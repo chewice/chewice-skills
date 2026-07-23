@@ -1,0 +1,6 @@
+interface:
+  display_name: "GEO/SRA Safe Download"
+  short_description: "Safe resumable GEO/SRA acquisition and validation"
+  default_prompt: "Use $download-geo-sra-safely to inspect, download, resume, validate, and document this GEO/SRA dataset."
+policy:
+  allow_implicit_invocation: true
