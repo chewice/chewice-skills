@@ -1,9 +1,8 @@
-# Manifest and project schema
+# Manifest 与项目 schema
 
-## Dataset directory
+## 数据集目录
 
-Use `<output-root>/GEO/<GSE>/`. If no output root is given, use
-`<current-directory>/GEO/<GSE>/`.
+使用 `<output-root>/GEO/<GSE>/`。如果未指定输出根目录，则使用 `<current-directory>/GEO/<GSE>/`。
 
 ```text
 GEO/GSE123456/
@@ -34,35 +33,31 @@ GEO/GSE123456/
 └── pixi.lock
 ```
 
-Create only terminal-product directories that are needed. Operational logs are
-not expression `logcounts` and must be retained.
+仅创建最终产品需要的目录。运行日志不是表达矩阵 `logcounts`，必须保留。
 
 ## `expected_runs.tsv`
 
-One row per expected run:
+每个预期 run 一行：
 
-| Column | Requirement |
+| 列 | 要求 |
 |---|---|
 | `gse` | `GSE` accession |
-| `gsm` | Parent `GSM` accession |
-| `srx` | Experiment accession, if available |
-| `srr` | Unique `SRR`/`ERR`/`DRR`/`CRR` run accession |
-| `run_alias` | Original run alias |
-| `lane` | Lane parsed from metadata/filename, or empty |
-| `library_layout` | `PAIRED` or `SINGLE` |
-| `read_structure` | Known structure such as `R1:28,R2:91`; do not guess |
-| `expected_spots` | Expected records per logical mate |
-| `cb_length` | Barcode length for single-cell data, or empty |
-| `umi_length` | UMI length, or empty |
+| `gsm` | 所属 `GSM` accession |
+| `srx` | Experiment accession（如可获得） |
+| `srr` | 唯一的 `SRR`/`ERR`/`DRR`/`CRR` run accession |
+| `run_alias` | 原始 run alias |
+| `lane` | 从 metadata/文件名解析的 lane，或留空 |
+| `library_layout` | `PAIRED` 或 `SINGLE` |
+| `read_structure` | 已知结构，例如 `R1:28,R2:91`；不得猜测 |
+| `expected_spots` | 每个逻辑 mate 的预期记录数 |
+| `cb_length` | 单细胞数据的 barcode 长度，或留空 |
+| `umi_length` | UMI 长度，或留空 |
 
-Normalize line endings to LF. Numeric fields must contain digits only or be
-empty. Preserve the complete expected run set even when a provider is missing a
-run.
+将换行统一为 LF。数值字段只能包含数字或留空。即使某数据源缺少部分 run，也必须保留完整预期 run 集合。
 
 ## `ena_runs.tsv`
 
-Retain the original ENA report fields when available. Source selection needs at
-least:
+尽可能保留 ENA 报告中的原始字段。数据源选择至少需要：
 
 ```text
 run_accession
@@ -80,13 +75,11 @@ read_count
 library_layout
 ```
 
-Semicolon-separated URL/byte/MD5/role arrays must have matching lengths.
-Convert bare FTP host paths to `https://` only when the same endpoint supports
-HTTPS.
+以分号分隔的 URL/byte/MD5/role 数组长度必须一致。仅当同一 endpoint 支持 HTTPS 时，才将裸 FTP host 路径转换为 `https://`。
 
 ## `ngdc_coverage.tsv`
 
-One row per expected run:
+每个预期 run 一行：
 
 ```text
 gse
@@ -104,17 +97,17 @@ probe_attempts
 probe_message
 ```
 
-Allowed `ngdc_status` values:
+允许的 `ngdc_status` 值：
 
-- `available`: endpoint returned a positive, stable Content-Length.
-- `missing`: all resolved/candidate endpoints returned not found.
-- `invalid`: endpoint exists but metadata/size is invalid.
-- `unreachable`: network/TLS/server failure prevented a decision.
-- `not_probed`: no network probe has been performed.
+- `available`：endpoint 返回稳定且大于零的 Content-Length。
+- `missing`：所有已解析/候选 endpoint 均返回 not found。
+- `invalid`：endpoint 存在，但 metadata/大小无效。
+- `unreachable`：网络/TLS/server 故障导致无法判定。
+- `not_probed`：尚未执行网络探测。
 
 ## `source_manifest.tsv`
 
-One row per run:
+每个 run 一行：
 
 ```text
 gse
@@ -142,7 +135,7 @@ final_product
 fallback_reason
 ```
 
-Allowed `selected_source`:
+允许的 `selected_source`：
 
 - `ngdc_gsa`
 - `ngdc_insdc`
@@ -150,7 +143,7 @@ Allowed `selected_source`:
 - `ena_fastq`
 - `ncbi_sra`
 
-Allowed `selected_provenance`:
+允许的 `selected_provenance`：
 
 - `AUTHOR_SUBMITTED`
 - `GSA_AUTHOR_SUBMITTED`
@@ -160,15 +153,13 @@ Allowed `selected_provenance`:
 - `AUTHOR_SUBMITTED_BAM`
 - `GEO_PROCESSED`
 
-Allowed `final_product`: `fastq`, `sra`, `matrix_velocity`.
+允许的 `final_product`：`fastq`、`sra`、`matrix_velocity`。
 
-`selected_urls`, `selected_bytes`, `selected_md5`, and `read_roles` use
-semicolon-separated arrays. Roles are `SRA`, `R1`, `R2`, `I1`, `I2`, `BAM`, or
-`OTHER`. Every non-NGDC selection requires `fallback_reason`.
+`selected_urls`、`selected_bytes`、`selected_md5` 和 `read_roles` 使用分号分隔数组。角色为 `SRA`、`R1`、`R2`、`I1`、`I2`、`BAM` 或 `OTHER`。每个非 NGDC 选择都必须填写 `fallback_reason`。
 
 ## `sample_metadata.tsv`
 
-Use one row per GSM and retain at least:
+每个 GSM 一行，至少保留：
 
 ```text
 gse
@@ -202,13 +193,11 @@ status
 notes
 ```
 
-Do not flatten arbitrary GEO characteristics into lossy columns. Store them in
-`sample_characteristics.tsv` with `gse`, `gsm`, `key`, `value`, and
-`source_order`.
+不要将任意 GEO characteristics 扁平化为会丢失信息的列。将其保存到 `sample_characteristics.tsv`，字段为 `gse`、`gsm`、`key`、`value` 和 `source_order`。
 
-## Per-GSM `download_manifest.tsv`
+## 每个 GSM 的 `download_manifest.tsv`
 
-Append one row only after a run reaches a validated terminal state:
+仅当 run 达到通过校验的终态后追加一行：
 
 ```text
 gse
@@ -229,5 +218,4 @@ validation
 completed_at
 ```
 
-Write through a temporary file and atomically rename. Never use a completion row
-as a substitute for checking the referenced files.
+先写入临时文件，再原子改名。不得用完成记录代替对其引用文件的实际检查。

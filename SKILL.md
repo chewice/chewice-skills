@@ -1,63 +1,42 @@
 ---
 name: download-geo-sra-safely
-description: Safely inspect, plan, download, resume, validate, and document public GEO/GSE/GSM, SRA/SRR/SRX/PRJNA, ENA, and CNCB-NGDC GSA/INSDC sequencing data. Use whenever Codex is asked to download or verify GSE/SRA data, recover an interrupted transfer, decide between author-submitted files and archive-generated FASTQ/SRA/BAM, inspect R1/R2/I1/I2 or multi-run/lane structure, organize one folder per GSM, or produce STARsolo/RNA-velocity inputs from public raw reads. Prefer an available and valid NGDC mirror run before ENA or NCBI, use pixi and detached tmux for long jobs, and retain auditable integrity evidence.
+description: 安全检查、规划、下载、续传、校验和记录 GEO/GSE/GSM、SRA/SRR/SRX/PRJNA、ENA 及 CNCB-NGDC GSA/INSDC 公共测序数据。当 Codex 需要下载或核验 GSE/SRA 数据、恢复中断传输、区分作者提交文件与数据库生成的 FASTQ/SRA/BAM、检查 R1/R2/I1/I2 或多 run/lane 结构、按 GSM 建立独立目录，或从公共原始 reads 生成 STARsolo/RNA velocity 输入时使用。有效且可用的 NGDC 镜像 run 优先于 ENA 或 NCBI；长任务使用 pixi 和 detached tmux，并保留可审计的完整性证据。
 ---
 
-# Download GEO/SRA Safely
+# 安全下载 GEO/SRA
 
-## Operating contract
+## 执行约定
 
-Treat metadata discovery, transfer, conversion, and analysis as separate gates.
-Never begin a large transfer until the accession set and terminal data product
-are explicit. Default the terminal product to analysis-ready FASTQ. Do not
-download GEO logcounts or normalized expression matrices unless explicitly
-requested.
+将元数据发现、传输、转换和分析视为相互独立的关卡。accession 集合和最终数据产品未明确前，不得开始大规模传输。默认最终产品为可直接分析的 FASTQ。除非用户明确要求，否则不要下载 GEO logcounts 或标准化表达矩阵。
 
-Use pixi for the environment. Pin the resolved tools in `pixi.lock`. Run long
-downloads and processing in a detached tmux session. Default monitoring to 1800
-seconds and report progress by samples/runs, phase, errors, bytes, and free
-space.
+使用 pixi 管理环境，并在 `pixi.lock` 中锁定解析后的工具版本。长时间下载和处理必须在 detached tmux 会话中运行。默认每 1800 秒监测一次，并按 sample/run、阶段、错误、字节数和剩余空间报告进度。
 
-Set the helper location before using bundled commands:
+使用内置命令前先设置 helper 路径：
 
 ```bash
 SKILL_DIR="${CODEX_HOME:-$HOME/.codex}/skills/download-geo-sra-safely"
 ```
 
-Use `scripts/scaffold_project.py` to create the dataset-local layout. Read
-`references/manifest-schema.md` before creating metadata tables.
+使用 `scripts/scaffold_project.py` 创建数据集目录结构。创建元数据表之前，先阅读 `references/manifest-schema.md`。
 
-## 1. Introduce and resolve the dataset
+## 1. 介绍并解析数据集
 
-Before downloading:
+下载前：
 
-1. Resolve GSE -> GSM -> SRX -> SRR and BioProject relationships from official
-   GEO, SRA, and ENA metadata.
-2. Explain the study title, purpose, organism, tissue/disease, design, groups,
-   assay, platform, library strategy, and chemistry when available.
-3. Count expected GSMs and SRRs. Identify GSMs split across runs or lanes.
-4. Inspect submitted and generated filenames for R1/R2/I1/I2 and technical
-   read patterns. Use read lengths and experiment metadata; filenames alone are
-   not sufficient.
-5. Decide whether the requested downstream work needs FASTQ, BAM, SRA, or
-   author-submitted bytes. STARsolo, re-alignment, and RNA velocity normally
-   require FASTQ.
-6. Save the explanation in `reports/dataset_overview.md`, normalized sample
-   metadata in `metadata/sample_metadata.tsv`, multi-valued characteristics in
-   `metadata/sample_characteristics.tsv`, and the complete expected run set in
-   `metadata/expected_runs.tsv`.
+1. 根据 GEO、SRA 和 ENA 官方元数据解析 GSE -> GSM -> SRX -> SRR 与 BioProject 的关系。
+2. 说明研究标题、目的、物种、组织/疾病、设计、分组、assay、平台、文库策略和 chemistry（如可获得）。
+3. 统计预期 GSM 和 SRR 数量，识别拆分为多个 run 或 lane 的 GSM。
+4. 检查作者提交文件名和数据库生成文件名中的 R1/R2/I1/I2 与技术 read 结构。必须结合 read 长度和实验元数据，不能只依据文件名。
+5. 判断下游工作真正需要 FASTQ、BAM、SRA 还是作者原始提交字节。STARsolo、重新比对和 RNA velocity 通常需要 FASTQ。
+6. 将介绍保存到 `reports/dataset_overview.md`，标准化 sample 元数据保存到 `metadata/sample_metadata.tsv`，多值 characteristics 保存到 `metadata/sample_characteristics.tsv`，完整预期 run 集合保存到 `metadata/expected_runs.tsv`。
 
-Do not silently continue when GEO, ENA, and SRA disagree on the expected run
-set. Write the difference to the preflight report and pause for resolution.
+当 GEO、ENA 和 SRA 对预期 run 集合的记录不一致时，不得静默继续。将差异写入预检报告并暂停，直至解决。
 
-## 2. Classify provenance and prefer NGDC
+## 2. 判定 provenance 并优先使用 NGDC
 
-Read `references/provenance-routing.md` before selecting files.
+选择文件前阅读 `references/provenance-routing.md`。
 
-For every expected run, inspect
-`https://ngdc.cncb.ac.cn/gsa/browse/` and the corresponding GSA or INSDC run
-record. Probe the actual `download*.cncb.ac.cn` file endpoint, not merely the
-browse page. Run:
+逐个检查预期 run 在 `https://ngdc.cncb.ac.cn/gsa/browse/` 中对应的 GSA 或 INSDC run 记录。必须探测实际的 `download*.cncb.ac.cn` 文件 endpoint，不能只检查 browse 页面。运行：
 
 ```bash
 pixi run --locked python "$SKILL_DIR/scripts/probe_ngdc.py" \
@@ -65,20 +44,16 @@ pixi run --locked python "$SKILL_DIR/scripts/probe_ngdc.py" \
   --output reports/ngdc_coverage.tsv
 ```
 
-Apply this run-level priority:
+按 run 应用以下优先级：
 
-1. NGDC-native GSA author files for CRA/CRR accessions.
-2. Valid NGDC INSDC mirror SRA for SRR accessions.
-3. ENA author-submitted FASTQ when usable; otherwise ENA generated FASTQ.
-4. NCBI SRA Toolkit as the final fallback.
+1. CRA/CRR accession优先使用 NGDC 原生 GSA 作者文件。
+2. SRR accession 优先使用有效的 NGDC INSDC 镜像 SRA。
+3. ENA 作者提交 FASTQ 可用时选用；否则使用 ENA 生成的 FASTQ。
+4. 最后才回退到 NCBI SRA Toolkit。
 
-Do not replace an available, valid NGDC run merely because another route is
-faster. Fallback only when the run is missing, has no file endpoint, is
-unreachable for three attempts, or fails size/integrity/read-count validation.
-Record a fallback reason for every non-NGDC selection.
+不能仅因其他线路更快而替换可用且有效的 NGDC run。仅当 run 缺失、没有文件 endpoint、连续三次不可达，或未通过大小/完整性/read 数校验时回退。每个非 NGDC 选择都必须记录 fallback reason。
 
-Generate `metadata/source_manifest.tsv` with
-`scripts/select_sources.py`, then validate it:
+使用 `scripts/select_sources.py` 生成 `metadata/source_manifest.tsv`，然后进行校验：
 
 ```bash
 pixi run --locked python "$SKILL_DIR/scripts/select_sources.py" \
@@ -91,77 +66,59 @@ pixi run --locked python "$SKILL_DIR/scripts/audit_manifest.py" \
   --root . --manifest metadata/source_manifest.tsv
 ```
 
-Always answer: “Are these author-uploaded bytes or an archive-converted
-version?” Use only the provenance values defined in the schema. In particular,
-NGDC INSDC `.sra` is `NGDC_MIRROR_SRA`; FASTQ produced by `fasterq-dump` is
-`ARCHIVE_GENERATED_FASTQ`.
+始终回答：“这些是作者上传的原始字节，还是公共数据库转换后的版本？”只能使用 schema 中定义的 provenance 值。特别注意：NGDC INSDC `.sra` 标记为 `NGDC_MIRROR_SRA`；由 `fasterq-dump` 生成的 FASTQ 标记为 `ARCHIVE_GENERATED_FASTQ`。
 
-## 3. Download and validate atomically
+## 3. 原子化下载与校验
 
-Use one GSM directory and separate files for every run/lane. Do not concatenate
-runs during acquisition.
+每个 GSM 使用独立目录，每个 run/lane 保持文件分离。下载阶段不要合并 run。
 
-Use `scripts/download_run.sh <project-root> <SRR>` for each source-manifest
-row. Start the sample loop in detached tmux. The downloader must:
+对 source manifest 的每一行运行 `scripts/download_run.sh <project-root> <SRR>`。在 detached tmux 中启动 sample 循环。下载器必须：
 
-- write only to `.part` plus aria2 control state;
-- require expected byte count when published;
-- require provider MD5 for ENA files;
-- run `gzip -t` on FASTQ and `vdb-validate` on SRA;
-- atomically rename only after validation;
-- run `fasterq-dump --split-files` for an SRA-to-FASTQ terminal product;
-- atomically compress converted FASTQ;
-- validate paired record counts, expected spots, and barcode-read minimum
-  length when CB/UMI geometry is known;
-- append an auditable row to `GSM*/download_manifest.tsv`;
-- retain failed partials only when a valid aria2 piece map exists.
+- 仅写入 `.part` 和 aria2 控制状态；
+- 发布方提供预期字节数时必须核对；
+- ENA 文件必须核对提供方 MD5；
+- FASTQ 运行 `gzip -t`，SRA 运行 `vdb-validate`；
+- 仅在校验通过后原子改名；
+- 最终产品为 FASTQ 时对 SRA 运行 `fasterq-dump --split-files`；
+- 原子压缩转换后的 FASTQ；
+- 已知 CB/UMI geometry 时校验配对记录数、expected spots 和 barcode read 最短长度；
+- 向 `GSM*/download_manifest.tsv` 追加可审计记录；
+- 仅当存在有效 aria2 piece map 时保留失败的 partial。
 
-Use `scripts/validate_fastq_pair.py` directly when validating existing FASTQ.
-Never accept “HTTP succeeded” or “size matches” as sufficient proof.
+校验已有 FASTQ 时直接使用 `scripts/validate_fastq_pair.py`。不得将“HTTP 请求成功”或“大小一致”视为充分证据。
 
-## 4. Monitor and recover
+## 4. 监测与恢复
 
-Run `scripts/watchdog.sh <project-root> [interval-seconds]` in its own detached
-tmux session. Read `references/recovery-playbook.md` before modifying a failed
-job.
+在独立 detached tmux 会话中运行 `scripts/watchdog.sh <project-root> [interval-seconds]`。修改失败任务前阅读 `references/recovery-playbook.md`。
 
-Recover a repeatable network or integrity error at most three times. Stop and
-report after the third identical failure. Never edit a shell script that a live
-sample process is currently reading; stop it, validate syntax, then restart.
-Normalize CRLF and validate numeric TSV fields so formatting errors cannot
-masquerade as read-count failures.
+对可重复出现的网络或完整性错误最多安全恢复三次。第三次发生相同错误后停止并报告。不得热修改正在被 sample 进程读取的 shell 脚本；先停止任务、校验语法，再重新启动。统一 CRLF 换行，并校验 TSV 数值字段，避免格式问题伪装成 read count 错误。
 
-## 5. Optional STARsolo and velocity branch
+## 5. 可选 STARsolo 与 velocity 分支
 
-Enter this branch only when the user requests matrices, re-alignment, or RNA
-velocity. Read `references/starsolo-read-geometry.md`.
+仅当用户要求矩阵、重新比对或 RNA velocity 时进入此分支。阅读 `references/starsolo-read-geometry.md`。
 
-- Keep the reference organism/version explicit.
-- Build and run a STAR index with the same locked STAR version.
-- Preserve the experiment's chemistry, CB/UMI geometry, and whitelist; never
-  “upgrade” all datasets to one chemistry.
-- Verify actual barcode/cDNA roles before assigning STARsolo input order.
-- Group validated runs by GSM without losing run provenance.
-- For velocity request `Gene`, `GeneFull`, and `Velocyto` as separately passed
-  STAR arguments and validate raw/filtered 10x matrices plus spliced,
-  unspliced, ambiguous, and loom outputs.
+- 明确记录参考物种和版本。
+- 使用同一个锁定 STAR 版本建立并运行 STAR index。
+- 保留原实验的 chemistry、CB/UMI geometry 和 whitelist；不得把所有数据集统一“升级”为一种 chemistry。
+- 指定 STARsolo 输入顺序前，核实 barcode/cDNA 的实际角色。
+- 按 GSM 分组已校验的 run，同时保留 run provenance。
+- velocity 分析中，将 `Gene`、`GeneFull` 和 `Velocyto` 作为独立 STAR 参数传入，并校验 raw/filtered 10x 矩阵以及 spliced、unspliced、ambiguous 和 loom 输出。
 
-Run `scripts/audit_final_outputs.py --root <GSE-dir>` before cleanup.
+清理前运行 `scripts/audit_final_outputs.py --root <GSE-dir>`。
 
-## 6. Cleanup and handoff
+## 6. 清理与交付
 
-Run `scripts/audit_download_evidence.py --root <GSE-dir>` first.
+先运行 `scripts/audit_download_evidence.py --root <GSE-dir>`。
 
-- FASTQ terminal product: keep FASTQ; remove SRA, `.part`, `.aria2`, and work.
-- SRA terminal product: keep validated SRA.
-- Matrix/velocity terminal product: remove SRA, FASTQ, and work only after both
-  download-evidence and final-output audits pass.
-- Never clean an incomplete or unaudited sample.
+- 最终产品为 FASTQ：保留 FASTQ，删除 SRA、`.part`、`.aria2` 和 work。
+- 最终产品为 SRA：保留通过校验的 SRA。
+- 最终产品为 matrix/velocity：仅当 download-evidence 和 final-output 审计均通过后，才删除 SRA、FASTQ 和 work。
+- 不得清理未完成或未经审计的 sample。
 
-Report:
+报告：
 
-- expected/observed GSM and SRR counts;
-- NGDC available/missing/invalid and fallback counts;
-- author-submitted versus archive-generated products;
-- multi-run/lane and read-role findings;
-- retained product paths, total size, integrity status, and cleanup performed.
+- 预期与实际 GSM、SRR 数量；
+- NGDC available/missing/invalid 和 fallback 数量；
+- 作者提交产品与数据库生成产品的分类；
+- 多 run/lane 与 read role 检查结果；
+- 保留产品路径、总大小、完整性状态及已执行的清理。

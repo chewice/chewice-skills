@@ -1,75 +1,73 @@
-# Interrupted-transfer and recovery playbook
+# 传输中断与恢复手册
 
-## Transfer invariants
+## 传输不变量
 
-A final filename means all applicable invariants passed:
+出现最终文件名，表示所有适用的不变量均已通过：
 
-1. Published byte count matches.
-2. Published MD5/checksum matches.
-3. `gzip -t` succeeds for FASTQ or `vdb-validate` succeeds for SRA.
-4. Conversion completed atomically.
-5. Paired records and expected spots match.
+1. 与发布的字节数一致。
+2. 与发布的 MD5/checksum 一致。
+3. FASTQ 通过 `gzip -t`，或 SRA 通过 `vdb-validate`。
+4. 转换已原子完成。
+5. 配对记录数与 expected spots 一致。
 
-Write active transfers to `.part`. For aria2, retain `.part.aria2` so completed
-pieces can be trusted. A partial file without piece metadata is not safely
-resumable.
+进行中的传输写入 `.part`。使用 aria2 时保留 `.part.aria2`，以便信任已完成的分片。缺少 piece metadata 的 partial 文件不能安全续传。
 
-## Common failures
+## 常见故障
 
-### TLS/network interruption
+### TLS/网络中断
 
-- Keep `.part` and `.part.aria2`.
-- Retry only the affected pieces.
-- Do not append a fresh stream to an untracked partial.
-- After three identical failures, stop and record the route as unreachable.
+- 保留 `.part` 和 `.part.aria2`。
+- 仅重试受影响的分片。
+- 不要向未跟踪的 partial 追加新数据流。
+- 连续三次出现相同故障后停止，并将该线路记录为 unreachable。
 
-### Expected size but wrong checksum
+### 大小符合预期但 checksum 错误
 
-- Treat the file as corrupt.
-- Delete `.part` and its control file.
-- Restart from byte zero.
-- Never promote by size alone.
+- 将文件视为损坏。
+- 删除 `.part` 及其控制文件。
+- 从第 0 字节重新下载。
+- 不得仅凭大小一致就提升为最终文件。
 
-### SRA endpoint has no checksum
+### SRA endpoint 不提供 checksum
 
-- Require stable positive Content-Length.
-- Download atomically.
-- Require `vdb-validate` internal MD5/consistency checks.
-- Require converted read counts to match provider `expected_spots`.
+- 要求稳定且大于零的 Content-Length。
+- 原子化下载。
+- 要求通过 `vdb-validate` 内部 MD5/一致性检查。
+- 要求转换后的 read 数与提供方 `expected_spots` 一致。
 
-### False read-count mismatch
+### 假性 read count 不一致
 
-- Normalize CRLF before parsing TSV.
-- Do not use whitespace-collapsing shell parsing for empty tab fields.
-- Validate numeric fields before running a sample.
-- Compare expected, R1, and R2 as normalized integers.
+- 解析 TSV 前统一 CRLF。
+- 对空 tab 字段不要使用会折叠空白的 shell 解析方式。
+- 运行 sample 前校验数值字段。
+- 将 expected、R1 和 R2 规范为整数后比较。
 
-### R1/R2/I1/I2 ambiguity
+### R1/R2/I1/I2 角色不明确
 
-- Inspect submitted filenames, run metadata, read lengths, and chemistry.
-- Do not assume `_1` is barcode or biological read across all platforms.
-- Keep technical reads separate.
-- Fail preflight when roles remain ambiguous.
+- 检查提交文件名、run metadata、read 长度和 chemistry。
+- 不能跨平台假设 `_1` 必然是 barcode read 或 biological read。
+- technical reads 必须保持分离。
+- read 角色仍不明确时，预检必须失败。
 
-### Multi-run or multi-lane sample
+### 多 run 或多 lane sample
 
-- Validate each run independently.
-- Keep files separate during acquisition.
-- Group runs by GSM only at the analysis invocation.
-- Preserve the contributing SRR list in final provenance.
+- 独立校验每个 run。
+- 下载阶段保持文件分离。
+- 仅在调用分析时按 GSM 对 run 分组。
+- 在最终 provenance 中保留参与分析的 SRR 列表。
 
-### Live script changed during execution
+### 运行期间修改活动脚本
 
-- Stop the affected job cleanly.
-- Run `bash -n` or the relevant syntax checker.
-- Restart from validated checkpoints.
-- Do not hot-edit a shell script a live Bash process may read later.
+- 干净停止受影响任务。
+- 运行 `bash -n` 或相应的语法检查器。
+- 从已校验 checkpoint 重新启动。
+- 不得热修改活动 Bash 进程之后可能读取的 shell 脚本。
 
-## Cleanup gate
+## 清理关卡
 
-Delete sources only when:
+仅当满足以下条件时删除源文件：
 
-- every expected run has a validated download-manifest row;
-- the requested terminal artifact exists and passes its direct audit;
-- no `.part`, `.aria2`, or `.tmp` is being used by a live process;
-- cleanup behavior matches the requested terminal product.
+- 每个预期 run 都有通过校验的 download manifest 记录；
+- 用户要求的最终 artifact 存在并通过直接审计；
+- 没有活动进程正在使用 `.part`、`.aria2` 或 `.tmp`；
+- 清理行为与用户要求的最终产品一致。
