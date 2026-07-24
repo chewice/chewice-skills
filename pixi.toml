@@ -3,10 +3,10 @@ authors = ["zdh <goodalleveryday@gmail.com>"]
 channels = ["conda-forge"]
 name = "research-project-os-skill"
 platforms = ["linux-64", "win-64"]
-version = "0.3.1"
+version = "0.3.2"
 
 [tasks]
-lint = "ruff check research-project-os/scripts tests"
+lint = "ruff check research-project-os/scripts scripts tests"
 test = "python -m unittest discover -s tests -p test_*.py"
 smoke = "python tests/smoke_test.py"
 validate-skill = "python tests/validate_skill.py"

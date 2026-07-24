@@ -1,23 +1,22 @@
 # Migration Policy
 
-Use `adopt` for an existing project.
+Run `inspect`, then `adopt` dry-run. Preserve paths, README, `AGENTS.md`,
+`.gitignore`, data, environments, and history. Add only the control layer;
+profile business directories remain recommendations. Stop on conflicts unless
+an explicit control-file overwrite was reviewed. A second dry-run must be
+idempotent.
 
-- Inspect before writing.
-- Preserve existing paths, naming, README, AGENTS, environment, and data layout.
-- Add missing control files around the project.
-- Do not create missing profile analysis, code, data, or output directories;
-  list them as recommendations only. Profile directories are created by
-  `init`, not by default `adopt`.
-- Write merge suggestions for existing AGENTS and `.gitignore` files.
-- Record path mappings in `docs/ai_context/project_structure.md`.
-- Do not move data, rename scripts, rewrite history, or initialize Git unless
-  explicitly requested.
-- Run adoption twice; the second dry-run should propose no new files.
+For schema `0.1.0` or `0.2.0`, preserve project/database IDs, add schema `0.3.0`
+portfolio fields, and review before writing.
 
-If an existing file conflicts with a required control file, stop and ask for a
-merge decision instead of overwriting by default.
+For nested Pixi environments, report paths and evidence. The migration is a
+separate authorized workflow:
 
-For manifest schema `0.1.0` or `0.2.0`, preserve existing project and database
-IDs, add the `0.3.0` portfolio fields, and require a reviewed migration before
-writing the manifest. Fix `portfolio_year` at adoption time. Do not infer a
-project ordinal from a title alone; read the annual portfolio and stable IDs.
+1. choose one root workspace manifest;
+2. group dependencies into root features/environments by compatibility;
+3. migrate namespaced tasks with `task.cwd`;
+4. regenerate and validate root `pixi.lock`;
+5. remove nested manifests, locks, and `.pixi/` only after validation.
+
+Never perform these steps automatically from `inspect`, `init`, `adopt`, or
+`audit`.

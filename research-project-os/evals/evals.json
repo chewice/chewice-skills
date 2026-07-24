@@ -5,43 +5,49 @@
       "id": 1,
       "prompt": "Adopt this existing research repository without moving its scripts or data, then prepare a resumable handoff.",
       "should_trigger": true,
-      "expected_output": "Uses inspect and adopt, preserves the existing workflow layout, creates only the control layer, and records the next minimum action."
+      "expected_output": "Inspects, adopts without restructuring, and records a resumable handoff."
     },
     {
       "id": 2,
       "prompt": "Close this research session and prepare a reviewed Project2026 Notion portfolio payload without sending it.",
       "should_trigger": true,
-      "expected_output": "Archives the handoff through a reviewed dry-run/apply flow and generates an immutable local Notion payload without writing to Notion."
+      "expected_output": "Archives the handoff and creates a reviewable local payload without calling Notion."
     },
     {
       "id": 3,
       "prompt": "Pixi cannot solve my CUDA and PyPI dependencies. Fix pixi.toml for me.",
       "should_trigger": false,
-      "expected_output": "Routes package solving to a Pixi environment workflow; Research Project OS is relevant only if the resulting environment state must be registered."
+      "expected_output": "Routes dependency solving elsewhere; this skill only governs the resulting state."
     },
     {
       "id": 4,
       "prompt": "Choose mitochondrial and gene-count QC thresholds for these single-cell samples and filter them.",
       "should_trigger": false,
-      "expected_output": "Uses a domain QC workflow for threshold review and filtering; Research Project OS only records an approved decision or resulting evidence when requested."
+      "expected_output": "Uses a domain QC workflow and registers approved evidence only when requested."
     },
     {
       "id": 5,
       "prompt": "Run STARsolo for these GEO samples and repair the FASTQ read-role manifest.",
       "should_trigger": false,
-      "expected_output": "Uses a specialized upstream data workflow rather than treating Research Project OS as the execution engine."
+      "expected_output": "Uses a specialized upstream data workflow."
     },
     {
       "id": 6,
       "prompt": "Export this UMAP as editable PDF and high-resolution PNG for Illustrator.",
       "should_trigger": false,
-      "expected_output": "Uses a scientific figure-export workflow; Research Project OS does not impose plotting backend, font, or export-format rules."
+      "expected_output": "Uses a scientific figure-export workflow."
     },
     {
       "id": 7,
       "prompt": "Search PubMed for recent MDD single-nucleus studies and produce a source-grounded digest.",
       "should_trigger": false,
-      "expected_output": "Uses a literature retrieval workflow; Research Project OS becomes relevant only when the search strategy or digest is registered as project evidence."
+      "expected_output": "Uses literature retrieval; registers the search as evidence only when requested."
+    },
+    {
+      "id": 8,
+      "prompt": "Audit this governed research project: child folders contain Pixi workspaces and I need evidence-backed migration guidance without changing them.",
+      "should_trigger": true,
+      "expected_output": "Reports nested Pixi policy errors and root-workspace migration advice without modifying environments."
     }
   ]
 }

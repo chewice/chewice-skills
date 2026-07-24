@@ -1,6 +1,5 @@
-# pixi environments
-.pixi/*
-!.pixi/config.toml
+# pixi environment
+/.pixi/
 __pycache__/
 *.py[cod]
 .ruff_cache/

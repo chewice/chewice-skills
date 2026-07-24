@@ -21,6 +21,8 @@
 ## Safety
 
 - 保留现有路径和 source data。
+- Pixi 只使用根 workspace；子项目使用 features、environments、namespaced
+  tasks 和 `task.cwd`。
 - generated artifacts 必须通过显式 overwrite flag 才能覆盖。
 - 除非用户明确要求，否则不得 commit、push 或写入 Notion。
 - credentials、sensitive data 和大型 generated objects 不得进入 Git。

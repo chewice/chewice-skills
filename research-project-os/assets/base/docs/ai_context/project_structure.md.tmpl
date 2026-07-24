@@ -6,7 +6,8 @@
 
 ## Bounded project inventory
 
-`inspect` 只检查已知入口和浅层路径，不递归扫描大型 data 或 artifact trees。
+`inspect` 对一般 inventory 只检查浅层路径；Pixi policy 使用有界扫描和
+Git-visible files，并剪枝大型 data 或 artifact trees。
 
 {{PROJECT_INVENTORY}}
 

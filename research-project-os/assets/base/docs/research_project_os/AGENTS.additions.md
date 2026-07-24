@@ -6,5 +6,6 @@
   和文件名保持英文。
 - session start 时读取 `project_manifest.yaml` 和 `CURRENT_HANDOFF.md`。
 - 保留 evidence boundary 和 status transition。
+- Pixi 只使用根 workspace；环境按依赖兼容性和复现边界划分。
 - write 与 overwrite 必须使用显式 flags。
 - 未经用户授权，不得 commit、push 或写入 Notion。

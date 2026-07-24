@@ -21,6 +21,7 @@
 ## Environment
 
 - 使用 Pixi 管理 dependencies 和 tasks。
+- 仓库只允许根级 Pixi workspace；不得跟踪 `.pixi/`。
 - 不得手动编辑 `pixi.lock`。
 - Python dependencies 保持最小，并从 Conda 获取。
 

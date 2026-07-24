@@ -1,64 +1,19 @@
-# Research Project OS Skill Architecture
+# Architecture
 
-## Objective
+Research Project OS 由精简 Skill、确定性 CLI、control-layer templates、profiles
+和按需 references 组成。
 
-提供可复用的 project-governance Skill：外部化 Agent memory，区分 exploration
-与 verified evidence，保留 provenance，并准备可审阅的 Git/Notion
-synchronization，同时不与单一科研领域耦合。
+| Mode | Behavior |
+| --- | --- |
+| `inspect`, `start`, `audit`, `sync-audit` | 只读 |
+| `init`, `adopt`, `close`, `sync-export` | 默认 dry-run，需 `--apply` |
 
-## Components
+`adopt` 保留现有布局并只添加 control layer。所有命令都不会自动 stage、
+commit、push、求解环境或调用 Notion。
 
-```text
-SKILL.md
-  → mode selection and Agent behavior
-deterministic CLI
-  → inspect/init/adopt/start/close/audit/sync-export/sync-audit
-base assets
-  → project control-plane templates
-profiles
-  → init directory plans and domain-specific interpretation boundaries;
-    adopt treats directories as recommendations only
-references
-  → governance, evidence, verification, migration, and sync contracts
-```
+Git 保存 code、根级 environment lock、handoff 和 evidence；Notion payload
+只承载经审阅的 portfolio navigation 与摘要。Pixi 使用单一根 workspace；
+inspect/audit 只治理布局，不修改环境。
 
-## Mode contracts
-
-| Mode | Mutation | Purpose |
-| --- | --- | --- |
-| `inspect` | none | 检测项目状态，并推荐 `init` 或 `adopt` |
-| `init` | explicit `--apply` | 在空项目中创建 governance files |
-| `adopt` | explicit `--apply` | 在不重构目录的前提下补充缺失 governance files |
-| `start` | none | 加载 manifest、handoff、tasks、questions 和 Git state |
-| `close` | explicit `--apply` | 归档 handoff、更新当前状态并导出 Notion JSON |
-| `audit` | none | 验证 structure、statuses、references、Git visibility 和 queues |
-| `sync-export` | explicit `--apply` | 导出 hierarchy-aware immutable payload |
-| `sync-audit` | none | 检查 schema、source hashes、queue state 和 application receipt |
-
-## Authority model
-
-- Git 对 code、environments、complete reports、evidence details、已回写的
-  decisions 和完整 handoff 具有权威性。
-- Notion 用于 cross-project views、task priority、session summaries、
-  evidence indexes 和 human approvals。
-- CLI 只写 JSON payload。Notion MCP layer 必须按 `ProjectYYYY`、共享 control
-  databases 和 append-only ordinal contract 执行 read-before-write，遇到
-  conflict 停止，并验证 read-back。
-
-## Safety model
-
-- 所有 mutation 默认 dry-run。
-- 除非显式提供 `--overwrite`，否则跳过现有文件。
-- `adopt` 不重命名或移动项目内容。
-- `adopt` 只创建 control layer；缺失的 profile 业务目录仅作为建议。
-- adoption 期间不替换现有 `AGENTS.md`、`README.md` 和 `.gitignore`；merge
-  suggestions 单独写入。
-- Git initialization 由 `--init-git` 单独控制。
-- 所有 mode 都不会 stage、commit、push 或发送 Notion request。
-
-## Scope boundary
-
-Research Project OS 不实现 environment solving、code refactoring、data
-acquisition、QC/statistical analysis、literature retrieval 或 figure export。
-专门 workflow 的 durable outputs 只在影响 provenance、evidence、decision 或
-handoff 时进入 control layer。
+科研分析、数据获取、文献检索和图形导出由专门 workflow 执行，其 durable
+outputs 仅在影响 provenance、decision 或 handoff 时登记。

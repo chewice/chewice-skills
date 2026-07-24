@@ -36,7 +36,7 @@ PROFILE_NAMES = (
     "literature-review",
     "software-development",
 )
-RELEASE_VERSION = "0.3.1"
+RELEASE_VERSION = "0.3.2"
 MANIFEST_SCHEMA_VERSION = "0.3.0"
 SYNC_PAYLOAD_SCHEMA_VERSION = "0.3.0"
 SUPPORTED_MANIFEST_SCHEMAS = {"0.1.0", "0.2.0", MANIFEST_SCHEMA_VERSION}
@@ -81,6 +81,34 @@ SENSITIVE_PATTERNS = (
 )
 SESSION_PATTERN = re.compile(r"^SES-\d{8}-\d{3}$")
 NUMBERED_TITLE_PATTERN = re.compile(r"^(?P<ordinal>\d{2,})｜(?P<title>\S(?:.*\S)?)$")
+TOML_TABLE_PATTERN = re.compile(
+    r"^\s*\[(?!\[)\s*(?P<table>[^\]]+?)\s*\](?!\])(?:\s*#.*)?$",
+    flags=re.MULTILINE,
+)
+DEFAULT_PIXI_POLICY = {
+    "policy": "root_workspace",
+    "allow_nested_package_manifests": True,
+}
+PIXI_SCAN_MAX_DEPTH = 6
+PIXI_SCAN_MAX_ENTRIES = 10_000
+PIXI_SCAN_PRUNE_NAMES = {
+    ".git",
+    ".hg",
+    ".svn",
+    "__pycache__",
+    "data",
+    "datasets",
+    "figure",
+    "figures",
+    "node_modules",
+    "output",
+    "outputs",
+    "reports",
+    "resources",
+    "result",
+    "results",
+    "runs",
+}
 PROJECT_INVENTORY_PATTERNS = {
     "code_roots": (
         "*.R",
@@ -162,7 +190,9 @@ def parse_args() -> argparse.Namespace:
     for command in ("init", "adopt"):
         command_parser = subparsers.add_parser(command)
         add_project_argument(command_parser)
-        command_parser.add_argument("--profile", choices=PROFILE_NAMES, default="generic-analysis")
+        command_parser.add_argument(
+            "--profile", choices=PROFILE_NAMES, default="generic-analysis"
+        )
         command_parser.add_argument(
             "--apply",
             action="store_true",
@@ -290,9 +320,12 @@ def allocate_numbered_page(
             "stable_id": stable_id,
         }
 
-    next_ordinal = max(
-        [minimum_ordinal - 1, *(ordinal for ordinal, _ in parsed)],
-    ) + 1
+    next_ordinal = (
+        max(
+            [minimum_ordinal - 1, *(ordinal for ordinal, _ in parsed)],
+        )
+        + 1
+    )
     return {
         "action": "create",
         "ordinal": next_ordinal,
@@ -442,12 +475,18 @@ def read_asset_files(
 ) -> dict[str, str]:
     replacements = template_replacements(root, profile, mode)
     files: dict[str, str] = {}
-    for asset_path in sorted(path for path in BASE_ASSET_ROOT.rglob("*") if path.is_file()):
+    for asset_path in sorted(
+        path for path in BASE_ASSET_ROOT.rglob("*") if path.is_file()
+    ):
         relative = asset_path.relative_to(BASE_ASSET_ROOT)
         target = template_target(relative)
         if mode == "adopt" and target == "AGENTS.md" and (root / "AGENTS.md").exists():
             continue
-        if mode == "adopt" and target == ".gitignore" and (root / ".gitignore").exists():
+        if (
+            mode == "adopt"
+            and target == ".gitignore"
+            and (root / ".gitignore").exists()
+        ):
             continue
         content = asset_path.read_text(encoding="utf-8")
         files[target] = render_template(content, replacements)
@@ -467,9 +506,13 @@ def plan_scaffold(
     overwrite: bool,
 ) -> dict[str, Any]:
     if mode == "init" and not directory_is_empty_for_init(root):
-        raise ValueError("init requires an empty directory; use adopt for an existing project")
+        raise ValueError(
+            "init requires an empty directory; use adopt for an existing project"
+        )
     if mode == "adopt" and not root.exists():
-        raise ValueError("adopt requires an existing project directory; use init instead")
+        raise ValueError(
+            "adopt requires an existing project directory; use init instead"
+        )
 
     profile = load_profile(profile_name)
     files = read_asset_files(root, profile, mode)
@@ -499,15 +542,21 @@ def plan_scaffold(
             actions.append(FileAction(relative_path, "create", content))
             continue
         if target.is_file() and target.read_text(encoding="utf-8") == content:
-            actions.append(FileAction(relative_path, "unchanged", reason="content matches"))
+            actions.append(
+                FileAction(relative_path, "unchanged", reason="content matches")
+            )
             continue
         if mode == "adopt" and relative_path in PROTECTED_ADOPTION_PATHS:
-            actions.append(FileAction(relative_path, "skip", reason="protected during adopt"))
+            actions.append(
+                FileAction(relative_path, "skip", reason="protected during adopt")
+            )
             continue
         if overwrite:
             actions.append(FileAction(relative_path, "overwrite", content))
         else:
-            actions.append(FileAction(relative_path, "skip", reason="existing content differs"))
+            actions.append(
+                FileAction(relative_path, "skip", reason="existing content differs")
+            )
 
     return {
         "mode": mode,
@@ -569,7 +618,11 @@ def apply_scaffold(plan: dict[str, Any], init_git: bool) -> dict[str, Any]:
             raise ValueError(f"Missing content for {action.path}")
         atomic_write(root / action.path, action.content)
         written.append(action.path)
-    git_result = initialize_git(root) if init_git else {"initialized": False, "reason": "not requested"}
+    git_result = (
+        initialize_git(root)
+        if init_git
+        else {"initialized": False, "reason": "not requested"}
+    )
     return {"written": written, "git": git_result}
 
 
@@ -583,10 +636,467 @@ def git_status(root: Path) -> dict[str, Any]:
 
 
 def visible_git_files(root: Path) -> list[str]:
-    result = git_command(root, "ls-files", "--cached", "--others", "--exclude-standard", "-z")
+    result = git_command(
+        root, "ls-files", "--cached", "--others", "--exclude-standard", "-z"
+    )
     if result.returncode != 0:
         return []
     return sorted(path for path in result.stdout.split("\0") if path)
+
+
+def toml_tables(path: Path) -> list[dict[str, Any]]:
+    """Return table headers without requiring a TOML 1.1 parser."""
+
+    content = path.read_text(encoding="utf-8")
+    tables = []
+    for match in TOML_TABLE_PATTERN.finditer(content):
+        tables.append(
+            {
+                "name": match.group("table").strip(),
+                "line": content.count("\n", 0, match.start()) + 1,
+            }
+        )
+    return tables
+
+
+def classify_pixi_manifest(path: Path) -> dict[str, Any]:
+    """Classify workspace, package-only, non-Pixi, or unknown manifests."""
+
+    tables = toml_tables(path)
+    names = [table["name"] for table in tables]
+    workspace_names = {"workspace", "tool.pixi.workspace"}
+    workspace = [table for table in tables if table["name"] in workspace_names]
+    package = [
+        table
+        for table in tables
+        if table["name"] == "package"
+        or table["name"].startswith("package.")
+        or table["name"] == "tool.pixi.package"
+        or table["name"].startswith("tool.pixi.package.")
+    ]
+    pixi_tables = [
+        table
+        for table in tables
+        if table["name"] == "tool.pixi" or table["name"].startswith("tool.pixi.")
+    ]
+    if workspace:
+        kind = "workspace"
+        evidence = workspace
+    elif package:
+        kind = "package"
+        evidence = package
+    elif path.name == "pyproject.toml" and not pixi_tables:
+        kind = "non-pixi"
+        evidence = []
+    else:
+        kind = "unknown"
+        evidence = tables
+    return {
+        "path": path,
+        "kind": kind,
+        "tables": names,
+        "evidence": evidence,
+    }
+
+
+def effective_pixi_policy(manifest: dict[str, Any] | None) -> dict[str, Any]:
+    policy = dict(DEFAULT_PIXI_POLICY)
+    source = "default"
+    issues: list[dict[str, str]] = []
+    if manifest is None:
+        return {**policy, "source": source, "issues": issues}
+    governance = manifest.get("governance")
+    pixi = governance.get("pixi") if isinstance(governance, dict) else None
+    if pixi is None:
+        return {**policy, "source": source, "issues": issues}
+    source = "project_manifest.yaml"
+    if not isinstance(pixi, dict):
+        issues.append(
+            pixi_issue(
+                "invalid_pixi_policy",
+                "project_manifest.yaml",
+                "governance.pixi must be a mapping",
+                "Use policy: root_workspace and a boolean allow_nested_package_manifests.",
+            )
+        )
+        return {**policy, "source": source, "issues": issues}
+    configured_policy = pixi.get("policy", policy["policy"])
+    if configured_policy != "root_workspace":
+        issues.append(
+            pixi_issue(
+                "invalid_pixi_policy",
+                "project_manifest.yaml",
+                f"unsupported governance.pixi.policy={configured_policy!r}",
+                "Set governance.pixi.policy to root_workspace.",
+            )
+        )
+    else:
+        policy["policy"] = configured_policy
+    allow_packages = pixi.get(
+        "allow_nested_package_manifests",
+        policy["allow_nested_package_manifests"],
+    )
+    if not isinstance(allow_packages, bool):
+        issues.append(
+            pixi_issue(
+                "invalid_pixi_policy",
+                "project_manifest.yaml",
+                "governance.pixi.allow_nested_package_manifests must be boolean",
+                "Set the value to true or false.",
+            )
+        )
+    else:
+        policy["allow_nested_package_manifests"] = allow_packages
+    return {**policy, "source": source, "issues": issues}
+
+
+def pixi_issue(
+    code: str,
+    path: str,
+    evidence: str,
+    recommendation: str,
+    *,
+    severity: str = "error",
+) -> dict[str, str]:
+    return {
+        "code": code,
+        "severity": severity,
+        "path": path,
+        "evidence": evidence,
+        "recommendation": recommendation,
+    }
+
+
+def bounded_pixi_candidates(root: Path) -> dict[str, Any]:
+    """Find Pixi paths without following links or walking artifact trees."""
+
+    paths: set[str] = set()
+    entries_seen = 0
+    truncated = False
+    if root.exists():
+        stack = [(root, 0)]
+        while stack and not truncated:
+            directory, depth = stack.pop()
+            try:
+                children = sorted(directory.iterdir(), key=lambda path: path.name)
+            except OSError:
+                continue
+            for child in children:
+                entries_seen += 1
+                if entries_seen > PIXI_SCAN_MAX_ENTRIES:
+                    truncated = True
+                    break
+                relative = child.relative_to(root).as_posix()
+                if child.is_symlink():
+                    continue
+                if child.is_dir():
+                    if child.name == ".pixi":
+                        paths.add(relative)
+                        continue
+                    if (
+                        child.name in PIXI_SCAN_PRUNE_NAMES
+                        or depth >= PIXI_SCAN_MAX_DEPTH
+                    ):
+                        continue
+                    stack.append((child, depth + 1))
+                elif child.name in {"pixi.toml", "pixi.lock", "pyproject.toml"}:
+                    paths.add(relative)
+
+    for relative in visible_git_files(root):
+        path = Path(relative)
+        if path.name in {"pixi.toml", "pixi.lock", "pyproject.toml"}:
+            paths.add(path.as_posix())
+        if ".pixi" in path.parts:
+            index = path.parts.index(".pixi")
+            paths.add(Path(*path.parts[: index + 1]).as_posix())
+    return {
+        "paths": sorted(paths),
+        "truncated": truncated,
+        "max_depth": PIXI_SCAN_MAX_DEPTH,
+        "max_entries": PIXI_SCAN_MAX_ENTRIES,
+    }
+
+
+def git_path_tracked(root: Path, relative: str) -> bool | None:
+    result = git_command(root, "rev-parse", "--is-inside-work-tree")
+    if result.returncode != 0:
+        return None
+    tracked = git_command(root, "ls-files", "--error-unmatch", "--", relative)
+    return tracked.returncode == 0
+
+
+def git_path_ignored(root: Path, relative: str) -> bool | None:
+    result = git_command(root, "rev-parse", "--is-inside-work-tree")
+    if result.returncode != 0:
+        return None
+    ignored = git_command(root, "check-ignore", "--quiet", "--", relative)
+    return ignored.returncode == 0
+
+
+def tracked_under(root: Path, relative: str) -> list[str] | None:
+    result = git_command(root, "rev-parse", "--is-inside-work-tree")
+    if result.returncode != 0:
+        return None
+    tracked = git_command(root, "ls-files", "-z", "--", relative)
+    if tracked.returncode != 0:
+        return []
+    return sorted(path for path in tracked.stdout.split("\0") if path)
+
+
+def format_manifest_evidence(classification: dict[str, Any]) -> str:
+    matches = classification["evidence"]
+    if not matches:
+        return "no Pixi workspace or package table found"
+    return ", ".join(f"[{item['name']}] at line {item['line']}" for item in matches)
+
+
+def inspect_pixi_policy(
+    root: Path,
+    manifest: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Inspect root_workspace policy without changing or solving environments."""
+
+    configured = effective_pixi_policy(manifest)
+    issues = list(configured.pop("issues"))
+    scan = bounded_pixi_candidates(root)
+    root_classifications: list[dict[str, Any]] = []
+    nested_classifications: list[dict[str, Any]] = []
+    nested_locks: list[str] = []
+    nested_environments: list[str] = []
+
+    for relative in scan["paths"]:
+        path = root / relative
+        if relative == ".pixi":
+            continue
+        if path.name == "pixi.lock":
+            if path.parent != root:
+                nested_locks.append(relative)
+            continue
+        if path.name not in {"pixi.toml", "pyproject.toml"} or not path.is_file():
+            if path.name == ".pixi" and path.parent != root:
+                nested_environments.append(relative)
+            continue
+        try:
+            classification = classify_pixi_manifest(path)
+        except (OSError, UnicodeError) as error:
+            if path.name == "pixi.toml":
+                issues.append(
+                    pixi_issue(
+                        "unreadable_pixi_manifest",
+                        relative,
+                        str(error),
+                        "Make the manifest readable, then rerun inspect.",
+                    )
+                )
+            continue
+        classification["relative_path"] = relative
+        if classification["kind"] == "non-pixi":
+            continue
+        if path.parent == root:
+            root_classifications.append(classification)
+        else:
+            nested_classifications.append(classification)
+
+    for relative in scan["paths"]:
+        path = root / relative
+        if path.name == ".pixi" and path.parent != root:
+            nested_environments.append(relative)
+
+    root_workspaces = [
+        item for item in root_classifications if item["kind"] == "workspace"
+    ]
+    if len(root_workspaces) > 1:
+        issues.append(
+            pixi_issue(
+                "multiple_root_workspace_manifests",
+                ".",
+                "workspace manifests: "
+                + ", ".join(item["relative_path"] for item in root_workspaces),
+                "Keep exactly one root pixi.toml or Pixi-enabled pyproject.toml.",
+            )
+        )
+    for item in root_classifications:
+        if item["kind"] != "workspace":
+            issues.append(
+                pixi_issue(
+                    "root_manifest_not_workspace",
+                    item["relative_path"],
+                    format_manifest_evidence(item),
+                    "Define the single root workspace here or remove the Pixi manifest.",
+                )
+            )
+
+    uses_pixi = bool(
+        root_classifications
+        or nested_classifications
+        or nested_locks
+        or nested_environments
+        or (root / "pixi.lock").exists()
+        or (root / ".pixi").exists()
+    )
+    if uses_pixi and not root_workspaces and not root_classifications:
+        issues.append(
+            pixi_issue(
+                "missing_root_workspace_manifest",
+                ".",
+                "Pixi artifacts exist but no root workspace manifest was found",
+                "Create one root pixi.toml or a pyproject.toml with [tool.pixi.workspace].",
+            )
+        )
+
+    migration = (
+        "Consolidate dependencies by compatibility and reproducibility boundary into root "
+        "features/environments; use <component>:<task> and task.cwd; regenerate pixi.lock "
+        "at the root; validate before manually removing nested environment files."
+    )
+    for item in nested_classifications:
+        relative = item["relative_path"]
+        if item["kind"] == "workspace":
+            issues.append(
+                pixi_issue(
+                    "nested_workspace_manifest",
+                    relative,
+                    format_manifest_evidence(item),
+                    migration,
+                )
+            )
+        elif item["kind"] == "package":
+            if not configured["allow_nested_package_manifests"]:
+                issues.append(
+                    pixi_issue(
+                        "nested_package_manifest_disallowed",
+                        relative,
+                        format_manifest_evidence(item),
+                        "Enable allow_nested_package_manifests or move package metadata "
+                        "into the root workspace.",
+                    )
+                )
+        else:
+            issues.append(
+                pixi_issue(
+                    "unknown_nested_pixi_manifest",
+                    relative,
+                    format_manifest_evidence(item),
+                    migration,
+                )
+            )
+    for relative in sorted(set(nested_locks)):
+        issues.append(
+            pixi_issue(
+                "nested_pixi_lock",
+                relative,
+                "pixi.lock is outside the project root",
+                migration,
+            )
+        )
+    for relative in sorted(set(nested_environments)):
+        issues.append(
+            pixi_issue(
+                "nested_pixi_environment",
+                relative,
+                ".pixi directory is outside the project root",
+                migration,
+            )
+        )
+
+    root_lock = root / "pixi.lock"
+    root_lock_tracked = (
+        git_path_tracked(root, "pixi.lock") if root_lock.exists() else False
+    )
+    root_lock_ignored = (
+        git_path_ignored(root, "pixi.lock") if root_lock.exists() else False
+    )
+    if root_workspaces:
+        if not root_lock.exists():
+            issues.append(
+                pixi_issue(
+                    "missing_root_pixi_lock",
+                    "pixi.lock",
+                    "root workspace has no pixi.lock",
+                    "Run pixi lock at the root and commit pixi.lock.",
+                )
+            )
+        elif root_lock_tracked is not True or root_lock_ignored is True:
+            state = (
+                "Git unavailable"
+                if root_lock_tracked is None
+                else f"tracked={root_lock_tracked}, ignored={root_lock_ignored}"
+            )
+            issues.append(
+                pixi_issue(
+                    "root_pixi_lock_untracked",
+                    "pixi.lock",
+                    state,
+                    "Remove ignore rules, add pixi.lock to Git, and commit it.",
+                )
+            )
+
+    root_environment = root / ".pixi"
+    root_environment_ignored = (
+        git_path_ignored(root, ".pixi") if root_environment.exists() else None
+    )
+    root_environment_tracked = (
+        tracked_under(root, ".pixi") if root_environment.exists() else []
+    )
+    if root_environment.exists():
+        if root_environment_ignored is not True:
+            issues.append(
+                pixi_issue(
+                    "root_pixi_environment_not_ignored",
+                    ".pixi",
+                    (
+                        "Git unavailable"
+                        if root_environment_ignored is None
+                        else "root .pixi is not ignored"
+                    ),
+                    "Add /.pixi/ to the root .gitignore.",
+                )
+            )
+        if root_environment_tracked:
+            issues.append(
+                pixi_issue(
+                    "tracked_root_pixi_environment",
+                    ".pixi",
+                    "tracked files: " + ", ".join(root_environment_tracked),
+                    "Remove .pixi contents from Git while preserving the local environment.",
+                )
+            )
+
+    if scan["truncated"]:
+        issues.append(
+            pixi_issue(
+                "pixi_scan_truncated",
+                ".",
+                f"scan exceeded {scan['max_entries']} entries",
+                "Review pruned paths manually or reduce the project scan surface.",
+                severity="warning",
+            )
+        )
+
+    return {
+        **configured,
+        "uses_pixi": uses_pixi,
+        "root_manifest": (
+            root_workspaces[0]["relative_path"] if len(root_workspaces) == 1 else None
+        ),
+        "root_workspace_manifests": [item["relative_path"] for item in root_workspaces],
+        "root_lock": {
+            "present": root_lock.exists(),
+            "tracked": root_lock_tracked,
+            "ignored": root_lock_ignored,
+        },
+        "root_environment": {
+            "present": root_environment.exists(),
+            "ignored": root_environment_ignored,
+            "tracked_files": root_environment_tracked,
+        },
+        "scan": {
+            "truncated": scan["truncated"],
+            "max_depth": scan["max_depth"],
+            "max_entries": scan["max_entries"],
+        },
+        "issues": issues,
+    }
 
 
 def inspect_project(root: Path) -> dict[str, Any]:
@@ -605,6 +1115,7 @@ def inspect_project(root: Path) -> dict[str, Any]:
         "governed": manifest is not None and (root / "CURRENT_HANDOFF.md").is_file(),
         "profile": manifest.get("project", {}).get("profile") if manifest else None,
         "project_inventory": bounded_project_inventory(root),
+        "pixi_policy": inspect_pixi_policy(root, manifest),
         "control_paths": {
             path: (root / path).exists() for path in REQUIRED_CONTROL_PATHS
         },
@@ -623,20 +1134,39 @@ def markdown_section(text: str, heading: str) -> str:
 
 def checkpoint_value(text: str, label: str) -> str | None:
     checkpoint = markdown_section(text, "Checkpoint")
-    match = re.search(rf"^- {re.escape(label)}:\s*(.+?)\s*$", checkpoint, flags=re.MULTILINE)
+    match = re.search(
+        rf"^- {re.escape(label)}:\s*(.+?)\s*$", checkpoint, flags=re.MULTILINE
+    )
     return match.group(1).strip().strip("`") if match else None
 
 
 def audit_project(root: Path) -> dict[str, Any]:
     errors: list[str] = []
     warnings: list[str] = []
+    manifest_path = root / "project_manifest.yaml"
+    manifest = load_yaml(manifest_path) if manifest_path.is_file() else None
+    pixi_policy = inspect_pixi_policy(root, manifest)
+    for issue in pixi_policy["issues"]:
+        message = (
+            f"[{issue['code']}] {issue['path']}: {issue['evidence']} "
+            f"Recommendation: {issue['recommendation']}"
+        )
+        (errors if issue["severity"] == "error" else warnings).append(message)
+    missing_controls = []
     for relative in REQUIRED_CONTROL_PATHS:
         if not (root / relative).exists():
-            errors.append(f"Missing required control path: {relative}")
-    if errors:
-        return {"ok": False, "errors": errors, "warnings": warnings}
+            missing_controls.append(f"Missing required control path: {relative}")
+    errors.extend(missing_controls)
+    if missing_controls:
+        return {
+            "ok": False,
+            "errors": errors,
+            "warnings": warnings,
+            "pixi_policy": pixi_policy,
+        }
 
-    manifest = load_yaml(root / "project_manifest.yaml")
+    if manifest is None:
+        raise AssertionError("Required manifest disappeared during audit")
     if manifest.get("schema_version") != MANIFEST_SCHEMA_VERSION:
         errors.append(
             f"Manifest schema must be {MANIFEST_SCHEMA_VERSION}; found "
@@ -678,11 +1208,16 @@ def audit_project(root: Path) -> dict[str, Any]:
         for path in visible_git_files(root)
         if any(pattern.search(path) for pattern in SENSITIVE_PATTERNS)
     ]
-    errors.extend(f"Sensitive or large file is visible to Git: {path}" for path in visible_sensitive)
+    errors.extend(
+        f"Sensitive or large file is visible to Git: {path}"
+        for path in visible_sensitive
+    )
 
     git = git_status(root)
     if not git["available"]:
-        warnings.append("Git is unavailable; initialize it before creating an evidence baseline")
+        warnings.append(
+            "Git is unavailable; initialize it before creating an evidence baseline"
+        )
     elif "No commits yet" in git["output"]:
         warnings.append("Git has no baseline commit")
 
@@ -697,6 +1232,7 @@ def audit_project(root: Path) -> dict[str, Any]:
         "warnings": warnings,
         "profile": project.get("profile") if isinstance(project, dict) else None,
         "pending_sync": pending,
+        "pixi_policy": pixi_policy,
     }
 
 
@@ -728,8 +1264,12 @@ def build_handoff(
 ) -> str:
     stage = manifest.get("project", {}).get("current_stage", "unknown")
     analysis_status = manifest.get("analysis", {}).get("status", "exploratory")
-    decisions = markdown_section(previous, "Confirmed decisions") or "- 尚未记录 decision。"
-    questions = markdown_section(previous, "Open questions") or "- 尚未记录 open question。"
+    decisions = (
+        markdown_section(previous, "Confirmed decisions") or "- 尚未记录 decision。"
+    )
+    questions = (
+        markdown_section(previous, "Open questions") or "- 尚未记录 open question。"
+    )
     boundary = (
         markdown_section(previous, "Blockers and interpretation boundary")
         or "- 尚未记录 blocker 或 interpretation boundary。"
@@ -814,7 +1354,11 @@ def compact_title(value: str, limit: int = 88) -> str:
     normalized = re.sub(r"\s+", " ", value).strip()
     if not normalized:
         raise ValueError("Notion output title must not be empty")
-    return normalized if len(normalized) <= limit else normalized[: limit - 1].rstrip() + "…"
+    return (
+        normalized
+        if len(normalized) <= limit
+        else normalized[: limit - 1].rstrip() + "…"
+    )
 
 
 def build_sync_payload(
@@ -943,10 +1487,26 @@ def build_sync_payload(
         },
         "notion_target": notion_target,
         "operations": [
-            {"operation": "ensure_page", "object_type": "portfolio", **notion_target["portfolio"]},
-            {"operation": "ensure_page", "object_type": "control", **notion_target["control"]},
-            {"operation": "ensure_numbered_page", "object_type": "project", **notion_target["project"]},
-            {"operation": "ensure_numbered_page", "object_type": "output", **notion_target["output"]},
+            {
+                "operation": "ensure_page",
+                "object_type": "portfolio",
+                **notion_target["portfolio"],
+            },
+            {
+                "operation": "ensure_page",
+                "object_type": "control",
+                **notion_target["control"],
+            },
+            {
+                "operation": "ensure_numbered_page",
+                "object_type": "project",
+                **notion_target["project"],
+            },
+            {
+                "operation": "ensure_numbered_page",
+                "object_type": "output",
+                **notion_target["output"],
+            },
         ],
         "authority": {
             "git": "完整 handoff、code、environment、reports 和 evidence details",
@@ -967,7 +1527,11 @@ def write_pending_payload(root: Path, payload: dict[str, Any]) -> dict[str, Any]
     if path.exists():
         if path.read_text(encoding="utf-8") != content:
             raise FileExistsError(f"Refusing to replace immutable payload: {path}")
-        return {"written": False, "reason": "identical payload already pending", "path": str(path)}
+        return {
+            "written": False,
+            "reason": "identical payload already pending",
+            "path": str(path),
+        }
     atomic_write(path, content)
     return {"written": True, "path": str(path)}
 
@@ -1025,7 +1589,8 @@ def finalize_application(
     applied_payload = {**payload, "application": receipt}
     atomic_write(
         applied,
-        json.dumps(applied_payload, indent=2, sort_keys=True, ensure_ascii=False) + "\n",
+        json.dumps(applied_payload, indent=2, sort_keys=True, ensure_ascii=False)
+        + "\n",
     )
     pending.unlink()
     return {"pending": str(pending), "applied": str(applied), "receipt": receipt}
@@ -1045,10 +1610,9 @@ def audit_sync_queue(root: Path) -> dict[str, Any]:
             except (json.JSONDecodeError, OSError) as error:
                 errors.append(f"{path}: invalid JSON: {error}")
                 continue
-            if (
-                payload.get("schema_version") != SYNC_PAYLOAD_SCHEMA_VERSION
-                and state in {"pending", "applied"}
-            ):
+            if payload.get(
+                "schema_version"
+            ) != SYNC_PAYLOAD_SCHEMA_VERSION and state in {"pending", "applied"}:
                 errors.append(f"{path}: unsupported active payload schema")
                 continue
             if state == "pending":
@@ -1065,7 +1629,12 @@ def audit_sync_queue(root: Path) -> dict[str, Any]:
                 if not isinstance(receipt, dict) or not receipt.get("read_back"):
                     errors.append(f"{path}: applied payload lacks read-back receipt")
     errors.extend(f"Stale pending payload: {payload_id}" for payload_id in stale)
-    return {"ok": not errors, "errors": errors, "stale_payloads": stale, "counts": counts}
+    return {
+        "ok": not errors,
+        "errors": errors,
+        "stale_payloads": stale,
+        "counts": counts,
+    }
 
 
 def export_sync_payload(root: Path, args: argparse.Namespace) -> dict[str, Any]:
@@ -1200,6 +1769,17 @@ def print_inspection(value: dict[str, Any]) -> None:
             print(f"  {category}: {', '.join(paths)}")
     if not populated:
         print("  none")
+    pixi = value["pixi_policy"]
+    print(
+        "Pixi policy: "
+        f"{pixi['policy']} ({pixi['source']}), "
+        f"root={pixi['root_manifest'] or 'none'}"
+    )
+    for issue in pixi["issues"]:
+        print(
+            f"  {issue['severity'].upper()} [{issue['code']}] "
+            f"{issue['path']}: {issue['evidence']}"
+        )
     print("Control paths:")
     for path, present in value["control_paths"].items():
         print(f"  [{'ok' if present else 'missing'}] {path}")

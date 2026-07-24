@@ -2,23 +2,50 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 import subprocess
 import sys
 
 
 ROOT = Path(__file__).resolve().parents[1]
-VALIDATOR = (
-    Path.home()
-    / ".agents/skills/.system/skill-creator/scripts/quick_validate.py"
-)
+VALIDATOR_RELATIVE = Path("skills/.system/skill-creator/scripts/quick_validate.py")
+
+
+def validator_candidates(
+    *,
+    codex_home: str | None = None,
+    home: Path | None = None,
+) -> list[Path]:
+    home = home or Path.home()
+    configured = codex_home if codex_home is not None else os.environ.get("CODEX_HOME")
+    candidates = []
+    if configured:
+        candidates.append(Path(configured).expanduser() / VALIDATOR_RELATIVE)
+    candidates.extend(
+        [
+            home / ".codex" / VALIDATOR_RELATIVE,
+            home / ".agents" / VALIDATOR_RELATIVE,
+        ]
+    )
+    return list(dict.fromkeys(candidates))
+
+
+def find_validator() -> Path:
+    for candidate in validator_candidates():
+        if candidate.is_file():
+            return candidate
+    rendered = "\n".join(f"- {path}" for path in validator_candidates())
+    raise FileNotFoundError(f"Skill validator not found. Checked:\n{rendered}")
 
 
 def main() -> None:
-    if not VALIDATOR.is_file():
-        raise SystemExit(f"Skill validator not found: {VALIDATOR}")
+    try:
+        validator = find_validator()
+    except FileNotFoundError as error:
+        raise SystemExit(str(error)) from error
     result = subprocess.run(
-        [sys.executable, str(VALIDATOR), str(ROOT / "research-project-os")],
+        [sys.executable, str(validator), str(ROOT / "research-project-os")],
         check=False,
     )
     raise SystemExit(result.returncode)
