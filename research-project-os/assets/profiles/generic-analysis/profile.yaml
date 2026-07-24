@@ -1,0 +1,16 @@
+name: generic-analysis
+description: 通用 data analysis 或 quantitative research project。
+directories:
+  - analysis
+  - data
+  - docs
+  - reports
+  - results
+  - scripts
+  - tests
+required_context:
+  - docs/ai_context/project_structure.md
+  - docs/ai_context/status_policy.md
+interpretation_boundary: >-
+  在记录 inputs、code、validation 和 limitations 前，exploratory outputs
+  不能视为 verified evidence。

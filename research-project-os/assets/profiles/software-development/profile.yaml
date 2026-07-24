@@ -1,0 +1,13 @@
+name: software-development
+description: Research software、library、CLI 或 reproducible pipeline project。
+directories:
+  - docs
+  - reports
+  - src
+  - tests
+required_context:
+  - docs/ai_context/project_structure.md
+  - docs/ai_context/status_policy.md
+interpretation_boundary: >-
+  通过 software tests 只能确认 implementation behavior，不能证明 downstream
+  results 的 scientific validity。

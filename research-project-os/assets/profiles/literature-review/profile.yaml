@@ -1,0 +1,18 @@
+name: literature-review
+description: Evidence synthesis、scoping review 或 literature mapping project。
+directories:
+  - docs
+  - notes
+  - reports
+  - sources
+  - synthesis
+  - tests
+required_context:
+  - docs/ai_context/project_structure.md
+  - docs/ai_context/status_policy.md
+interpretation_boundary: >-
+  区分 retrieved source claims、reviewer observations、synthesis hypotheses
+  和 approved conclusions。记录 source query、database/index、run date、
+  deduplication、exclusions、persistent identifiers，以及 evidence 来自 metadata、
+  abstract 还是 full text。不得编造 citations，也不得将 abstract-only evidence
+  描述为 full-text appraisal。

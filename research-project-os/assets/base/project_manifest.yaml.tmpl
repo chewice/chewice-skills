@@ -1,0 +1,53 @@
+schema_version: 0.3.0
+
+project:
+  id: "{{PROJECT_ID}}"
+  name: "{{PROJECT_NAME}}"
+  profile: "{{PROFILE}}"
+  status: active
+  current_stage: setup
+  repository_root: "."
+
+source_of_truth:
+  code_and_history: git
+  current_state: CURRENT_HANDOFF.md
+  evidence_registry: reports/evidence_registry.yaml
+
+governance:
+  required_context:
+{{REQUIRED_CONTEXT}}
+  current_handoff: CURRENT_HANDOFF.md
+  handoff_archive_dir: docs/handoffs/archive
+  tasks_path: docs/ai_context/tasks.md
+  decisions_path: docs/ai_context/decisions.md
+  open_questions_path: docs/ai_context/open_questions.md
+  evidence_registry_path: reports/evidence_registry.yaml
+  notion_sync_queue: work/notion_sync
+  status_policy_path: docs/ai_context/status_policy.md
+
+analysis:
+  status: exploratory
+  interpretation_boundary: >-
+    {{INTERPRETATION_BOUNDARY}}
+  dataset_overlap_status: unknown
+
+notion:
+  synchronization_status: pending_configuration
+  portfolio_year: {{PORTFOLIO_YEAR}}
+  portfolio_title: "{{PORTFOLIO_TITLE}}"
+  portfolio_page_id: null
+  control_page_id: null
+  project_page_id: null
+  project_ordinal: null
+  databases: {}
+
+identifiers:
+  project: PRJ-
+  session: SES-
+  task: TASK-
+  question: Q-
+  observation: OBS-
+  hypothesis: HYP-
+  evidence: EVID-
+  decision: DEC-
+  report: REPORT-

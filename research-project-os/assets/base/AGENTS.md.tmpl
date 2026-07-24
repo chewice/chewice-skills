@@ -1,0 +1,26 @@
+# Repository Instructions
+
+## Language
+
+项目说明默认使用中文。稳定的 engineering terms、machine-readable contract 和
+文件名保持英文。
+
+## Session Protocol
+
+- 修改项目逻辑前，读取 `project_manifest.yaml` 和 `CURRENT_HANDOFF.md`。
+- 只加载 required context 和与当前 task 相关的 evidence。
+- 项目状态发生实质变化时更新 handoff。
+
+## Evidence
+
+- 区分 execution、observation、hypothesis、evidence 和 decision。
+- 不得把 exploratory output 直接提升为 `verified` 或 `stable` 结论。
+- 记录 inputs、validation、environment、exclusions、random seed、overlap 和
+  limitations。
+
+## Safety
+
+- 保留现有路径和 source data。
+- generated artifacts 必须通过显式 overwrite flag 才能覆盖。
+- 除非用户明确要求，否则不得 commit、push 或写入 Notion。
+- credentials、sensitive data 和大型 generated objects 不得进入 Git。

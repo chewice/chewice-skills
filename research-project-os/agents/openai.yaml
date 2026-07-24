@@ -1,0 +1,4 @@
+interface:
+  display_name: "Research Project OS"
+  short_description: "Govern research lifecycles and Notion portfolios"
+  default_prompt: "Use $research-project-os to adopt or resume this research project while preserving its existing analysis workflow."

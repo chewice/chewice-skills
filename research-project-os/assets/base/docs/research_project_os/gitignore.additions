@@ -1,0 +1,9 @@
+# 建议添加到 .gitignore
+work/notion_sync/pending/*
+work/notion_sync/applied/*
+work/notion_sync/conflicts/*
+work/notion_sync/superseded/*
+*.h5ad
+*.zarr/
+*.fastq
+*.fastq.gz
