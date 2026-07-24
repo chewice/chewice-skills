@@ -129,6 +129,9 @@ pixi run --locked python "$SKILL_DIR/scripts/build_report.py" \
 - 指定 STARsolo 输入顺序前，核实 barcode/cDNA 的实际角色。
 - 按 GSM 分组已校验的 run，同时保留 run provenance。
 - velocity 分析中，将 `Gene`、`GeneFull` 和 `Velocyto` 作为独立 STAR 参数传入，并校验 raw/filtered 10x 矩阵以及 spliced、unspliced、ambiguous 和 loom 输出。
+- 每个 sample 保留 STARsolo `GeneFull_Summary.csv`。全部 sample 完成后运行 `scripts/summarize_starsolo.py --root <GSE-dir>`，生成一行一个 GSM 的 `reports/starsolo_summary.tsv`。
+- 汇总至少展示 Estimated Number of Cells、valid barcode、sequencing saturation、genome/GeneFull mapping、fraction reads in cells、reads/UMI/gene per cell。明确区分 `EmptyDrops_CR` 实际回收细胞数和 `nExpectedCells` 算法先验。
+- 重新运行 `scripts/build_report.py`，在统一 HTML 中展示分数据集统计、跨样本分布和逐 GSM 指标；不得用 MultiQC 的 STAR alignment 表替代 STARsolo Summary。
 
 清理前运行 `scripts/audit_final_outputs.py --root <GSE-dir>`。
 

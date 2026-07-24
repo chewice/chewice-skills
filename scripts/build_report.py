@@ -10,6 +10,7 @@ import fcntl
 import html
 import os
 import re
+import statistics
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
@@ -105,6 +106,25 @@ LABELS = {
     "summary": "研究摘要",
     "overall_design": "整体设计",
     "publication": "文献",
+    "sample": "样本名",
+    "batch": "Batch",
+    "sex": "Sex",
+    "number_of_reads": "Reads",
+    "reads_with_valid_barcodes": "Valid barcodes",
+    "sequencing_saturation": "Sequencing saturation",
+    "reads_mapped_genome_unique": "Unique genome mapping",
+    "reads_mapped_genefull_unique": "Unique GeneFull mapping",
+    "estimated_number_of_cells": "Estimated cells",
+    "fraction_unique_reads_in_cells": "Reads in cells",
+    "median_reads_per_cell": "Median reads/cell",
+    "median_umi_per_cell": "Median UMI/cell",
+    "median_genefull_per_cell": "Median GeneFull/cell",
+    "samples": "样本数",
+    "total_cells": "细胞总数",
+    "median_cells": "细胞数中位数",
+    "cell_range": "细胞数范围",
+    "median_saturation": "Saturation 中位数",
+    "median_reads_in_cells": "Reads in cells 中位数",
 }
 
 
@@ -188,6 +208,15 @@ def render_value(key: str, value: str, root: Path) -> str:
         return html.escape(CHECK_ZH.get(value, value))
     if key.endswith("_bytes") and value.isdigit():
         return f"{html.escape(value)}<br><small>{format_bytes(int(value))}</small>"
+    if key in {
+        "reads_with_valid_barcodes",
+        "sequencing_saturation",
+        "reads_mapped_genome_unique",
+        "reads_mapped_genefull_unique",
+        "fraction_unique_reads_in_cells",
+    }:
+        parsed = numeric(value)
+        return f"{parsed * 100:.1f}%" if parsed is not None else html.escape(value)
     if key.endswith("_url") and value.startswith(("https://", "http://")):
         safe = html.escape(value, quote=True)
         return f'<a href="{safe}">{html.escape(value)}</a>'
@@ -217,6 +246,127 @@ def table(
     return (
         '<div class="table-wrap"><table class="filterable"><thead><tr>'
         f"{header}</tr></thead><tbody>{''.join(body)}</tbody></table></div>"
+    )
+
+
+def numeric(value: str) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def starsolo_distribution(
+    rows: list[dict[str, str]], field: str, label: str, percent: bool = False
+) -> str:
+    points = [
+        (row, value)
+        for row in rows
+        if (value := numeric(row.get(field, ""))) is not None
+    ]
+    if not points:
+        return ""
+    maximum = max(value for _, value in points) or 1
+    bars = []
+    for row, value in sorted(points, key=lambda item: item[1]):
+        display = f"{value * 100:.1f}%" if percent else f"{value:,.0f}"
+        title = html.escape(f"{row.get('gsm', '')}: {display}", quote=True)
+        bars.append(
+            f'<i style="height:{max(2.0, value / maximum * 100):.2f}%" '
+            f'title="{title}"></i>'
+        )
+    return (
+        '<div class="distribution"><strong>'
+        + html.escape(label)
+        + f"</strong><div>{''.join(bars)}</div>"
+        + "<small>每根柱代表一个 GSM；按数值从低到高排列，悬停查看样本和数值。</small></div>"
+    )
+
+
+def starsolo_body(rows: list[dict[str, str]], root: Path) -> str:
+    if not rows:
+        return '<p class="empty">尚未生成 STARsolo 跨样本汇总。</p>'
+    grouped: dict[str, list[dict[str, str]]] = {}
+    for row in rows:
+        grouped.setdefault(row.get("gse", "") or "未标注 GSE", []).append(row)
+    group_rows: list[dict[str, str]] = []
+    for gse, items in sorted(grouped.items()):
+        cells = [
+            value
+            for row in items
+            if (value := numeric(row.get("estimated_number_of_cells", ""))) is not None
+        ]
+        saturation = [
+            value
+            for row in items
+            if (value := numeric(row.get("sequencing_saturation", ""))) is not None
+        ]
+        reads_in_cells = [
+            value
+            for row in items
+            if (value := numeric(row.get("fraction_unique_reads_in_cells", ""))) is not None
+        ]
+        group_rows.append(
+            {
+                "gse": gse,
+                "samples": str(len(items)),
+                "total_cells": f"{sum(cells):.0f}" if cells else "",
+                "median_cells": f"{statistics.median(cells):.0f}" if cells else "",
+                "cell_range": f"{min(cells):.0f}–{max(cells):.0f}" if cells else "",
+                "median_saturation": (
+                    f"{statistics.median(saturation) * 100:.1f}%" if saturation else ""
+                ),
+                "median_reads_in_cells": (
+                    f"{statistics.median(reads_in_cells) * 100:.1f}%"
+                    if reads_in_cells
+                    else ""
+                ),
+            }
+        )
+    summary = table(
+        group_rows,
+        [
+            "gse",
+            "samples",
+            "total_cells",
+            "median_cells",
+            "cell_range",
+            "median_saturation",
+            "median_reads_in_cells",
+        ],
+        root,
+    )
+    columns = [
+        "gse",
+        "gsm",
+        "sample",
+        "condition",
+        "batch",
+        "sex",
+        "chemistry",
+        "estimated_number_of_cells",
+        "number_of_reads",
+        "reads_with_valid_barcodes",
+        "sequencing_saturation",
+        "reads_mapped_genome_unique",
+        "reads_mapped_genefull_unique",
+        "fraction_unique_reads_in_cells",
+        "median_umi_per_cell",
+        "median_genefull_per_cell",
+    ]
+    detail = table(rows, columns, root)
+    return (
+        "<p><strong>注意：</strong><code>Estimated Number of Cells</code> 是 cell calling "
+        "实际输出，不等同于 <code>nExpectedCells</code> 算法先验。</p>"
+        + summary
+        + '<div class="distribution-grid">'
+        + starsolo_distribution(rows, "estimated_number_of_cells", "Estimated Number of Cells")
+        + starsolo_distribution(
+            rows, "sequencing_saturation", "Sequencing Saturation", percent=True
+        )
+        + "</div><details><summary>查看逐 GSM STARsolo 指标</summary>"
+        + detail
+        + "</details>"
     )
 
 
@@ -380,6 +530,7 @@ def build(args: argparse.Namespace) -> tuple[str, Path | None]:
         "downloads": root / "reports/download_integrity_audit.tsv",
         "final": root / "reports/final_output_audit.tsv",
         "tools": root / "reports/tool_versions.tsv",
+        "starsolo": root / "reports/starsolo_summary.tsv",
     }
     data = {name: read_tsv(path) for name, path in paths.items()}
     legacy = legacy_tables(root)
@@ -440,6 +591,7 @@ def build(args: argparse.Namespace) -> tuple[str, Path | None]:
         ("downloads", "下载与完整性"),
         ("qc", "FastQC / MultiQC"),
         ("outputs", "STARsolo / velocity"),
+        ("starsolo-summary", "STARsolo 汇总"),
         ("repro", "复现信息"),
     ]
     navigation = "".join(
@@ -692,6 +844,16 @@ def build(args: argparse.Namespace) -> tuple[str, Path | None]:
             "outputs",
         )
     )
+    sections.append(
+        section(
+            "STARsolo 跨样本 Summary",
+            starsolo_body(data["starsolo"], root),
+            root,
+            output,
+            [paths["starsolo"], root / "reports/starsolo"],
+            "starsolo-summary",
+        )
+    )
 
     legacy = legacy_reports(root)
     legacy_html = ""
@@ -742,6 +904,7 @@ th,td{{padding:.48rem .58rem;border-bottom:1px solid var(--line);vertical-align:
 #report-filter{{width:min(520px,100%);padding:.55rem .7rem;border:1px solid var(--line);border-radius:.4rem}}
 button{{padding:.5rem .8rem;border:0;border-radius:.4rem;background:var(--brand);color:#fff;cursor:pointer}}
 #multiqc-frame{{width:100%;min-height:900px;border:1px solid var(--line);border-radius:.45rem;margin-top:.7rem;background:#fff}}
+.distribution-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:.8rem;margin:1rem 0}} .distribution{{border:1px solid var(--line);border-radius:.45rem;padding:.7rem}} .distribution>div{{height:160px;display:flex;align-items:end;gap:2px;border-bottom:1px solid var(--line);margin:.5rem 0}} .distribution i{{display:block;flex:1;min-width:2px;background:#2288a4;border-radius:2px 2px 0 0}} .distribution small{{color:var(--muted)}}
 footer{{color:var(--muted);text-align:center;padding:1.5rem}} a{{color:#086d91}} @media print{{nav,button,#report-filter{{display:none}} .table-wrap{{max-height:none;overflow:visible}} section{{break-inside:avoid}}}}
 </style>
 </head>

@@ -219,6 +219,29 @@ def unified_report_test(base: Path, project: Path) -> None:
         "<!doctype html><html><body><h1>MultiQC 完整报告</h1>"
         f"<p>{project}</p></body></html>"
     )
+    starsolo = (
+        project
+        / "reports/starsolo/GSE123456/GSM100001/GeneFull_Summary.csv"
+    )
+    starsolo.parent.mkdir(parents=True, exist_ok=True)
+    starsolo.write_text(
+        "Number of Reads,100000\n"
+        "Reads With Valid Barcodes,0.98\n"
+        "Sequencing Saturation,0.72\n"
+        "Reads Mapped to Genome: Unique,0.88\n"
+        "Reads Mapped to GeneFull: Unique GeneFull,0.55\n"
+        "Estimated Number of Cells,2345\n"
+        "Fraction of Unique Reads in Cells,0.80\n"
+        "Median Reads per Cell,30000\n"
+        "Median UMI per Cell,4000\n"
+        "Median GeneFull per Cell,2100\n"
+    )
+    run(
+        sys.executable,
+        str(HERE / "summarize_starsolo.py"),
+        "--root",
+        str(project),
+    )
     run(
         sys.executable,
         str(HERE / "build_report.py"),
@@ -235,6 +258,11 @@ def unified_report_test(base: Path, project: Path) -> None:
     assert 'lang="zh-CN"' in text
     assert "目录与层级说明" in text
     assert "作者原始上传还是数据库转换" in text
+    assert "STARsolo 跨样本 Summary" in text
+    assert "Estimated Number of Cells" in text
+    starsolo_rows = read_tsv(project / "reports/starsolo_summary.tsv")
+    assert len(starsolo_rows) == 1
+    assert starsolo_rows[0]["estimated_number_of_cells"] == "2345"
     assert "GSM*/fastq/" in text
     assert "../metadata/sample_metadata.tsv" in text
     assert str(project) not in text

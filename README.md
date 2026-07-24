@@ -9,4 +9,5 @@
 - 每个 GSM 使用独立目录，并保留多 run/lane 与 provenance。
 - 每个 GSE 生成唯一的中文报告：`reports/report.html`。
 - 完整 MultiQC 内容内嵌于单个 HTML；机器所需的 TSV、JSON、log 和 marker 继续保留。
+- 自动汇总样本级 STARsolo `GeneFull_Summary.csv`，生成跨样本 TSV 并纳入统一 HTML。
 - 报告中的目录和数据来源均显示相对于 GSE 根目录的路径。
