@@ -377,4 +377,8 @@ if [[ "$FINAL_PRODUCT" == "fastq" ]]; then
     find "$WORK_DIR" -type f -delete
     find "$WORK_DIR" -depth -type d -empty -delete
 fi
+if [[ -f "$ROOT/scripts/build_report.py" ]]; then
+    python "$ROOT/scripts/build_report.py" --root "$ROOT" \
+        || echo "WARNING: HTML 报告刷新失败" >&2
+fi
 echo "[$(date -Is)] COMPLETE $GSE/$GSM/$SRR source=$SOURCE product=$FINAL_PRODUCT"

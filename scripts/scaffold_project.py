@@ -7,6 +7,8 @@ import argparse
 import os
 import re
 import shutil
+import subprocess
+import sys
 from pathlib import Path
 
 
@@ -86,12 +88,6 @@ def main() -> None:
         "provider_priority\tngdc_gsa;ngdc_insdc;ena_submitted;ena_fastq;ncbi_sra\n",
     )
     write_new(
-        project / "reports/dataset_overview.md",
-        f"# {gse} dataset overview\n\n"
-        "Populate this report from official GEO/SRA/ENA/NGDC metadata before "
-        "starting a large transfer.\n",
-    )
-    write_new(
         project / "pixi.toml",
         "[workspace]\n"
         f'name = "{gse.lower()}-acquisition"\n'
@@ -124,15 +120,35 @@ def main() -> None:
         "set -Eeuo pipefail\n"
         'ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)\n'
         'MANIFEST="$ROOT/metadata/source_manifest.tsv"\n'
+        'REPORTER="$ROOT/scripts/build_report.py"\n'
+        'MULTIQC_HTML="$ROOT/reports/multiqc_data/embedded_multiqc.html"\n'
+        'refresh_report() {\n'
+        '  local args=(python "$REPORTER" --root "$ROOT")\n'
+        '  [[ -s "$MULTIQC_HTML" ]] && args+=(--multiqc-html "$MULTIQC_HTML")\n'
+        '  "${args[@]}" || echo "WARNING: HTML 报告刷新失败" >&2\n'
+        '}\n'
+        "trap refresh_report EXIT\n"
         '[[ -s "$MANIFEST" ]] || { echo "Missing $MANIFEST" >&2; exit 2; }\n'
         "while IFS= read -r run; do\n"
         '  [[ -n "$run" ]] || continue\n'
         '  "$ROOT/scripts/download_run.sh" "$ROOT" "$run"\n'
         "done < <(awk -F '\\t' 'NR>1 {gsub(/\\r/,\"\",$4); print $4}' \"$MANIFEST\")\n"
         'if [[ -d "$ROOT/reports/fastqc" ]]; then\n'
-        '  multiqc --force --outdir "$ROOT/reports/multiqc" "$ROOT/reports/fastqc"\n'
+        '  MULTIQC_DIR="$ROOT/reports/multiqc_data"\n'
+        '  mkdir -p "$MULTIQC_DIR"\n'
+        '  multiqc --force --data-dir --data-format json '
+        '--filename embedded_multiqc.html --outdir "$MULTIQC_DIR" '
+        '"$ROOT/reports/fastqc"\n'
+        '  refresh_report\n'
         "fi\n"
-        'python "$ROOT/scripts/audit_download_evidence.py" --root "$ROOT"\n',
+        'python "$ROOT/scripts/audit_download_evidence.py" --root "$ROOT"\n'
+        'if [[ -s "$MULTIQC_HTML" ]]; then\n'
+        '  python "$REPORTER" --root "$ROOT" --multiqc-html "$MULTIQC_HTML" '
+        '--consume-multiqc\n'
+        "else\n"
+        "  refresh_report\n"
+        "fi\n"
+        "trap - EXIT\n",
     )
 
     skill_scripts = Path(__file__).resolve().parent
@@ -145,6 +161,16 @@ def main() -> None:
     for script in (project / "scripts").iterdir():
         if script.is_file() and script.suffix in {".py", ".sh"}:
             script.chmod(script.stat().st_mode | 0o111)
+
+    subprocess.run(
+        [
+            sys.executable,
+            str(project / "scripts/build_report.py"),
+            "--root",
+            str(project),
+        ],
+        check=True,
+    )
 
     print(f"Created/reused {project}")
     print(f"Next: populate metadata, then run `cd {project} && pixi lock`")

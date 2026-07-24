@@ -9,11 +9,13 @@ import gzip
 import hashlib
 import http.server
 import os
+import re
 import subprocess
 import sys
 import tempfile
 import threading
 import tomllib
+from html.parser import HTMLParser
 from pathlib import Path
 
 import h5py
@@ -129,6 +131,152 @@ def final_outputs(project: Path, gsm: str) -> None:
 class QuietHandler(http.server.SimpleHTTPRequestHandler):
     def log_message(self, format: str, *args: object) -> None:
         pass
+
+
+def unified_report_test(base: Path, project: Path) -> None:
+    study_fields = [
+        "gse",
+        "title",
+        "summary",
+        "overall_design",
+        "organism",
+        "bioproject",
+        "platforms",
+        "expected_samples",
+        "expected_runs",
+        "publication",
+        "metadata_retrieved_at",
+    ]
+    write_tsv(
+        project / "metadata/study_metadata.tsv",
+        study_fields,
+        [
+            {
+                "gse": "GSE123456",
+                "title": "中文测试 <script>alert('xss')</script>",
+                "summary": "单细胞 RNA sequencing 数据集",
+                "overall_design": "两个 GSM，三个 run",
+                "organism": "Homo sapiens",
+                "bioproject": "PRJNA123456",
+                "platforms": "GPL24676",
+                "expected_samples": "2",
+                "expected_runs": "3",
+                "publication": "",
+                "metadata_retrieved_at": "2026-01-01",
+            }
+        ],
+    )
+    sample_fields = [
+        "gse",
+        "gsm",
+        "title",
+        "organism",
+        "tissue",
+        "condition",
+        "treatment",
+        "chemistry",
+        "instrument_model",
+        "run_count",
+        "lane_count",
+        "read_structure",
+        "selected_source",
+        "final_product",
+        "status",
+    ]
+    write_tsv(
+        project / "metadata/sample_metadata.tsv",
+        sample_fields,
+        [
+            {
+                "gse": "GSE123456",
+                "gsm": "GSM100001",
+                "title": "样本 A",
+                "organism": "Homo sapiens",
+                "tissue": "PBMC",
+                "condition": "control",
+                "treatment": "none",
+                "chemistry": "10x 3' v3",
+                "instrument_model": "NovaSeq 6000",
+                "run_count": "2",
+                "lane_count": "2",
+                "read_structure": "R1:28,R2:91",
+                "selected_source": "mixed",
+                "final_product": "fastq",
+                "status": "complete",
+            }
+        ],
+    )
+    write_tsv(
+        project / "reports/tool_versions.tsv",
+        ["tool", "version"],
+        [{"tool": "STAR", "version": "2.7.11b"}],
+    )
+    legacy = project / "reports/preflight_summary.md"
+    legacy.write_text("# 旧版摘要\n\n<script>alert('legacy')</script>\n")
+    multiqc = project / "reports/multiqc_data/embedded_multiqc.html"
+    multiqc.parent.mkdir(parents=True, exist_ok=True)
+    multiqc.write_text(
+        "<!doctype html><html><body><h1>MultiQC 完整报告</h1>"
+        f"<p>{project}</p></body></html>"
+    )
+    run(
+        sys.executable,
+        str(HERE / "build_report.py"),
+        "--root",
+        str(project),
+        "--multiqc-html",
+        str(multiqc),
+        "--consume-multiqc",
+    )
+    report = project / "reports/report.html"
+    assert report.is_file() and report.stat().st_size > 1000
+    assert not multiqc.exists()
+    text = report.read_text()
+    assert 'lang="zh-CN"' in text
+    assert "目录与层级说明" in text
+    assert "作者原始上传还是数据库转换" in text
+    assert "GSM*/fastq/" in text
+    assert "../metadata/sample_metadata.tsv" in text
+    assert str(project) not in text
+    assert "<script>alert('xss')</script>" not in text
+    assert "&lt;script&gt;alert(&#x27;legacy&#x27;)&lt;/script&gt;" in text
+    assert "<script src=" not in text and "<link rel=" not in text
+    HTMLParser().feed(text)
+    assert [path.name for path in (project / "reports").rglob("*.html")] == [
+        "report.html"
+    ]
+
+    payload_before = re.search(
+        r'id="multiqc-data">([^<]+)</script>', text
+    )
+    assert payload_before
+    run(
+        sys.executable,
+        str(HERE / "build_report.py"),
+        "--root",
+        str(project),
+    )
+    refreshed = report.read_text()
+    payload_after = re.search(
+        r'id="multiqc-data">([^<]+)</script>', refreshed
+    )
+    assert payload_after and payload_after.group(1) == payload_before.group(1)
+
+    previous = report.read_bytes()
+    outside = base / "outside_multiqc.html"
+    outside.write_text("<html><body>outside</body></html>")
+    run(
+        sys.executable,
+        str(HERE / "build_report.py"),
+        "--root",
+        str(project),
+        "--multiqc-html",
+        str(outside),
+        "--consume-multiqc",
+        expect=1,
+    )
+    assert report.read_bytes() == previous
+    assert outside.is_file()
 
 
 def downloader_smoke_test(base: Path) -> None:
@@ -258,6 +406,9 @@ def main() -> None:
         project = base / "GEO/GSE123456"
         assert (project / "pixi.toml").is_file()
         assert (project / "scripts/run_all.sh").is_file()
+        assert (project / "reports/report.html").is_file()
+        assert not (project / "reports/dataset_overview.md").exists()
+        run("bash", "-n", str(project / "scripts/run_all.sh"))
         with (project / "pixi.toml").open("rb") as handle:
             pixi_manifest = tomllib.load(handle)
         assert "sra-tools" in pixi_manifest["dependencies"]
@@ -587,6 +738,7 @@ def main() -> None:
             "--root",
             str(project),
         )
+        unified_report_test(base, project)
         downloader_smoke_test(base)
 
     print("SELF_TEST_PASS")

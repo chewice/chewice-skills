@@ -6,6 +6,8 @@ from __future__ import annotations
 import argparse
 import csv
 import re
+import subprocess
+import sys
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -35,6 +37,16 @@ FIELDS = [
     "final_product",
     "fallback_reason",
 ]
+
+
+def refresh_report_from_output(output: Path) -> None:
+    reporter = Path(__file__).with_name("build_report.py")
+    root = output.resolve().parent.parent
+    if output.parent.name == "metadata" and reporter.is_file():
+        subprocess.run(
+            [sys.executable, str(reporter), "--root", str(root)],
+            check=False,
+        )
 
 
 def read_tsv(path: Path) -> list[dict[str, str]]:
@@ -231,6 +243,7 @@ def main() -> None:
         writer.writerows(records)
     temp.replace(args.output)
     print(f"Wrote {args.output}: {len(records)} runs")
+    refresh_report_from_output(args.output)
 
 
 if __name__ == "__main__":

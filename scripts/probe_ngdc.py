@@ -7,6 +7,7 @@ import argparse
 import csv
 import re
 import subprocess
+import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -26,6 +27,16 @@ FIELDS = [
     "probe_attempts",
     "probe_message",
 ]
+
+
+def refresh_report_from_output(output: Path) -> None:
+    reporter = Path(__file__).with_name("build_report.py")
+    root = output.resolve().parent.parent
+    if output.parent.name == "reports" and reporter.is_file():
+        subprocess.run(
+            [sys.executable, str(reporter), "--root", str(root)],
+            check=False,
+        )
 
 
 def read_tsv(path: Path) -> list[dict[str, str]]:
@@ -225,6 +236,7 @@ def main() -> None:
     print(f"expected_runs\t{len(output_rows)}")
     for status, count in counts.items():
         print(f"ngdc_{status}_runs\t{count}")
+    refresh_report_from_output(args.output)
 
 
 if __name__ == "__main__":

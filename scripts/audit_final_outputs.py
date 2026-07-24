@@ -6,11 +6,21 @@ from __future__ import annotations
 import argparse
 import csv
 import gzip
+import subprocess
 import sys
 from pathlib import Path
 
 import h5py
 from scipy.io import mminfo
+
+
+def refresh_report(root: Path) -> None:
+    reporter = Path(__file__).with_name("build_report.py")
+    if reporter.is_file():
+        subprocess.run(
+            [sys.executable, str(reporter), "--root", str(root)],
+            check=False,
+        )
 
 
 def read_tsv(path: Path) -> list[dict[str, str]]:
@@ -179,6 +189,7 @@ def main() -> int:
     )
     for error in all_errors:
         print(f"ERROR {error}")
+    refresh_report(root)
     return 1 if all_errors else 0
 
 
