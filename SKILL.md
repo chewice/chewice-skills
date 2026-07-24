@@ -1,6 +1,6 @@
 ---
 name: download-geo-sra-safely
-description: 安全检查、规划、下载、续传、校验和记录 GEO/GSE/GSM、SRA/SRR/SRX/PRJNA、ENA 及 CNCB-NGDC GSA/INSDC 公共测序数据。当 Codex 需要下载或核验 GSE/SRA 数据、恢复中断传输、区分作者提交文件与数据库生成的 FASTQ/SRA/BAM、检查 R1/R2/I1/I2 或多 run/lane 结构、按 GSM 建立独立目录，或从公共原始 reads 生成 STARsolo/RNA velocity 输入时使用。有效且可用的 NGDC 镜像 run 优先于 ENA 或 NCBI；长任务使用 pixi 和 detached tmux，并保留可审计的完整性证据。
+description: 安全检查、规划、下载、续传、校验和记录 GEO/GSE/GSM、SRA/SRR/SRX/PRJNA、ENA 及 CNCB-NGDC GSA/INSDC 公共测序数据。当 Codex 需要下载或核验 GSE/SRA 数据、恢复中断传输、区分作者提交文件与数据库生成的 FASTQ/SRA/BAM、检查 R1/R2/I1/I2 或多 run/lane 结构、按 GSM 建立独立目录，或从公共原始 reads 生成 STARsolo/RNA velocity 输入时使用。有效且可用的 NGDC 镜像 run 优先于 ENA 或 NCBI；长任务使用 pixi 和 detached tmux；生成单文件中文 HTML 报告并保留可审计的机器证据。
 ---
 
 # 安全下载 GEO/SRA
@@ -10,6 +10,10 @@ description: 安全检查、规划、下载、续传、校验和记录 GEO/GSE/G
 将元数据发现、传输、转换和分析视为相互独立的关卡。accession 集合和最终数据产品未明确前，不得开始大规模传输。默认最终产品为可直接分析的 FASTQ。除非用户明确要求，否则不要下载 GEO logcounts 或标准化表达矩阵。
 
 使用 pixi 管理环境，并在 `pixi.lock` 中锁定解析后的工具版本。长时间下载和处理必须在 detached tmux 会话中运行。默认每 1800 秒监测一次，并按 sample/run、阶段、错误、字节数和剩余空间报告进度。
+
+每个 GSE 只生成一份面向用户的报告：`reports/report.html`。将 TSV、JSON、log 和 status marker 作为机器证据保留，不把它们视为额外的人类报告。报告标题、摘要、状态和解释使用简体中文；accession、chemistry、provenance、read structure 等专业术语可保留英文。
+
+在报告和目录说明中使用相对于 GSE 根目录的路径，例如 `metadata/sample_metadata.tsv`、`GSM*/fastq/`、`reports/logs/`。不得写入项目绝对路径。每个报告章节都要列出其机器数据来源的相对路径。
 
 使用内置命令前先设置 helper 路径：
 
@@ -28,7 +32,7 @@ SKILL_DIR="${CODEX_HOME:-$HOME/.codex}/skills/download-geo-sra-safely"
 3. 统计预期 GSM 和 SRR 数量，识别拆分为多个 run 或 lane 的 GSM。
 4. 检查作者提交文件名和数据库生成文件名中的 R1/R2/I1/I2 与技术 read 结构。必须结合 read 长度和实验元数据，不能只依据文件名。
 5. 判断下游工作真正需要 FASTQ、BAM、SRA 还是作者原始提交字节。STARsolo、重新比对和 RNA velocity 通常需要 FASTQ。
-6. 将介绍保存到 `reports/dataset_overview.md`，标准化 sample 元数据保存到 `metadata/sample_metadata.tsv`，多值 characteristics 保存到 `metadata/sample_characteristics.tsv`，完整预期 run 集合保存到 `metadata/expected_runs.tsv`。
+6. 将研究介绍保存到 `metadata/study_metadata.tsv`，标准化 sample 元数据保存到 `metadata/sample_metadata.tsv`，多值 characteristics 保存到 `metadata/sample_characteristics.tsv`，完整预期 run 集合保存到 `metadata/expected_runs.tsv`；再刷新 `reports/report.html`。
 
 当 GEO、ENA 和 SRA 对预期 run 集合的记录不一致时，不得静默继续。将差异写入预检报告并暂停，直至解决。
 
@@ -87,13 +91,35 @@ pixi run --locked python "$SKILL_DIR/scripts/audit_manifest.py" \
 
 校验已有 FASTQ 时直接使用 `scripts/validate_fastq_pair.py`。不得将“HTTP 请求成功”或“大小一致”视为充分证据。
 
-## 4. 监测与恢复
+## 4. 生成统一 HTML 报告
+
+运行：
+
+```bash
+pixi run --locked python "$SKILL_DIR/scripts/build_report.py" \
+  --root <GSE-dir>
+```
+
+默认输出为 `<GSE-dir>/reports/report.html`。报告必须整合 study/sample metadata、预检、NGDC coverage、source routing、provenance、下载与转换完整性、FastQC/MultiQC、STARsolo/velocity、工具版本和清理状态。
+
+MultiQC 使用项目内临时 HTML 时，运行：
+
+```bash
+pixi run --locked python "$SKILL_DIR/scripts/build_report.py" \
+  --root <GSE-dir> \
+  --multiqc-html <GSE-dir>/reports/multiqc_data/embedded_multiqc.html \
+  --consume-multiqc
+```
+
+仅在统一报告原子写入成功后删除明确指定的临时 MultiQC HTML；保留 MultiQC 的 JSON/TSV 数据。对旧项目，可读取已有 Markdown/TSV 报告并纳入 HTML，但不得自动删除旧文件。
+
+## 5. 监测与恢复
 
 在独立 detached tmux 会话中运行 `scripts/watchdog.sh <project-root> [interval-seconds]`。修改失败任务前阅读 `references/recovery-playbook.md`。
 
 对可重复出现的网络或完整性错误最多安全恢复三次。第三次发生相同错误后停止并报告。不得热修改正在被 sample 进程读取的 shell 脚本；先停止任务、校验语法，再重新启动。统一 CRLF 换行，并校验 TSV 数值字段，避免格式问题伪装成 read count 错误。
 
-## 5. 可选 STARsolo 与 velocity 分支
+## 6. 可选 STARsolo 与 velocity 分支
 
 仅当用户要求矩阵、重新比对或 RNA velocity 时进入此分支。阅读 `references/starsolo-read-geometry.md`。
 
@@ -106,7 +132,7 @@ pixi run --locked python "$SKILL_DIR/scripts/audit_manifest.py" \
 
 清理前运行 `scripts/audit_final_outputs.py --root <GSE-dir>`。
 
-## 6. 清理与交付
+## 7. 清理与交付
 
 先运行 `scripts/audit_download_evidence.py --root <GSE-dir>`。
 
@@ -114,6 +140,7 @@ pixi run --locked python "$SKILL_DIR/scripts/audit_manifest.py" \
 - 最终产品为 SRA：保留通过校验的 SRA。
 - 最终产品为 matrix/velocity：仅当 download-evidence 和 final-output 审计均通过后，才删除 SRA、FASTQ 和 work。
 - 不得清理未完成或未经审计的 sample。
+- 清理后再次生成 `reports/report.html`，并确认其中不存在项目绝对路径。
 
 报告：
 

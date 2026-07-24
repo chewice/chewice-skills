@@ -24,6 +24,13 @@ LOG="$LOG_DIR/watchdog.log"
 STATE="$STATE_DIR/state.tsv"
 mkdir -p "$LOG_DIR" "$STATE_DIR"
 
+refresh_report() {
+    if [[ -f "$ROOT/scripts/build_report.py" ]]; then
+        python "$ROOT/scripts/build_report.py" --root "$ROOT" \
+            || printf '[%s] WARNING HTML report refresh failed\n' "$(date -Is)" >> "$LOG"
+    fi
+}
+
 exec 9>"$STATE_DIR/watchdog.lock"
 flock -n 9 || { echo "Another watchdog is already active" >&2; exit 2; }
 
@@ -65,6 +72,7 @@ while true; do
     printf '[%s] CHECK pipeline=%s phase=%s completed=%s/%s bytes=%s free=%s recent_errors=%s restart_streak=%s\n' \
         "$(date -Is)" "$pipeline" "$current_phase" "$completed" "$expected" \
         "$bytes" "$free" "$recent_errors" "$restart_streak" | tee -a "$LOG"
+    refresh_report
 
     if (( completed > last_completed )); then
         restart_streak=0

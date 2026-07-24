@@ -24,16 +24,56 @@ GEO/GSE123456/
 ├── reports/
 │   ├── logs/
 │   ├── status/
-│   ├── dataset_overview.md
+│   ├── fastqc/
+│   ├── multiqc_data/
+│   ├── report.html
 │   ├── preflight_audit.tsv
 │   ├── ngdc_coverage.tsv
-│   └── download_integrity_audit.tsv
+│   ├── download_integrity_audit.tsv
+│   ├── final_output_audit.tsv
+│   └── tool_versions.tsv
 ├── scripts/
 ├── pixi.toml
 └── pixi.lock
 ```
 
 仅创建最终产品需要的目录。运行日志不是表达矩阵 `logcounts`，必须保留。
+
+## 路径与层级约定
+
+所有路径均以单个 GSE 根目录为基准：
+
+| 层级 | 相对路径 | 内容 |
+|---|---|---|
+| GSE 项目 | `.` | 单个数据集的完整获取和处理项目 |
+| 元数据 | `metadata/` | study、sample、run、ENA 与 source manifest |
+| GSM sample | `GSM*/` | 每个 GSM 的独立目录 |
+| run FASTQ | `GSM*/fastq/` | 按 SRR 分开的 R1/R2/I1/I2 |
+| SRA | `GSM*/sra/` | 需要保留时的归档文件 |
+| 临时转换 | `GSM*/work/` | `.part`、SRA 转换和中间文件 |
+| 10x 矩阵 | `GSM*/matrix_10x/` | raw/filtered feature-barcode matrix |
+| RNA velocity | `GSM*/velocity/` | spliced、unspliced、ambiguous 与 loom |
+| 统一报告 | `reports/report.html` | 唯一面向用户的中文 HTML |
+| 机器证据 | `reports/*.tsv` | preflight、coverage、download、final audit |
+| QC 数据 | `reports/fastqc/`、`reports/multiqc_data/` | 供统一报告读取的机器数据 |
+| 日志与状态 | `reports/logs/`、`reports/status/` | 原始日志和完成 marker |
+
+HTML 中显示上述项目相对路径。从 `reports/report.html` 链接文件时，实际 href 使用 `../metadata/...` 等浏览器相对地址。不得将 GSE 根目录的绝对路径写入报告。
+
+## 报告展示层
+
+`reports/report.html` 是唯一面向用户的报告。它由 `scripts/build_report.py` 原子生成，使用 UTF-8 和内联 CSS/JS，不依赖 CDN。完整 MultiQC HTML 以内嵌 iframe 保存到该文件；成功内嵌后删除临时 MultiQC HTML，但保留 JSON/TSV 等机器数据。
+
+以下文件继续使用 TSV/JSON/log 等机器可读格式，因为下载、恢复和审计脚本依赖它们：
+
+- `metadata/*.tsv`
+- `GSM*/download_manifest.tsv`
+- `reports/*_audit.tsv`
+- `reports/ngdc_coverage.tsv`
+- `reports/logs/*`
+- `reports/status/*`
+
+旧项目中的 `reports/dataset_overview.md`、`reports/preflight_summary.md` 和 `reports/ngdc_mirror_audit.md` 可被纳入统一报告，但生成器不得自动删除它们。
 
 ## `expected_runs.tsv`
 

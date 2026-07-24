@@ -8,6 +8,7 @@ import csv
 import os
 import re
 import statistics
+import subprocess
 import sys
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -43,6 +44,15 @@ PROVENANCE = {
 NGDC_STATUS = {"available", "missing", "invalid", "unreachable", "not_probed"}
 ROLES = {"SRA", "R1", "R2", "I1", "I2", "BAM", "OTHER"}
 PRODUCTS = {"fastq", "sra", "matrix_velocity"}
+
+
+def refresh_report(root: Path) -> None:
+    reporter = Path(__file__).with_name("build_report.py")
+    if reporter.is_file():
+        subprocess.run(
+            [sys.executable, str(reporter), "--root", str(root)],
+            check=False,
+        )
 
 
 def split(value: str) -> list[str]:
@@ -342,6 +352,7 @@ def main() -> int:
         f"AUDIT samples={sample_count} runs={run_count} "
         f"errors={levels['ERROR']} warnings={levels['WARNING']} report={report}"
     )
+    refresh_report(root)
     return 1 if levels["ERROR"] else 0
 
 

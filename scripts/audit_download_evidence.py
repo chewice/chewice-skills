@@ -14,6 +14,15 @@ from collections import Counter
 from pathlib import Path
 
 
+def refresh_report(root: Path) -> None:
+    reporter = Path(__file__).with_name("build_report.py")
+    if reporter.is_file():
+        subprocess.run(
+            [sys.executable, str(reporter), "--root", str(root)],
+            check=False,
+        )
+
+
 def read_tsv(path: Path) -> list[dict[str, str]]:
     with path.open(newline="") as handle:
         return list(csv.DictReader(handle, delimiter="\t"))
@@ -168,7 +177,9 @@ def main() -> int:
     output = args.output or root / "reports/download_integrity_audit.tsv"
     source_rows = read_tsv(manifest)
     if source_rows and "selected_source" not in source_rows[0]:
-        return legacy_log_audit(root, source_rows, output)
+        result = legacy_log_audit(root, source_rows, output)
+        refresh_report(root)
+        return result
     errors: list[str] = []
     report_rows: list[dict[str, str]] = []
     observed: dict[str, dict[str, str]] = {}
@@ -316,6 +327,7 @@ def main() -> int:
     )
     for error in errors:
         print(f"ERROR {error}")
+    refresh_report(root)
     return 1 if errors else 0
 
 
