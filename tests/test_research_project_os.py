@@ -100,6 +100,10 @@ class ResearchProjectOSTests(unittest.TestCase):
             manifest = (root / "project_manifest.yaml").read_text(encoding="utf-8")
 
             self.assertIn("项目说明默认使用中文", agents)
+            self.assertIn(
+                "You may use superpowers, but do not write any spec or plan.",
+                agents,
+            )
             self.assertIn("已采用 Research Project OS control layer", handoff)
             self.assertIn("biological replicate", manifest)
             self.assertIn("schema_version: 0.3.0", manifest)
@@ -124,6 +128,13 @@ class ResearchProjectOSTests(unittest.TestCase):
             )
             self.assertTrue(
                 (root / "docs/research_project_os/AGENTS.additions.md").is_file()
+            )
+            additions = (
+                root / "docs/research_project_os/AGENTS.additions.md"
+            ).read_text(encoding="utf-8")
+            self.assertIn(
+                "You may use superpowers, but do not write any spec or plan.",
+                additions,
             )
             self.assertTrue((root / "project_manifest.yaml").is_file())
             for path in ("analysis", "config", "data", "results", "scripts", "tests"):
