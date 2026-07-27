@@ -7,10 +7,10 @@ set -Eeuo pipefail
 }
 ROOT=$(cd "$1" && pwd)
 INTERVAL=${2:-1800}
-[[ "$INTERVAL" =~ ^[0-9]+$ ]] && (( INTERVAL >= 60 )) || {
+if [[ ! "$INTERVAL" =~ ^[0-9]+$ ]] || (( INTERVAL < 60 )); then
     echo "Interval must be an integer >= 60" >&2
     exit 2
-}
+fi
 MANIFEST="$ROOT/metadata/source_manifest.tsv"
 [[ -s "$MANIFEST" ]] || { echo "Missing $MANIFEST" >&2; exit 2; }
 GSE=$(awk -F '\t' 'NR==2 {gsub(/\r/,"",$1); print $1}' "$MANIFEST")
@@ -20,6 +20,7 @@ AUTO_RESTART=${GEO_SRA_AUTO_RESTART:-1}
 MAX_RESTARTS=${GEO_SRA_MAX_RESTARTS:-3}
 LOG_DIR="$ROOT/reports/logs"
 STATE_DIR="$ROOT/reports/watchdog"
+TRANSFER_STATUS_DIR="$ROOT/reports/status"
 LOG="$LOG_DIR/watchdog.log"
 STATE="$STATE_DIR/state.tsv"
 mkdir -p "$LOG_DIR" "$STATE_DIR"
@@ -56,6 +57,32 @@ phase() {
     fi
 }
 
+transfer_summary() {
+    python - "$TRANSFER_STATUS_DIR" <<'PY'
+import json
+import sys
+from collections import Counter
+from pathlib import Path
+
+states = []
+for path in Path(sys.argv[1]).glob("*.transfer.json"):
+    try:
+        states.append(json.loads(path.read_text()))
+    except (OSError, json.JSONDecodeError):
+        continue
+terminal = sorted(
+    state.get("run", "") for state in states
+    if state.get("status") == "terminal_failed"
+)
+classes = Counter(
+    state.get("error_class", "") for state in states
+    if state.get("error_class")
+)
+print(",".join(item for item in terminal if item))
+print(",".join(f"{key}:{value}" for key, value in sorted(classes.items())))
+PY
+}
+
 while true; do
     completed=$(find "$ROOT/reports/status" -maxdepth 1 -type f -name '*.complete' 2>/dev/null | wc -l)
     bytes=$(du -sb "$ROOT" | awk '{print $1}')
@@ -69,9 +96,13 @@ while true; do
     recent_errors=$(find "$LOG_DIR" -type f -name '*.log' -mmin -35 -print0 2>/dev/null \
         | xargs -0 -r tail -n 200 2>/dev/null \
         | grep -Eic '(^|[^[:alpha:]])(error|failed|corrupt|mismatch)([^[:alpha:]]|$)' || true)
-    printf '[%s] CHECK pipeline=%s phase=%s completed=%s/%s bytes=%s free=%s recent_errors=%s restart_streak=%s\n' \
+    mapfile -t transfer < <(transfer_summary)
+    terminal_runs=${transfer[0]:-}
+    error_classes=${transfer[1]:-}
+    printf '[%s] CHECK pipeline=%s phase=%s completed=%s/%s bytes=%s free=%s recent_errors=%s restart_streak=%s terminal_runs=%s error_classes=%s\n' \
         "$(date -Is)" "$pipeline" "$current_phase" "$completed" "$expected" \
-        "$bytes" "$free" "$recent_errors" "$restart_streak" | tee -a "$LOG"
+        "$bytes" "$free" "$recent_errors" "$restart_streak" \
+        "${terminal_runs:-none}" "${error_classes:-none}" | tee -a "$LOG"
     refresh_report
 
     if (( completed > last_completed )); then
@@ -85,6 +116,15 @@ while true; do
         printf 'last_completed\t%s\nrestart_streak\t0\n' "$completed" > "${STATE}.tmp"
         mv "${STATE}.tmp" "$STATE"
         exit 0
+    fi
+
+    if [[ -n "$terminal_runs" ]]; then
+        printf '[%s] STOP terminal transfer failure requires review: %s\n' \
+            "$(date -Is)" "$terminal_runs" | tee -a "$LOG"
+        printf 'last_completed\t%s\nrestart_streak\t%s\nterminal_runs\t%s\n' \
+            "$completed" "$restart_streak" "$terminal_runs" > "${STATE}.tmp"
+        mv "${STATE}.tmp" "$STATE"
+        exit 1
     fi
 
     if [[ "$pipeline" == missing && "$AUTO_RESTART" == 1 ]]; then

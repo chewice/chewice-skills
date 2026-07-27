@@ -1,73 +1,65 @@
 # 传输中断与恢复手册
 
-## 传输不变量
+## 不变量与状态机
 
-出现最终文件名，表示所有适用的不变量均已通过：
+每个 run 依次经过 `preflight -> transfer/prefetch -> converting -> validating ->
+publishing -> complete`。`reports/status/<run>.transfer.json` 是跨进程状态，
+`reports/status/<run>.complete` 仅在最终 manifest 原子写入后生成。
 
-1. 与发布的字节数一致。
-2. 与发布的 MD5/checksum 一致。
-3. FASTQ 通过 `gzip -t`，或 SRA 通过 `vdb-validate`。
-4. 转换已原子完成。
-5. 配对记录数与 expected spots 一致。
+- 下载与转换只写 `GSM*/work/<run>/staging/`。
+- 最终目录中的文件必须属于已校验的发布事务。
+- 同一 run 由 `flock` 串行化。
+- R1、R2 和适用的 I1/I2 作为一个 run 事务校验；任一文件失败都不得发布。
+- `publish.json` 记录每个 staged/final 路径、字节数和 MD5。进程在改名间退出时，
+  下一次运行逐项复核后继续提交。
 
-进行中的传输写入 `.part`。使用 aria2 时保留 `.part.aria2`，以便信任已完成的分片。缺少 piece metadata 的 partial 文件不能安全续传。
+## 可信断点
 
-## 常见故障
+aria2 partial 仅在以下三项同时存在且一致时续传：
 
-### TLS/网络中断
+1. `<file>.part`；
+2. `<file>.part.aria2` piece map；
+3. `<file>.part.resume.json`，其中 source fingerprint 与当前 manifest 一致。
 
-- 保留 `.part` 和 `.part.aria2`。
-- 仅重试受影响的分片。
-- 不要向未跟踪的 partial 追加新数据流。
-- 连续三次出现相同故障后停止，并将该线路记录为 unreachable。
+source fingerprint 覆盖 source、URL、expected bytes、provider MD5、read role 和最终
+产品。可获得时还比较 ETag、Last-Modified 和远端 Content-Length。任一稳定标识变化，
+将旧断点移到 `GSM*/work/<run>/quarantine/`，从零开始；不得拼接不同远端对象。
 
-### 大小符合预期但 checksum 错误
+aria2 每次调用只尝试一次。外层默认最多三次同类错误，并将次数写入 transfer JSON；
+因此 tmux 或 watchdog 重启不会重置预算。默认退避由
+`GEO_SRA_RETRY_DELAYS=0,30,120` 控制。
 
-- 将文件视为损坏。
-- 删除 `.part` 及其控制文件。
-- 从第 0 字节重新下载。
-- 不得仅凭大小一致就提升为最终文件。
+## 故障分类
 
-### SRA endpoint 不提供 checksum
+| 类别 | 行为 |
+|---|---|
+| `network_interrupted` | 保留可信 partial，按预算续传 |
+| `checksum_or_integrity` | 隔离完整但损坏的文件，从零重下 |
+| `remote_changed` | 立即停止，重新核对 endpoint/manifest |
+| `disk_or_conversion` | 立即停止，检查空间和 fasterq size check |
+| `conversion_failure` | 立即停止，保留 SRA 与日志 |
+| `read_validation` | 立即停止，核对 expected spots、layout 和 read role |
 
-- 要求稳定且大于零的 Content-Length。
-- 原子化下载。
-- 要求通过 `vdb-validate` 内部 MD5/一致性检查。
-- 要求转换后的 read 数与提供方 `expected_spots` 一致。
+三次相同可恢复错误或任一不可安全重试错误将状态设为 `terminal_failed`。watchdog
+看到该状态必须停止，不得循环启动 pipeline。
 
-### 假性 read count 不一致
+## NCBI prefetch
 
-- 解析 TSV 前统一 CRLF。
-- 对空 tab 字段不要使用会折叠空白的 shell 解析方式。
-- 运行 sample 前校验数值字段。
-- 将 expected、R1 和 R2 规范为整数后比较。
+`prefetch` 的工作目录跨重试保留，使 SRA Toolkit 自身恢复缓存。只有出现完整
+`.sra` 且 `vdb-validate` 失败时才隔离该文件；不得因普通 TLS/网络失败清空 cache。
 
-### R1/R2/I1/I2 角色不明确
+## 人工恢复与换源
 
-- 检查提交文件名、run metadata、read 长度和 chemistry。
-- 不能跨平台假设 `_1` 必然是 barcode read 或 biological read。
-- technical reads 必须保持分离。
-- read 角色仍不明确时，预检必须失败。
-
-### 多 run 或多 lane sample
-
-- 独立校验每个 run。
-- 下载阶段保持文件分离。
-- 仅在调用分析时按 GSM 对 run 分组。
-- 在最终 provenance 中保留参与分析的 SRR 列表。
-
-### 运行期间修改活动脚本
-
-- 干净停止受影响任务。
-- 运行 `bash -n` 或相应的语法检查器。
-- 从已校验 checkpoint 重新启动。
-- 不得热修改活动 Bash 进程之后可能读取的 shell 脚本。
+1. 阅读 `reports/status/<run>.transfer.json` 和对应 log。
+2. 解决磁盘、metadata 或 endpoint 问题。
+3. 若继续同一 source，保留可信 partial；需要新的三次预算时，先人工审计错误原因，
+   再归档该 transfer JSON。
+4. 若换源，重新运行 source selection/audit。新的 fingerprint 会归档旧状态并隔离
+   不匹配断点。
+5. 不要手工把 `.part` 政名为最终文件，不要热修改活动脚本。
 
 ## 清理关卡
 
-仅当满足以下条件时删除源文件：
-
-- 每个预期 run 都有通过校验的 download manifest 记录；
-- 用户要求的最终 artifact 存在并通过直接审计；
-- 没有活动进程正在使用 `.part`、`.aria2` 或 `.tmp`；
-- 清理行为与用户要求的最终产品一致。
+仅当每个预期 run 均有 PASS download manifest、匹配的 complete marker、直接终端
+文件审计且没有活动事务时清理。执行 `audit_download_evidence.py --deep` 后，才删除
+`.part`、`.aria2`、resume metadata、SRA 或 FASTQ 源文件。

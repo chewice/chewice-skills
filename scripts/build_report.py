@@ -8,14 +8,14 @@ import base64
 import csv
 import fcntl
 import html
+import json
 import os
 import re
 import statistics
 from collections import Counter
+from collections.abc import Iterable
 from datetime import datetime
 from pathlib import Path
-from typing import Iterable
-
 
 STATUS_ZH = {
     "PASS": "通过",
@@ -31,6 +31,9 @@ STATUS_ZH = {
     "complete": "完成",
     "running": "运行中",
     "pending": "待处理",
+    "in_progress": "进行中",
+    "retryable_failed": "可恢复失败",
+    "terminal_failed": "终止失败",
 }
 
 CHECK_ZH = {
@@ -541,6 +544,25 @@ def build(args: argparse.Namespace) -> tuple[str, Path | None]:
     raw_download_rows = [
         row for manifest in download_manifests for row in read_tsv(manifest)
     ]
+    transfer_states = []
+    for path in sorted((root / "reports/status").glob("*.transfer.json")):
+        try:
+            state = json.loads(path.read_text())
+        except (OSError, json.JSONDecodeError):
+            continue
+        transfer_states.append(
+            {
+                "run": state.get("run", path.name.removesuffix(".transfer.json")),
+                "phase": state.get("phase", ""),
+                "status": state.get("status", ""),
+                "attempt_count": state.get("attempt_count", 0),
+                "resume_count": state.get("resume_count", 0),
+                "bytes_resumed": state.get("bytes_resumed", 0),
+                "error_class": state.get("error_class", ""),
+                "last_error": state.get("last_error", ""),
+                "updated_at": state.get("updated_at", ""),
+            }
+        )
 
     all_rows = data["sources"] or data["expected"]
     gse_values = sorted(
@@ -562,6 +584,10 @@ def build(args: argparse.Namespace) -> tuple[str, Path | None]:
         row.get("level") == "ERROR" for row in data["preflight"]
     ) + sum(row.get("status") == "FAIL" for row in data["downloads"] + data["final"])
     warnings = sum(row.get("level") == "WARNING" for row in data["preflight"])
+    terminal_failures = sum(
+        row.get("status") == "terminal_failed" for row in transfer_states
+    )
+    errors += terminal_failures
     source_counts = Counter(row.get("selected_source", "") for row in data["sources"])
     provenance_counts = Counter(
         row.get("selected_provenance", "") for row in data["sources"]
@@ -573,6 +599,7 @@ def build(args: argparse.Namespace) -> tuple[str, Path | None]:
         ("GSM", str(len(samples))),
         ("run", str(len(runs))),
         ("完成 marker", f"{len(completion_markers)}/{len(runs) or '?'}"),
+        ("终止传输", str(terminal_failures)),
         ("错误", str(errors)),
         ("警告", str(warnings)),
     ]
@@ -589,6 +616,7 @@ def build(args: argparse.Namespace) -> tuple[str, Path | None]:
         ("preflight", "预检"),
         ("routing", "数据源与 provenance"),
         ("downloads", "下载与完整性"),
+        ("transfer-recovery", "断点恢复"),
         ("qc", "FastQC / MultiQC"),
         ("outputs", "STARsolo / velocity"),
         ("starsolo-summary", "STARsolo 汇总"),
@@ -778,6 +806,9 @@ def build(args: argparse.Namespace) -> tuple[str, Path | None]:
             "expected_spots",
             "observed_r1",
             "observed_r2",
+            "attempt_count",
+            "resume_count",
+            "integrity_methods",
             "status",
             "message",
         ]
@@ -791,6 +822,9 @@ def build(args: argparse.Namespace) -> tuple[str, Path | None]:
             "final_product",
             "observed_r1",
             "observed_r2",
+            "attempt_count",
+            "resume_count",
+            "integrity_methods",
             "validation",
             "completed_at",
         ]
@@ -803,6 +837,31 @@ def build(args: argparse.Namespace) -> tuple[str, Path | None]:
             output,
             [paths["downloads"], *download_manifests],
             "downloads",
+        )
+    )
+    sections.append(
+        section(
+            "断点续传与失败状态",
+            table(
+                transfer_states,
+                [
+                    "run",
+                    "phase",
+                    "status",
+                    "attempt_count",
+                    "resume_count",
+                    "bytes_resumed",
+                    "error_class",
+                    "last_error",
+                    "updated_at",
+                ],
+                root,
+                "尚无传输状态记录。",
+            ),
+            root,
+            output,
+            [root / "reports/status"],
+            "transfer-recovery",
         )
     )
 

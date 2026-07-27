@@ -4,25 +4,28 @@
 from __future__ import annotations
 
 import csv
+import fcntl
 import functools
 import gzip
 import hashlib
 import http.server
+import json
 import os
 import re
+import socket
 import subprocess
 import sys
 import tempfile
 import threading
-import tomllib
 from html.parser import HTMLParser
 from pathlib import Path
+from typing import ClassVar
 
 import h5py
 import numpy as np
+import tomllib
 from scipy import sparse
 from scipy.io import mmwrite
-
 
 HERE = Path(__file__).resolve().parent
 
@@ -131,6 +134,50 @@ def final_outputs(project: Path, gsm: str) -> None:
 class QuietHandler(http.server.SimpleHTTPRequestHandler):
     def log_message(self, format: str, *args: object) -> None:
         pass
+
+
+class InterruptingRangeHandler(http.server.BaseHTTPRequestHandler):
+    payload = b""
+    interrupted = False
+    resumed_offsets: ClassVar[list[int]] = []
+
+    def log_message(self, format: str, *args: object) -> None:
+        pass
+
+    def headers_for(self, status: int, length: int, start: int = 0) -> None:
+        self.send_response(status)
+        self.send_header("Content-Length", str(length))
+        self.send_header("Accept-Ranges", "bytes")
+        self.send_header("ETag", '"stable-fixture"')
+        if status == 206:
+            self.send_header(
+                "Content-Range",
+                f"bytes {start}-{len(self.payload) - 1}/{len(self.payload)}",
+            )
+        self.end_headers()
+
+    def do_HEAD(self) -> None:
+        self.headers_for(200, len(self.payload))
+
+    def do_GET(self) -> None:
+        match = re.match(r"bytes=(\d+)-", self.headers.get("Range", ""))
+        start = int(match.group(1)) if match else 0
+        if not type(self).interrupted:
+            type(self).interrupted = True
+            self.headers_for(206 if match else 200, len(self.payload) - start, start)
+            stop = start + max(1, (len(self.payload) - start) // 2)
+            self.wfile.write(self.payload[start:stop])
+            self.wfile.flush()
+            try:
+                self.connection.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+            self.connection.close()
+            return
+        if start:
+            type(self).resumed_offsets.append(start)
+        self.headers_for(206 if match else 200, len(self.payload) - start, start)
+        self.wfile.write(self.payload[start:])
 
 
 def unified_report_test(base: Path, project: Path) -> None:
@@ -353,7 +400,7 @@ def downloader_smoke_test(base: Path) -> None:
             f"http://127.0.0.1:{port}/{r2_source.name}"
         ),
         "selected_bytes": f"{r1_source.stat().st_size};{r2_source.stat().st_size}",
-        "selected_md5": f"{'0' * 32};{digest(r2_source)}",
+        "selected_md5": f"{digest(r1_source)};{'0' * 32}",
         "read_roles": "R1;R2",
         "final_product": "fastq",
         "fallback_reason": "ngdc_missing",
@@ -375,6 +422,24 @@ def downloader_smoke_test(base: Path) -> None:
         }
     )
     try:
+        lock = project / "GSM200001/work/SRR20000001/run.lock"
+        lock.parent.mkdir(parents=True, exist_ok=True)
+        with lock.open("w") as lock_handle:
+            fcntl.flock(lock_handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            locked = subprocess.run(
+                [
+                    "bash",
+                    str(HERE / "download_run.sh"),
+                    str(project),
+                    "SRR20000001",
+                ],
+                text=True,
+                capture_output=True,
+                env=environment,
+                check=False,
+            )
+            assert locked.returncode == 75
+            fcntl.flock(lock_handle, fcntl.LOCK_UN)
         failed = subprocess.run(
             [
                 "bash",
@@ -385,6 +450,7 @@ def downloader_smoke_test(base: Path) -> None:
             text=True,
             capture_output=True,
             env=environment,
+            check=False,
         )
         assert failed.returncode != 0, (
             f"wrong-MD5 download unexpectedly succeeded\n"
@@ -393,6 +459,14 @@ def downloader_smoke_test(base: Path) -> None:
         assert not (
             project / "GSM200001/fastq/SRR20000001_R1.fastq.gz"
         ).exists()
+        assert not (
+            project / "GSM200001/fastq/SRR20000001_R2.fastq.gz"
+        ).exists()
+        transfer_state = json.loads(
+            (project / "reports/status/SRR20000001.transfer.json").read_text()
+        )
+        assert transfer_state["status"] == "terminal_failed"
+        assert transfer_state["error_class"] == "checksum_or_integrity"
 
         row["selected_md5"] = f"{digest(r1_source)};{digest(r2_source)}"
         write_tsv(manifest, fields, [row])
@@ -413,6 +487,378 @@ def downloader_smoke_test(base: Path) -> None:
             str(project),
             "--deep",
         )
+        retained_r1 = project / "GSM200001/fastq/SRR20000001_R1.fastq.gz"
+        original = retained_r1.read_bytes()
+        retained_r1.write_bytes(original[:-1] + bytes([original[-1] ^ 0xFF]))
+        tampered = subprocess.run(
+            [
+                sys.executable,
+                str(HERE / "audit_download_evidence.py"),
+                "--root",
+                str(project),
+                "--deep",
+            ],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        assert tampered.returncode != 0
+        retained_r1.write_bytes(original)
+        run(
+            sys.executable,
+            str(HERE / "audit_download_evidence.py"),
+            "--root",
+            str(project),
+            "--deep",
+        )
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def prefetch_resume_test(base: Path) -> None:
+    project = base / "prefetch_project"
+    (project / "metadata").mkdir(parents=True)
+    stubs = base / "prefetch_stubs"
+    stubs.mkdir()
+    prefetch = stubs / "prefetch"
+    prefetch.write_text(
+        "#!/usr/bin/env bash\n"
+        "set -eu\n"
+        "run=$1\n"
+        "shift\n"
+        "while [[ $# -gt 0 ]]; do\n"
+        "  if [[ $1 == -O ]]; then out=$2; shift 2; else shift; fi\n"
+        "done\n"
+        "mkdir -p \"$out/$run\"\n"
+        "if [[ ! -f \"$out/$run/resume.cache\" ]]; then\n"
+        "  printf partial > \"$out/$run/resume.cache\"\n"
+        "  exit 1\n"
+        "fi\n"
+        "printf valid-sra > \"$out/$run/$run.sra\"\n"
+    )
+    validator = stubs / "vdb-validate"
+    validator.write_text("#!/usr/bin/env bash\n[[ -s $1 ]]\n")
+    fasterq = stubs / "fasterq-dump"
+    fasterq.write_text(
+        "#!/usr/bin/env bash\n"
+        "set -eu\n"
+        "size_check=0\n"
+        "outdir=\n"
+        "source=\n"
+        "while [[ $# -gt 0 ]]; do\n"
+        "  case $1 in\n"
+        "    --size-check) [[ $2 == only ]] && size_check=1; shift 2 ;;\n"
+        "    --outdir) outdir=$2; shift 2 ;;\n"
+        "    --temp|--threads) shift 2 ;;\n"
+        "    --split-files) shift ;;\n"
+        "    *) source=$1; shift ;;\n"
+        "  esac\n"
+        "done\n"
+        "(( size_check == 1 )) && exit 0\n"
+        "run=$(basename \"$source\" .sra)\n"
+        "mkdir -p \"$outdir\"\n"
+        "printf '@r1\\nAAAAAAAAAAAAAAAAAAAAAAAAAAAA\\n+\\nIIIIIIIIIIIIIIIIIIIIIIIIIIII\\n"
+        "@r2\\nAAAAAAAAAAAAAAAAAAAAAAAAAAAA\\n+\\nIIIIIIIIIIIIIIIIIIIIIIIIIIII\\n' "
+        "> \"$outdir/$run.fastq\"\n"
+    )
+    prefetch.chmod(0o755)
+    validator.chmod(0o755)
+    fasterq.chmod(0o755)
+    fields = [
+        "gse", "gsm", "srx", "srr", "run_alias", "lane", "library_layout",
+        "read_structure", "expected_spots", "cb_length", "umi_length",
+        "ngdc_status", "ngdc_run_page", "ngdc_url", "ngdc_bytes",
+        "selected_source", "selected_provenance", "selected_urls",
+        "selected_bytes", "selected_md5", "read_roles", "final_product",
+        "fallback_reason",
+    ]
+    write_tsv(
+        project / "metadata/source_manifest.tsv",
+        fields,
+        [
+            {
+                "gse": "GSE400000",
+                "gsm": "GSM400001",
+                "srx": "SRX400001",
+                "srr": "SRR40000001",
+                "run_alias": "prefetch",
+                "lane": "",
+                "library_layout": "SINGLE",
+                "read_structure": "R1:28",
+                "expected_spots": "2",
+                "cb_length": "",
+                "umi_length": "",
+                "ngdc_status": "unreachable",
+                "ngdc_run_page": "",
+                "ngdc_url": "",
+                "ngdc_bytes": "",
+                "selected_source": "ncbi_sra",
+                "selected_provenance": "ARCHIVE_NORMALIZED_SRA",
+                "selected_urls": "SRR40000001",
+                "selected_bytes": "",
+                "selected_md5": "",
+                "read_roles": "SRA",
+                "final_product": "fastq",
+                "fallback_reason": "ngdc_unreachable",
+            }
+        ],
+    )
+    environment = os.environ.copy()
+    environment.update(
+        {
+            "PATH": f"{stubs}:{environment['PATH']}",
+            "GEO_SRA_MAX_ATTEMPTS": "2",
+            "GEO_SRA_RETRY_DELAYS": "0,0",
+            "GEO_SRA_RUN_FASTQC": "0",
+        }
+    )
+    run(
+        "bash",
+        str(HERE / "download_run.sh"),
+        str(project),
+        "SRR40000001",
+        env=environment,
+    )
+    assert (project / "GSM400001/fastq/SRR40000001_R1.fastq.gz").is_file()
+    assert not (project / "GSM400001/sra/SRR40000001.sra").exists()
+    state = json.loads(
+        (project / "reports/status/SRR40000001.transfer.json").read_text()
+    )
+    assert state["attempt_count"] == 2 and state["status"] == "complete"
+
+
+def watchdog_terminal_test(base: Path) -> None:
+    project = base / "watchdog_project"
+    (project / "metadata").mkdir(parents=True)
+    (project / "reports/status").mkdir(parents=True)
+    (project / "metadata/source_manifest.tsv").write_text(
+        "gse\tgsm\tsrr\nGSE500000\tGSM500001\tSRR50000001\n"
+    )
+    (project / "reports/status/SRR50000001.transfer.json").write_text(
+        json.dumps(
+            {
+                "run": "SRR50000001",
+                "status": "terminal_failed",
+                "error_class": "checksum_or_integrity",
+            }
+        )
+    )
+    result = subprocess.run(
+        ["bash", str(HERE / "watchdog.sh"), str(project), "60"],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 1
+    assert "terminal transfer failure" in result.stdout
+
+
+def transfer_state_test(base: Path) -> None:
+    helper = HERE / "transfer_state.py"
+    state = base / "transfer.json"
+    fingerprint = run(
+        sys.executable,
+        str(helper),
+        "fingerprint",
+        "--source",
+        "ena_fastq",
+        "--urls",
+        "https://example.invalid/R1.fastq.gz",
+        "--bytes",
+        "100",
+        "--md5",
+        "a" * 32,
+        "--roles",
+        "R1",
+        "--final-product",
+        "fastq",
+    ).stdout.strip()
+    run(
+        sys.executable,
+        str(helper),
+        "update",
+        "--path",
+        str(state),
+        "--run",
+        "SRRSTATE1",
+        "--fingerprint",
+        fingerprint,
+        "--phase",
+        "transfer",
+        "--status",
+        "retryable_failed",
+        "--attempt-delta",
+        "1",
+        "--resume-delta",
+        "1",
+        "--error-class",
+        "network_interrupted",
+        "--error-key",
+        "R1:network_interrupted",
+    )
+    saved = json.loads(state.read_text())
+    assert saved["attempt_count"] == 1 and saved["resume_count"] == 1
+    resume = base / "resume.json"
+    resume_args = [
+        sys.executable,
+        str(helper),
+        "resume-check",
+        "--path",
+        str(resume),
+        "--fingerprint",
+        fingerprint,
+        "--url",
+        "https://example.invalid/R1.fastq.gz",
+        "--role",
+        "R1",
+        "--expected-bytes",
+        "100",
+        "--expected-md5",
+        "a" * 32,
+        "--etag",
+        '"v1"',
+    ]
+    run(*resume_args)
+    changed = [*resume_args]
+    changed[-1] = '"v2"'
+    run(*changed, expect=10)
+
+    staged = base / "staging/R1.fastq.gz"
+    final = base / "final/R1.fastq.gz"
+    write_fastq(staged, 2)
+    journal = base / "publish.json"
+    journal.write_text(
+        json.dumps(
+            {
+                "source_fingerprint": fingerprint,
+                "files": [
+                    {
+                        "staged": str(staged),
+                        "final": str(final),
+                        "bytes": staged.stat().st_size,
+                        "md5": digest(staged),
+                    }
+                ],
+            }
+        )
+    )
+    run(
+        sys.executable,
+        str(helper),
+        "publish",
+        "--journal",
+        str(journal),
+        "--fingerprint",
+        fingerprint,
+    )
+    assert final.is_file() and not staged.exists() and journal.is_file()
+    run(
+        sys.executable,
+        str(helper),
+        "publish",
+        "--journal",
+        str(journal),
+        "--fingerprint",
+        fingerprint,
+    )
+
+
+def interrupted_resume_test(base: Path) -> None:
+    project = base / "resume_project"
+    (project / "metadata").mkdir(parents=True)
+    source = base / "resume.fastq.gz"
+    write_fastq(source, 50_000, 91)
+    InterruptingRangeHandler.payload = source.read_bytes()
+    InterruptingRangeHandler.interrupted = False
+    InterruptingRangeHandler.resumed_offsets = []
+    server = http.server.ThreadingHTTPServer(
+        ("127.0.0.1", 0), InterruptingRangeHandler
+    )
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    port = server.server_address[1]
+    fields = [
+        "gse", "gsm", "srx", "srr", "run_alias", "lane", "library_layout",
+        "read_structure", "expected_spots", "cb_length", "umi_length",
+        "ngdc_status", "ngdc_run_page", "ngdc_url", "ngdc_bytes",
+        "selected_source", "selected_provenance", "selected_urls",
+        "selected_bytes", "selected_md5", "read_roles", "final_product",
+        "fallback_reason",
+    ]
+    row = {
+        "gse": "GSE300000",
+        "gsm": "GSM300001",
+        "srx": "SRX300001",
+        "srr": "SRR30000001",
+        "run_alias": "resume",
+        "lane": "",
+        "library_layout": "SINGLE",
+        "read_structure": "R1:91",
+        "expected_spots": "50000",
+        "cb_length": "",
+        "umi_length": "",
+        "ngdc_status": "missing",
+        "ngdc_run_page": "",
+        "ngdc_url": "",
+        "ngdc_bytes": "",
+        "selected_source": "ena_fastq",
+        "selected_provenance": "ARCHIVE_GENERATED_FASTQ",
+        "selected_urls": f"http://127.0.0.1:{port}/resume.fastq.gz",
+        "selected_bytes": str(source.stat().st_size),
+        "selected_md5": digest(source),
+        "read_roles": "R1",
+        "final_product": "fastq",
+        "fallback_reason": "ngdc_missing",
+    }
+    write_tsv(project / "metadata/source_manifest.tsv", fields, [row])
+    environment = os.environ.copy()
+    environment.update(
+        {
+            "GEO_SRA_MAX_ATTEMPTS": "1",
+            "GEO_SRA_RETRY_DELAYS": "0",
+            "GEO_SRA_CONNECTIONS": "1",
+            "GEO_SRA_RUN_FASTQC": "0",
+        }
+    )
+    try:
+        failed = subprocess.run(
+            [
+                "bash",
+                str(HERE / "download_run.sh"),
+                str(project),
+                "SRR30000001",
+            ],
+            text=True,
+            capture_output=True,
+            env=environment,
+            check=False,
+        )
+        assert failed.returncode != 0
+        assert not (project / "GSM300001/fastq/SRR30000001_R1.fastq.gz").exists()
+        work = project / "GSM300001/work/SRR30000001/staging/download"
+        assert (work / "SRR30000001_R1.fastq.gz.part").is_file()
+        assert (work / "SRR30000001_R1.fastq.gz.part.aria2").is_file()
+        assert (work / "SRR30000001_R1.fastq.gz.part.resume.json").is_file()
+        run(
+            "bash",
+            str(HERE / "download_run.sh"),
+            str(project),
+            "SRR30000001",
+            env=environment,
+        )
+        assert InterruptingRangeHandler.resumed_offsets
+        state = json.loads(
+            (project / "reports/status/SRR30000001.transfer.json").read_text()
+        )
+        assert state["resume_count"] >= 1 and state["status"] == "complete"
+        run(
+            sys.executable,
+            str(HERE / "audit_download_evidence.py"),
+            "--root",
+            str(project),
+            "--deep",
+        )
     finally:
         server.shutdown()
         server.server_close()
@@ -421,6 +867,10 @@ def downloader_smoke_test(base: Path) -> None:
 def main() -> None:
     with tempfile.TemporaryDirectory(prefix="geo-sra-skill-test-") as temporary:
         base = Path(temporary)
+        transfer_state_test(base)
+        interrupted_resume_test(base)
+        prefetch_resume_test(base)
+        watchdog_terminal_test(base)
         run(
             sys.executable,
             str(HERE / "scaffold_project.py"),
@@ -694,6 +1144,7 @@ def main() -> None:
                 "2",
             ],
             capture_output=True,
+            check=False,
         )
         assert mismatch.returncode != 0
 
@@ -747,6 +1198,7 @@ def main() -> None:
                 "--deep",
             ],
             capture_output=True,
+            check=False,
         )
         assert failed.returncode != 0
         partial.unlink()

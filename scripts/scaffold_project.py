@@ -11,7 +11,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-
 EXPECTED_HEADER = (
     "gse\tgsm\tsrx\tsrr\trun_alias\tlane\tlibrary_layout\tread_structure\t"
     "expected_spots\tcb_length\tumi_length\tngdc_run_page\tngdc_url\n"
@@ -85,6 +84,8 @@ def main() -> None:
         f"final_product\t{args.final_product}\n"
         f"max_project_bytes\t{args.max_project_gib * 1024**3}\n"
         f"monitor_interval_seconds\t{args.monitor_interval}\n"
+        "max_same_error_attempts\t3\n"
+        "retry_delays_seconds\t0;30;120\n"
         "provider_priority\tngdc_gsa;ngdc_insdc;ena_submitted;ena_fastq;ncbi_sra\n",
     )
     write_new(

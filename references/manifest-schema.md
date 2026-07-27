@@ -24,6 +24,8 @@ GEO/GSE123456/
 ├── reports/
 │   ├── logs/
 │   ├── status/
+│   │   ├── SRR*.transfer.json
+│   │   └── SRR*.complete
 │   ├── fastqc/
 │   ├── multiqc_data/
 │   ├── report.html
@@ -258,6 +260,38 @@ observed_r1
 observed_r2
 validation
 completed_at
+retained_files
+retained_bytes
+retained_md5
+integrity_methods
+attempt_count
+resume_count
+source_fingerprint
 ```
 
 先写入临时文件，再原子改名。不得用完成记录代替对其引用文件的实际检查。
+
+`retained_files` 使用项目相对路径；`retained_bytes` 和 `retained_md5` 与其按位置
+一一对应。旧项目缺少新增列时仍可执行兼容审计，但新事务必须写齐这些列。
+
+## `<run>.transfer.json`
+
+每个 run 的持久恢复状态至少包含：
+
+```text
+run
+source_fingerprint
+phase
+status
+attempt_count
+resume_count
+bytes_resumed
+error_counts
+error_class
+last_error
+created_at
+updated_at
+```
+
+`status` 为 `in_progress`、`retryable_failed`、`terminal_failed` 或 `complete`。
+该 JSON 原子写入，是 watchdog 判断是否允许自动恢复的机器证据。

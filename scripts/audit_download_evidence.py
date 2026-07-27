@@ -7,9 +7,11 @@ import argparse
 import csv
 import gzip
 import hashlib
+import json
 import re
 import subprocess
 import sys
+import zlib
 from collections import Counter
 from pathlib import Path
 
@@ -227,27 +229,50 @@ def main() -> int:
                 row_errors.append(
                     f"R1={evidence.get('observed_r1')} expected={expected_spots}"
                 )
-            if source.get("library_layout", "").upper() == "PAIRED":
-                if evidence.get("observed_r2") != expected_spots:
-                    row_errors.append(
-                        f"R2={evidence.get('observed_r2')} expected={expected_spots}"
-                    )
+            if (
+                source.get("library_layout", "").upper() == "PAIRED"
+                and evidence.get("observed_r2") != expected_spots
+            ):
+                row_errors.append(
+                    f"R2={evidence.get('observed_r2')} expected={expected_spots}"
+                )
 
         sample = root / gsm
         product = source["final_product"]
-        files: list[Path] = []
+        mandatory_files: list[Path] = []
         if product == "fastq":
-            files.append(sample / "fastq" / f"{run}_R1.fastq.gz")
+            mandatory_files.append(sample / "fastq" / f"{run}_R1.fastq.gz")
             if source.get("library_layout", "").upper() == "PAIRED":
-                files.append(sample / "fastq" / f"{run}_R2.fastq.gz")
+                mandatory_files.append(sample / "fastq" / f"{run}_R2.fastq.gz")
         elif product == "sra":
-            files.append(sample / "sra" / f"{run}.sra")
+            mandatory_files.append(sample / "sra" / f"{run}.sra")
         elif product == "matrix_velocity":
             final_report = root / "reports/final_output_audit.tsv"
             if not final_report.is_file():
                 row_errors.append("matrix_velocity cleanup lacks final-output audit")
 
-        for path in files:
+        recorded_names = split(evidence.get("retained_files", ""))
+        recorded_sizes = split(evidence.get("retained_bytes", ""))
+        recorded_md5 = split(evidence.get("retained_md5", ""))
+        files = mandatory_files
+        if recorded_names:
+            if not (
+                len(recorded_names) == len(recorded_sizes) == len(recorded_md5)
+            ):
+                row_errors.append("retained file/bytes/MD5 arrays differ in length")
+                files = []
+            else:
+                files = []
+                for name in recorded_names:
+                    candidate = Path(name)
+                    if candidate.is_absolute() or ".." in candidate.parts:
+                        row_errors.append(f"unsafe retained path {name!r}")
+                        continue
+                    files.append(root / candidate)
+                if not set(mandatory_files).issubset(set(files)):
+                    row_errors.append("retained files omit a mandatory terminal file")
+
+        for index, path in enumerate(files):
             if not path.is_file() or path.stat().st_size == 0:
                 row_errors.append(f"missing/empty terminal file {path}")
                 continue
@@ -263,17 +288,45 @@ def main() -> int:
                     )
                     if result.returncode:
                         row_errors.append(f"vdb-validate failed for {path}")
-                if args.deep:
+                if recorded_names:
+                    if path.stat().st_size != int(recorded_sizes[index]):
+                        row_errors.append(f"retained byte count changed for {path}")
+                    if args.deep:
+                        digest = md5(path)
+                        if digest != recorded_md5[index]:
+                            row_errors.append(f"retained MD5 changed for {path}")
+                elif args.deep:
                     recorded_paths = split(evidence.get("observed_md5", ""))
                     digest = md5(path)
                     if recorded_paths and digest not in recorded_paths:
                         row_errors.append(f"retained MD5 changed for {path}")
-            except Exception as exc:
+            except (OSError, ValueError, EOFError, gzip.BadGzipFile, zlib.error) as exc:
                 row_errors.append(f"{path}: {exc}")
 
         marker = root / "reports/status" / f"{run}.complete"
         if not marker.is_file() or marker.stat().st_size == 0:
             row_errors.append("missing completion marker")
+        elif evidence.get("source_fingerprint"):
+            marker_text = marker.read_text(errors="replace")
+            if (
+                f"source_fingerprint\t{evidence['source_fingerprint']}" not in marker_text
+                or "validation\tPASS" not in marker_text
+            ):
+                row_errors.append("completion marker lacks matching transaction evidence")
+        state_path = root / "reports/status" / f"{run}.transfer.json"
+        if evidence.get("source_fingerprint"):
+            try:
+                state = json.loads(state_path.read_text())
+                if state.get("status") != "complete":
+                    row_errors.append("transfer state is not complete")
+                if state.get("source_fingerprint") != evidence["source_fingerprint"]:
+                    row_errors.append("transfer state fingerprint mismatch")
+                if str(state.get("attempt_count", "")) != evidence.get("attempt_count", ""):
+                    row_errors.append("transfer attempt count differs from evidence")
+                if str(state.get("resume_count", "")) != evidence.get("resume_count", ""):
+                    row_errors.append("transfer resume count differs from evidence")
+            except (OSError, json.JSONDecodeError) as exc:
+                row_errors.append(f"missing/invalid transfer state: {exc}")
         errors.extend(f"{run}: {message}" for message in row_errors)
         report_rows.append(
             {
@@ -286,6 +339,9 @@ def main() -> int:
                 "expected_spots": expected_spots,
                 "observed_r1": evidence.get("observed_r1", ""),
                 "observed_r2": evidence.get("observed_r2", ""),
+                "attempt_count": evidence.get("attempt_count", ""),
+                "resume_count": evidence.get("resume_count", ""),
+                "integrity_methods": evidence.get("integrity_methods", ""),
                 "status": "FAIL" if row_errors else "PASS",
                 "message": "; ".join(row_errors),
             }
@@ -295,7 +351,14 @@ def main() -> int:
         path
         for path in root.rglob("*")
         if path.is_file()
-        and (path.name.endswith(".part") or path.name.endswith(".aria2") or path.name.endswith(".tmp"))
+        and "quarantine" not in path.parts
+        and (
+            path.name.endswith(".part")
+            or path.name.endswith(".aria2")
+            or path.name.endswith(".tmp")
+            or path.name.endswith(".resume.json")
+            or path.name == "publish.json"
+        )
     ]
     if partials and len(observed) == len(expected_runs):
         errors.extend(f"residual partial: {path}" for path in partials)
@@ -312,6 +375,9 @@ def main() -> int:
         "expected_spots",
         "observed_r1",
         "observed_r2",
+        "attempt_count",
+        "resume_count",
+        "integrity_methods",
         "status",
         "message",
     ]
