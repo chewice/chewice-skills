@@ -55,6 +55,7 @@ GEO/GSE123456/
 | RNA velocity | `GSM*/velocity/` | spliced、unspliced、ambiguous 与 loom |
 | 统一报告 | `reports/report.html` | 唯一面向用户的中文 HTML |
 | 机器证据 | `reports/*.tsv` | preflight、coverage、download、final audit |
+| STARsolo 汇总 | `reports/starsolo_summary.tsv` | 每个 GSM 一行的 cell calling、mapping、saturation 与计数指标 |
 | QC 数据 | `reports/fastqc/`、`reports/multiqc_data/` | 供统一报告读取的机器数据 |
 | 日志与状态 | `reports/logs/`、`reports/status/` | 原始日志和完成 marker |
 
@@ -70,6 +71,7 @@ HTML 中显示上述项目相对路径。从 `reports/report.html` 链接文件�
 - `GSM*/download_manifest.tsv`
 - `reports/*_audit.tsv`
 - `reports/ngdc_coverage.tsv`
+- `reports/starsolo_summary.tsv`
 - `reports/logs/*`
 - `reports/status/*`
 

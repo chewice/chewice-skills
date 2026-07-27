@@ -15,6 +15,12 @@ from scipy.io import mminfo
 
 
 def refresh_report(root: Path) -> None:
+    summarizer = Path(__file__).with_name("summarize_starsolo.py")
+    if summarizer.is_file() and list(root.glob("reports/starsolo/**/Summary.csv")):
+        subprocess.run(
+            [sys.executable, str(summarizer), "--root", str(root)],
+            check=False,
+        )
     reporter = Path(__file__).with_name("build_report.py")
     if reporter.is_file():
         subprocess.run(
