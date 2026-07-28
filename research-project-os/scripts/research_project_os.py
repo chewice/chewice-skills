@@ -2,8 +2,9 @@
 
 This CLI is intentionally conservative:
 
-- inspect, start, audit, and sync-audit are read-only;
-- init, adopt, close, and sync-export are dry-run unless --apply is explicit;
+- inspect, start, audit, sync-audit, and archive-verify are read-only;
+- init, adopt, close, sync-export, explore-create, archive-promote,
+  pipeline-create, and pipeline-release are dry-run unless --apply is explicit;
 - existing files are preserved unless --overwrite is explicit;
 - adopt never replaces AGENTS.md, README.md, or .gitignore;
 - no command stages, commits, pushes, or writes to Notion.
@@ -19,6 +20,7 @@ import json
 import logging
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import tempfile
 from typing import Any
@@ -36,12 +38,14 @@ PROFILE_NAMES = (
     "literature-review",
     "software-development",
 )
-RELEASE_VERSION = "0.3.2"
+RELEASE_VERSION = "0.4.0"
 MANIFEST_SCHEMA_VERSION = "0.3.0"
 SYNC_PAYLOAD_SCHEMA_VERSION = "0.3.0"
+ANALYSIS_ARTIFACT_SCHEMA_VERSION = "1.0.0"
 SUPPORTED_MANIFEST_SCHEMAS = {"0.1.0", "0.2.0", MANIFEST_SCHEMA_VERSION}
 SYNC_EXPORT_KINDS = ("project-adopt", "milestone", "full-state")
 OUTPUT_KINDS = (*SYNC_EXPORT_KINDS, "session-close")
+ANALYSIS_LIFECYCLE_PROFILES = {"generic-analysis", "bioinformatics"}
 PROTECTED_ADOPTION_PATHS = {"AGENTS.md", "README.md", ".gitignore"}
 REQUIRED_CONTROL_PATHS = (
     "AGENTS.md",
@@ -80,6 +84,15 @@ SENSITIVE_PATTERNS = (
     ),
 )
 SESSION_PATTERN = re.compile(r"^SES-\d{8}-\d{3}$")
+TASK_NAME_PATTERN = re.compile(
+    r"^P(?P<order>0|[1-9]\d*)-"
+    r"(?P<core>[A-Za-z][A-Za-z0-9]{0,23})-"
+    r"(?P<summary>[a-z0-9]+(?:-[a-z0-9]+)*)$"
+)
+SNAPSHOT_SELECTOR_PATTERN = re.compile(
+    rf"(?P<task>{TASK_NAME_PATTERN.pattern[1:-1]})@(?P<version>v\d{{3}})"
+)
+ARCHIVE_VERSION_PATTERN = re.compile(r"^v\d{3}$")
 NUMBERED_TITLE_PATTERN = re.compile(r"^(?P<ordinal>\d{2,})｜(?P<title>\S(?:.*\S)?)$")
 TOML_TABLE_PATTERN = re.compile(
     r"^\s*\[(?!\[)\s*(?P<table>[^\]]+?)\s*\](?!\])(?:\s*#.*)?$",
@@ -108,6 +121,28 @@ PIXI_SCAN_PRUNE_NAMES = {
     "result",
     "results",
     "runs",
+}
+SNAPSHOT_FORBIDDEN_PARTS = {
+    ".cache",
+    ".git",
+    ".pixi",
+    "__pycache__",
+    "node_modules",
+}
+SNAPSHOT_FORBIDDEN_PATTERN = re.compile(
+    r"(?:^|/)(?:\.env(?:\.|$)|credentials?|secrets?|tokens?|private[_-]?keys?)",
+    re.IGNORECASE,
+)
+PIPELINE_TEXT_SUFFIXES = {
+    ".json",
+    ".md",
+    ".py",
+    ".r",
+    ".sh",
+    ".toml",
+    ".txt",
+    ".yaml",
+    ".yml",
 }
 PROJECT_INVENTORY_PATTERNS = {
     "code_roots": (
@@ -221,6 +256,48 @@ def parse_args() -> argparse.Namespace:
     close_parser.add_argument("--apply", action="store_true")
     close_parser.add_argument("--overwrite", action="store_true")
     close_parser.add_argument("--json", action="store_true")
+
+    explore_parser = subparsers.add_parser("explore-create")
+    add_project_argument(explore_parser)
+    explore_parser.add_argument("--order", type=int, required=True)
+    explore_parser.add_argument("--core", required=True)
+    explore_parser.add_argument("--summary", required=True)
+    explore_parser.add_argument("--question", required=True)
+    explore_parser.add_argument("--method", required=True)
+    explore_parser.add_argument("--expected-output", action="append", required=True)
+    explore_parser.add_argument("--stop-condition", required=True)
+    explore_parser.add_argument("--approved-by", required=True)
+    explore_parser.add_argument("--apply", action="store_true")
+    explore_parser.add_argument("--json", action="store_true")
+
+    promote_parser = subparsers.add_parser("archive-promote")
+    add_project_argument(promote_parser)
+    promote_parser.add_argument("--task", required=True)
+    promote_parser.add_argument("--reviewed-by", required=True)
+    promote_parser.add_argument("--review-summary", required=True)
+    promote_parser.add_argument("--validation", action="append", required=True)
+    promote_parser.add_argument("--apply", action="store_true")
+    promote_parser.add_argument("--json", action="store_true")
+
+    verify_parser = subparsers.add_parser("archive-verify")
+    add_project_argument(verify_parser)
+    verify_parser.add_argument("--snapshot", required=True)
+    verify_parser.add_argument("--json", action="store_true")
+
+    pipeline_parser = subparsers.add_parser("pipeline-create")
+    add_project_argument(pipeline_parser)
+    pipeline_parser.add_argument("--snapshot", action="append", required=True)
+    pipeline_parser.add_argument("--apply", action="store_true")
+    pipeline_parser.add_argument("--json", action="store_true")
+
+    release_parser = subparsers.add_parser("pipeline-release")
+    add_project_argument(release_parser)
+    release_parser.add_argument("--entrypoint", required=True)
+    release_parser.add_argument("--reviewed-by", required=True)
+    release_parser.add_argument("--review-summary", required=True)
+    release_parser.add_argument("--validation", action="append", required=True)
+    release_parser.add_argument("--apply", action="store_true")
+    release_parser.add_argument("--json", action="store_true")
 
     sync_export_parser = subparsers.add_parser("sync-export")
     add_project_argument(sync_export_parser)
@@ -357,6 +434,16 @@ def migrate_manifest_schema(manifest: dict[str, Any]) -> dict[str, Any]:
     notion.setdefault("project_ordinal", None)
     notion.setdefault("databases", {})
     project["repository_root"] = repository_root.as_posix()
+    analysis = migrated.setdefault("analysis", {})
+    if not isinstance(analysis, dict):
+        raise ValueError("Manifest analysis field must be a mapping")
+    profile = project.get("profile")
+    lifecycle = (
+        "explore_archive_pipeline"
+        if isinstance(profile, str) and profile in ANALYSIS_LIFECYCLE_PROFILES
+        else "profile_specific"
+    )
+    analysis.setdefault("lifecycle", lifecycle)
     return migrated
 
 
@@ -457,6 +544,9 @@ def template_replacements(
         "PROJECT_ID": project_identifier(project_name),
         "PROJECT_NAME": slug(project_name).replace("-", "_"),
         "PROFILE": str(profile["name"]),
+        "ANALYSIS_LIFECYCLE": str(
+            profile.get("analysis_lifecycle", "profile_specific")
+        ),
         "DATE": today.isoformat(),
         "DATE_COMPACT": today.strftime("%Y%m%d"),
         "PORTFOLIO_YEAR": str(today.year),
@@ -580,6 +670,681 @@ def atomic_write(path: Path, content: str) -> None:
         handle.write(content)
         temporary = Path(handle.name)
     temporary.replace(path)
+
+
+def yaml_text(value: dict[str, Any]) -> str:
+    return yaml.safe_dump(
+        value,
+        allow_unicode=True,
+        sort_keys=False,
+        width=88,
+    )
+
+
+def analysis_profile(root: Path) -> str:
+    manifest_path = root / "project_manifest.yaml"
+    if not manifest_path.is_file():
+        raise ValueError("Project is not governed; run init or adopt first")
+    manifest = load_yaml(manifest_path)
+    profile = manifest.get("project", {}).get("profile")
+    if not isinstance(profile, str) or profile not in ANALYSIS_LIFECYCLE_PROFILES:
+        raise ValueError(
+            "The explore/archive/pipeline lifecycle is limited to "
+            "generic-analysis and bioinformatics profiles"
+        )
+    lifecycle = manifest.get("analysis", {}).get("lifecycle")
+    if lifecycle not in {None, "explore_archive_pipeline"}:
+        raise ValueError(
+            "Manifest analysis.lifecycle conflicts with the selected profile"
+        )
+    return str(profile)
+
+
+def normalize_task_name(order: int, core: str, summary: str) -> str:
+    if order < 0:
+        raise ValueError("Task order must be a non-negative integer")
+    if not re.fullmatch(r"[A-Za-z][A-Za-z0-9]{0,23}", core):
+        raise ValueError(
+            "Task core must be one short ASCII token such as QC, cluster, or GRN"
+        )
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9 _-]{0,63}", summary):
+        raise ValueError(
+            "Task summary must be a short English ASCII phrase up to 64 characters"
+        )
+    summary_slug = re.sub(r"[^A-Za-z0-9]+", "-", summary).strip("-").lower()
+    task_name = f"P{order}-{core}-{summary_slug}"
+    if TASK_NAME_PATTERN.fullmatch(task_name) is None:
+        raise ValueError(f"Invalid task name: {task_name}")
+    return task_name
+
+
+def parse_task_name(task_name: str) -> dict[str, Any]:
+    match = TASK_NAME_PATTERN.fullmatch(task_name)
+    if match is None:
+        raise ValueError("Task name must match P<order>-<core>-<short-english-summary>")
+    return {
+        "name": task_name,
+        "order": int(match.group("order")),
+        "core": match.group("core"),
+        "summary": match.group("summary"),
+    }
+
+
+def task_names(root: Path) -> list[str]:
+    values: set[str] = set()
+    for stage in ("explore", "archive"):
+        stage_root = root / stage
+        if not stage_root.is_dir():
+            continue
+        values.update(
+            path.name
+            for path in stage_root.iterdir()
+            if path.is_dir() and TASK_NAME_PATTERN.fullmatch(path.name)
+        )
+    return sorted(values)
+
+
+def plan_explore_task(
+    root: Path,
+    *,
+    order: int,
+    core: str,
+    summary: str,
+    question: str,
+    method: str,
+    expected_outputs: list[str],
+    stop_condition: str,
+    approved_by: str,
+) -> dict[str, Any]:
+    profile = analysis_profile(root)
+    task_name = normalize_task_name(order, core, summary)
+    for existing in task_names(root):
+        parsed = parse_task_name(existing)
+        if parsed["order"] == order:
+            raise ValueError(f"Task order P{order} is already assigned to {existing}")
+    required_text = {
+        "question": question,
+        "method": method,
+        "stop_condition": stop_condition,
+        "approved_by": approved_by,
+    }
+    for label, value in required_text.items():
+        if not value.strip():
+            raise ValueError(f"{label} must not be empty")
+    outputs = [value.strip() for value in expected_outputs if value.strip()]
+    if not outputs:
+        raise ValueError("At least one expected output is required")
+    parsed = parse_task_name(task_name)
+    task = {
+        "schema_version": ANALYSIS_ARTIFACT_SCHEMA_VERSION,
+        "task": {
+            "id": f"TASK-{order:03d}",
+            **parsed,
+            "stage": "explore",
+            "status": "ready",
+        },
+        "direction": {
+            "question": question.strip(),
+            "method": method.strip(),
+            "expected_outputs": outputs,
+            "stop_condition": stop_condition.strip(),
+        },
+        "approval": {
+            "status": "approved",
+            "approved_by": approved_by.strip(),
+            "approved_on": date.today().isoformat(),
+        },
+        "artifact_layout": {
+            "scripts": "scripts",
+            "derived_data": "derived",
+            "figures": "figures",
+        },
+    }
+    relative = Path("explore") / task_name
+    return {
+        "mode": "explore-create",
+        "project": str(root),
+        "profile": profile,
+        "task_name": task_name,
+        "task_path": relative.as_posix(),
+        "directories": [
+            (relative / child).as_posix() for child in ("scripts", "derived", "figures")
+        ],
+        "task": task,
+        "task_yaml": yaml_text(task),
+    }
+
+
+def apply_explore_task(plan: dict[str, Any]) -> dict[str, Any]:
+    root = Path(plan["project"])
+    task_root = root / plan["task_path"]
+    if task_root.exists():
+        raise FileExistsError(f"Refusing to overwrite {task_root}")
+    for relative in plan["directories"]:
+        (root / relative).mkdir(parents=True, exist_ok=False)
+    atomic_write(task_root / "task.yaml", plan["task_yaml"])
+    return {
+        "written": True,
+        "task_path": plan["task_path"],
+        "task_file": f"{plan['task_path']}/task.yaml",
+    }
+
+
+def validate_explore_task(root: Path, task_name: str) -> dict[str, Any]:
+    parsed = parse_task_name(task_name)
+    task_path = root / "explore" / task_name / "task.yaml"
+    if not task_path.is_file():
+        raise ValueError(f"Missing explore task metadata: {task_path}")
+    document = load_yaml(task_path)
+    task = document.get("task")
+    approval = document.get("approval")
+    if document.get("schema_version") != ANALYSIS_ARTIFACT_SCHEMA_VERSION:
+        raise ValueError(f"Unsupported task schema: {task_path}")
+    if not isinstance(task, dict):
+        raise ValueError(f"Task metadata must contain a task mapping: {task_path}")
+    for key in ("name", "order", "core", "summary"):
+        if task.get(key) != parsed[key]:
+            raise ValueError(f"Task metadata {key} does not match {task_name}")
+    if task.get("stage") != "explore":
+        raise ValueError(f"Explore task must use stage=explore: {task_path}")
+    if not isinstance(approval, dict) or approval.get("status") != "approved":
+        raise ValueError(f"Explore task lacks human direction approval: {task_path}")
+    if not approval.get("approved_by"):
+        raise ValueError(f"Explore task approval lacks approved_by: {task_path}")
+    return document
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def sha256_bytes(content: bytes) -> str:
+    return hashlib.sha256(content).hexdigest()
+
+
+def snapshot_file_records(source: Path) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    if not source.is_dir():
+        raise ValueError(f"Snapshot source is not a directory: {source}")
+    for path in sorted(source.rglob("*")):
+        relative = path.relative_to(source)
+        relative_text = relative.as_posix()
+        if path.is_symlink():
+            raise ValueError(f"Snapshot source contains a symlink: {relative_text}")
+        if any(part in SNAPSHOT_FORBIDDEN_PARTS for part in relative.parts):
+            raise ValueError(
+                f"Snapshot source contains a forbidden cache/workspace path: "
+                f"{relative_text}"
+            )
+        if SNAPSHOT_FORBIDDEN_PATTERN.search(relative_text):
+            raise ValueError(
+                f"Snapshot source may contain credentials: {relative_text}"
+            )
+        if path.is_file():
+            records.append(
+                {
+                    "path": relative_text,
+                    "size": path.stat().st_size,
+                    "sha256": sha256_file(path),
+                }
+            )
+    if not records:
+        raise ValueError(f"Snapshot source contains no files: {source}")
+    return records
+
+
+def next_archive_version(root: Path, task_name: str) -> str:
+    task_root = root / "archive" / task_name
+    versions = (
+        [
+            int(path.name[1:])
+            for path in task_root.iterdir()
+            if path.is_dir() and ARCHIVE_VERSION_PATTERN.fullmatch(path.name)
+        ]
+        if task_root.is_dir()
+        else []
+    )
+    return f"v{max(versions, default=0) + 1:03d}"
+
+
+def plan_archive_promotion(
+    root: Path,
+    *,
+    task_name: str,
+    reviewed_by: str,
+    review_summary: str,
+    validations: list[str],
+) -> dict[str, Any]:
+    profile = analysis_profile(root)
+    task_document = validate_explore_task(root, task_name)
+    if not reviewed_by.strip() or not review_summary.strip():
+        raise ValueError("reviewed_by and review_summary must not be empty")
+    cleaned_validations = [value.strip() for value in validations if value.strip()]
+    if not cleaned_validations:
+        raise ValueError("At least one validation result is required")
+    source = root / "explore" / task_name
+    files = snapshot_file_records(source)
+    version = next_archive_version(root, task_name)
+    selector = f"{task_name}@{version}"
+    destination = root / "archive" / task_name / version
+    manifest = {
+        "schema_version": ANALYSIS_ARTIFACT_SCHEMA_VERSION,
+        "snapshot": {
+            "id": f"SNAP-{task_name}-{version.upper()}",
+            "selector": selector,
+            "task": task_name,
+            "task_id": task_document["task"]["id"],
+            "version": version,
+            "source_path": f"explore/{task_name}",
+            "created_on": date.today().isoformat(),
+            "git_commit": git_commit(root),
+        },
+        "review": {
+            "status": "approved",
+            "reviewed_by": reviewed_by.strip(),
+            "summary": review_summary.strip(),
+            "validations": cleaned_validations,
+        },
+        "files": files,
+    }
+    return {
+        "mode": "archive-promote",
+        "project": str(root),
+        "profile": profile,
+        "task_name": task_name,
+        "selector": selector,
+        "source_path": f"explore/{task_name}",
+        "archive_path": destination.relative_to(root).as_posix(),
+        "files": files,
+        "manifest": manifest,
+        "manifest_yaml": yaml_text(manifest),
+    }
+
+
+def apply_archive_promotion(plan: dict[str, Any]) -> dict[str, Any]:
+    root = Path(plan["project"])
+    source = root / plan["source_path"]
+    destination = root / plan["archive_path"]
+    if destination.exists():
+        raise FileExistsError(f"Refusing to overwrite frozen archive {destination}")
+    if snapshot_file_records(source) != plan["files"]:
+        raise ValueError("Explore task changed after the archive plan was created")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary_parent = Path(
+        tempfile.mkdtemp(prefix=".archive-", dir=destination.parent)
+    )
+    temporary_snapshot = temporary_parent / destination.name
+    try:
+        shutil.copytree(source, temporary_snapshot)
+        atomic_write(
+            temporary_snapshot / "archive_manifest.yaml",
+            plan["manifest_yaml"],
+        )
+        temporary_snapshot.replace(destination)
+    finally:
+        shutil.rmtree(temporary_parent, ignore_errors=True)
+    return {
+        "written": True,
+        "selector": plan["selector"],
+        "archive_path": plan["archive_path"],
+    }
+
+
+def parse_snapshot_selector(selector: str) -> dict[str, Any]:
+    match = SNAPSHOT_SELECTOR_PATTERN.fullmatch(selector)
+    if match is None:
+        raise ValueError(
+            "Snapshot selector must match P<order>-<core>-<short-english-summary>@vNNN"
+        )
+    parsed = parse_task_name(match.group("task"))
+    return {**parsed, "version": match.group("version"), "selector": selector}
+
+
+def snapshot_path(root: Path, selector: str) -> Path:
+    parsed = parse_snapshot_selector(selector)
+    return root / "archive" / parsed["name"] / parsed["version"]
+
+
+def verify_archive_snapshot(root: Path, selector: str) -> dict[str, Any]:
+    target = snapshot_path(root, selector)
+    manifest_path = target / "archive_manifest.yaml"
+    errors: list[str] = []
+    if not manifest_path.is_file():
+        return {
+            "ok": False,
+            "selector": selector,
+            "errors": [f"Missing archive manifest: {manifest_path}"],
+        }
+    manifest = load_yaml(manifest_path)
+    if manifest.get("schema_version") != ANALYSIS_ARTIFACT_SCHEMA_VERSION:
+        errors.append(f"Unsupported archive schema: {manifest_path}")
+    snapshot = manifest.get("snapshot")
+    review = manifest.get("review")
+    if not isinstance(snapshot, dict) or snapshot.get("selector") != selector:
+        errors.append(f"Archive selector mismatch: {manifest_path}")
+    if not isinstance(review, dict) or review.get("status") != "approved":
+        errors.append(f"Archive snapshot lacks approved review: {manifest_path}")
+    expected_records = manifest.get("files")
+    if not isinstance(expected_records, list):
+        errors.append(f"Archive files must be a list: {manifest_path}")
+        expected_records = []
+    expected = {
+        str(record.get("path")): record
+        for record in expected_records
+        if isinstance(record, dict)
+    }
+    actual_paths = {
+        path.relative_to(target).as_posix()
+        for path in target.rglob("*")
+        if path.is_file() and path.name != "archive_manifest.yaml"
+    }
+    if actual_paths != set(expected):
+        errors.append(f"Archive file set differs from manifest: {selector}")
+    for relative, record in expected.items():
+        path = target / relative
+        if not path.is_file():
+            continue
+        if path.stat().st_size != record.get("size"):
+            errors.append(f"Archive file size changed: {selector}:{relative}")
+            continue
+        if sha256_file(path) != record.get("sha256"):
+            errors.append(f"Archive file hash changed: {selector}:{relative}")
+    return {
+        "ok": not errors,
+        "selector": selector,
+        "archive_path": target.relative_to(root).as_posix(),
+        "manifest_sha256": sha256_file(manifest_path),
+        "file_count": len(expected),
+        "errors": errors,
+    }
+
+
+def plan_pipeline_creation(
+    root: Path,
+    *,
+    selectors: list[str],
+) -> dict[str, Any]:
+    profile = analysis_profile(root)
+    unique = list(dict.fromkeys(value.strip() for value in selectors if value.strip()))
+    if not unique:
+        raise ValueError("At least one archive snapshot is required")
+    if len(unique) != len(selectors):
+        raise ValueError("Pipeline snapshot selectors must be unique")
+    parsed_sources = sorted(
+        (parse_snapshot_selector(selector) for selector in unique),
+        key=lambda value: value["order"],
+    )
+    pipeline_root = root / "pipeline"
+    if pipeline_root.exists() and any(pipeline_root.iterdir()):
+        raise FileExistsError(
+            "pipeline/ is not empty; refuse to replace an existing main flow"
+        )
+    sources: list[dict[str, Any]] = []
+    steps: list[dict[str, Any]] = []
+    for parsed in parsed_sources:
+        verification = verify_archive_snapshot(root, parsed["selector"])
+        if not verification["ok"]:
+            raise ValueError("; ".join(verification["errors"]))
+        sources.append(
+            {
+                "selector": parsed["selector"],
+                "path": verification["archive_path"],
+                "manifest_sha256": verification["manifest_sha256"],
+            }
+        )
+        steps.append(
+            {
+                "order": parsed["order"],
+                "core": parsed["core"],
+                "derived_from": parsed["selector"],
+                "implementation": None,
+            }
+        )
+    pipeline = {
+        "schema_version": ANALYSIS_ARTIFACT_SCHEMA_VERSION,
+        "pipeline": {
+            "status": "candidate",
+            "created_on": date.today().isoformat(),
+            "entrypoint": None,
+            "runtime_independent_from": ["explore", "archive"],
+        },
+        "sources": sources,
+        "steps": steps,
+    }
+    return {
+        "mode": "pipeline-create",
+        "project": str(root),
+        "profile": profile,
+        "pipeline_path": "pipeline/pipeline.yaml",
+        "directories": ["pipeline/src", "pipeline/config", "pipeline/tests"],
+        "pipeline": pipeline,
+        "pipeline_yaml": yaml_text(pipeline),
+    }
+
+
+def apply_pipeline_creation(plan: dict[str, Any]) -> dict[str, Any]:
+    root = Path(plan["project"])
+    pipeline_path = root / plan["pipeline_path"]
+    if pipeline_path.exists():
+        raise FileExistsError(f"Refusing to overwrite {pipeline_path}")
+    pipeline_root = pipeline_path.parent
+    if pipeline_root.exists() and any(pipeline_root.iterdir()):
+        raise FileExistsError(
+            "pipeline/ is not empty; refuse to replace an existing main flow"
+        )
+    for relative in plan["directories"]:
+        (root / relative).mkdir(parents=True, exist_ok=True)
+    atomic_write(pipeline_path, plan["pipeline_yaml"])
+    return {"written": True, "pipeline_path": plan["pipeline_path"]}
+
+
+def safe_pipeline_relative(value: str, label: str) -> Path:
+    path = Path(value)
+    if path.is_absolute() or not path.parts or ".." in path.parts:
+        raise ValueError(f"{label} must be a relative path inside pipeline/")
+    if path.parts[0] == "pipeline":
+        raise ValueError(f"{label} must be relative to pipeline/, without its prefix")
+    return path
+
+
+def runtime_reference_errors(
+    pipeline_root: Path,
+    relative_paths: list[Path],
+) -> list[str]:
+    errors: list[str] = []
+    forbidden = re.compile(
+        r"(?<![A-Za-z0-9_-])(?:\.\./)*(?:explore|archive)/",
+        re.IGNORECASE,
+    )
+    for relative in sorted(set(relative_paths)):
+        path = pipeline_root / relative
+        if not path.is_file():
+            errors.append(f"Missing pipeline implementation: {relative.as_posix()}")
+            continue
+        if path.is_symlink():
+            errors.append(f"Pipeline runtime path is a symlink: {relative.as_posix()}")
+            continue
+        if path.suffix.lower() not in PIPELINE_TEXT_SUFFIXES:
+            continue
+        text = path.read_text(encoding="utf-8", errors="replace")
+        if forbidden.search(text):
+            errors.append(
+                "Pipeline runtime references explore/ or archive/: "
+                f"{relative.as_posix()}"
+            )
+    return errors
+
+
+def pipeline_file_records(
+    pipeline_root: Path,
+    *,
+    pipeline_yaml_override: str | None = None,
+) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    for path in sorted(pipeline_root.rglob("*")):
+        relative = path.relative_to(pipeline_root)
+        if relative.as_posix() == "release_manifest.yaml":
+            continue
+        if path.is_symlink():
+            raise ValueError(
+                f"Pipeline release cannot contain symlinks: {relative.as_posix()}"
+            )
+        if not path.is_file():
+            continue
+        content = (
+            pipeline_yaml_override.encode("utf-8")
+            if relative.as_posix() == "pipeline.yaml"
+            and pipeline_yaml_override is not None
+            else path.read_bytes()
+        )
+        records.append(
+            {
+                "path": relative.as_posix(),
+                "size": len(content),
+                "sha256": sha256_bytes(content),
+            }
+        )
+    return records
+
+
+def plan_pipeline_release(
+    root: Path,
+    *,
+    entrypoint: str,
+    reviewed_by: str,
+    review_summary: str,
+    validations: list[str],
+) -> dict[str, Any]:
+    profile = analysis_profile(root)
+    pipeline_root = root / "pipeline"
+    pipeline_path = pipeline_root / "pipeline.yaml"
+    release_path = pipeline_root / "release_manifest.yaml"
+    if release_path.exists():
+        raise FileExistsError(
+            "A release manifest already exists; releases are immutable"
+        )
+    document = load_yaml(pipeline_path)
+    if document.get("schema_version") != ANALYSIS_ARTIFACT_SCHEMA_VERSION:
+        raise ValueError(f"Unsupported pipeline schema: {pipeline_path}")
+    pipeline = document.get("pipeline")
+    sources = document.get("sources")
+    steps = document.get("steps")
+    if not isinstance(pipeline, dict) or pipeline.get("status") != "candidate":
+        raise ValueError("pipeline.yaml must have pipeline.status=candidate")
+    if not isinstance(sources, list) or not sources:
+        raise ValueError("pipeline.yaml must declare at least one archive source")
+    source_selectors: set[str] = set()
+    for source in sources:
+        if not isinstance(source, dict):
+            raise ValueError("Every pipeline source must be a mapping")
+        selector = str(source.get("selector", ""))
+        verification = verify_archive_snapshot(root, selector)
+        if not verification["ok"]:
+            raise ValueError("; ".join(verification["errors"]))
+        if source.get("manifest_sha256") != verification["manifest_sha256"]:
+            raise ValueError(f"Pipeline source manifest changed: {selector}")
+        source_selectors.add(selector)
+    if not isinstance(steps, list) or not steps:
+        raise ValueError("pipeline.yaml must declare at least one pipeline step")
+    implementations: list[Path] = []
+    for step in steps:
+        if not isinstance(step, dict):
+            raise ValueError("Every pipeline step must be a mapping")
+        if step.get("derived_from") not in source_selectors:
+            raise ValueError("Every pipeline step must map to an archive source")
+        implementation = step.get("implementation")
+        if not isinstance(implementation, str) or not implementation.strip():
+            raise ValueError("Every pipeline step requires an implementation path")
+        implementations.append(
+            safe_pipeline_relative(implementation, "step implementation")
+        )
+    entrypoint_path = safe_pipeline_relative(entrypoint, "entrypoint")
+    errors = runtime_reference_errors(
+        pipeline_root,
+        [entrypoint_path, *implementations],
+    )
+    if errors:
+        raise ValueError("; ".join(errors))
+    if not reviewed_by.strip() or not review_summary.strip():
+        raise ValueError("reviewed_by and review_summary must not be empty")
+    cleaned_validations = [value.strip() for value in validations if value.strip()]
+    if not cleaned_validations:
+        raise ValueError("At least one pipeline validation result is required")
+    pipeline["status"] = "release-ready"
+    pipeline["entrypoint"] = entrypoint_path.as_posix()
+    updated_yaml = yaml_text(document)
+    files = pipeline_file_records(
+        pipeline_root,
+        pipeline_yaml_override=updated_yaml,
+    )
+    release = {
+        "schema_version": ANALYSIS_ARTIFACT_SCHEMA_VERSION,
+        "release": {
+            "status": "release-ready",
+            "reviewed_by": reviewed_by.strip(),
+            "reviewed_on": date.today().isoformat(),
+            "summary": review_summary.strip(),
+            "validations": cleaned_validations,
+            "git_commit": git_commit(root),
+        },
+        "archive_sources": sorted(source_selectors),
+        "files": files,
+    }
+    return {
+        "mode": "pipeline-release",
+        "project": str(root),
+        "profile": profile,
+        "pipeline_path": "pipeline/pipeline.yaml",
+        "release_path": "pipeline/release_manifest.yaml",
+        "pipeline_yaml": updated_yaml,
+        "release": release,
+        "release_yaml": yaml_text(release),
+        "files": files,
+    }
+
+
+def apply_pipeline_release(plan: dict[str, Any]) -> dict[str, Any]:
+    root = Path(plan["project"])
+    pipeline_path = root / plan["pipeline_path"]
+    release_path = root / plan["release_path"]
+    if release_path.exists():
+        raise FileExistsError(f"Refusing to overwrite {release_path}")
+    current = pipeline_file_records(
+        pipeline_path.parent,
+        pipeline_yaml_override=plan["pipeline_yaml"],
+    )
+    if current != plan["files"]:
+        raise ValueError("Pipeline changed after the release plan was created")
+    atomic_write(pipeline_path, plan["pipeline_yaml"])
+    atomic_write(release_path, plan["release_yaml"])
+    return {"written": True, "release_path": plan["release_path"]}
+
+
+def verify_pipeline_release(root: Path) -> dict[str, Any]:
+    pipeline_root = root / "pipeline"
+    release_path = pipeline_root / "release_manifest.yaml"
+    if not release_path.is_file():
+        return {"ok": True, "errors": [], "released": False}
+    release = load_yaml(release_path)
+    errors: list[str] = []
+    if release.get("schema_version") != ANALYSIS_ARTIFACT_SCHEMA_VERSION:
+        errors.append(f"Unsupported pipeline release schema: {release_path}")
+    expected_records = release.get("files")
+    if not isinstance(expected_records, list):
+        errors.append(f"Pipeline release files must be a list: {release_path}")
+        expected_records = []
+    try:
+        actual_records = pipeline_file_records(pipeline_root)
+    except ValueError as error:
+        errors.append(str(error))
+        actual_records = []
+    if actual_records != expected_records:
+        errors.append("Pipeline files differ from the release manifest")
+    return {"ok": not errors, "errors": errors, "released": True}
 
 
 def git_command(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -1140,6 +1905,150 @@ def checkpoint_value(text: str, label: str) -> str | None:
     return match.group(1).strip().strip("`") if match else None
 
 
+def audit_analysis_lifecycle(
+    root: Path,
+    profile: str | None,
+) -> dict[str, list[str]]:
+    errors: list[str] = []
+    warnings: list[str] = []
+    if not isinstance(profile, str) or profile not in ANALYSIS_LIFECYCLE_PROFILES:
+        return {"errors": errors, "warnings": warnings}
+
+    for stage in ("explore", "archive", "pipeline"):
+        if not (root / stage).is_dir():
+            warnings.append(
+                f"Missing recommended analysis lifecycle directory: {stage}/"
+            )
+
+    explore_root = root / "explore"
+    orders: dict[int, str] = {}
+    if explore_root.is_dir():
+        for task_path in sorted(explore_root.iterdir()):
+            if not task_path.is_dir():
+                errors.append(
+                    f"explore/ may only contain task directories: {task_path.name}"
+                )
+                continue
+            try:
+                parsed = parse_task_name(task_path.name)
+                existing = orders.get(parsed["order"])
+                if existing is not None:
+                    errors.append(
+                        f"Duplicate task order P{parsed['order']}: "
+                        f"{existing} and {task_path.name}"
+                    )
+                orders[parsed["order"]] = task_path.name
+                validate_explore_task(root, task_path.name)
+            except (OSError, ValueError, yaml.YAMLError) as error:
+                errors.append(str(error))
+
+    archive_root = root / "archive"
+    if archive_root.is_dir():
+        for task_root in sorted(archive_root.iterdir()):
+            if not task_root.is_dir():
+                errors.append(
+                    f"archive/ may only contain task directories: {task_root.name}"
+                )
+                continue
+            try:
+                parse_task_name(task_root.name)
+            except ValueError as error:
+                errors.append(str(error))
+                continue
+            if not (explore_root / task_root.name).is_dir():
+                errors.append(
+                    f"Frozen archive lacks preserved explore source: {task_root.name}"
+                )
+            for version_root in sorted(task_root.iterdir()):
+                if (
+                    not version_root.is_dir()
+                    or ARCHIVE_VERSION_PATTERN.fullmatch(version_root.name) is None
+                ):
+                    errors.append(
+                        "Archive task may only contain vNNN snapshot directories: "
+                        f"{version_root.relative_to(root)}"
+                    )
+                    continue
+                manifest_path = version_root / "archive_manifest.yaml"
+                if not manifest_path.is_file():
+                    errors.append(f"Missing archive manifest: {manifest_path}")
+                    continue
+                try:
+                    manifest = load_yaml(manifest_path)
+                except (OSError, ValueError, yaml.YAMLError) as error:
+                    errors.append(str(error))
+                    continue
+                selector = f"{task_root.name}@{version_root.name}"
+                snapshot = manifest.get("snapshot")
+                review = manifest.get("review")
+                if manifest.get("schema_version") != ANALYSIS_ARTIFACT_SCHEMA_VERSION:
+                    errors.append(f"Unsupported archive schema: {manifest_path}")
+                if (
+                    not isinstance(snapshot, dict)
+                    or snapshot.get("selector") != selector
+                ):
+                    errors.append(f"Archive selector mismatch: {manifest_path}")
+                if (
+                    not isinstance(review, dict)
+                    or review.get("status") != "approved"
+                    or not review.get("reviewed_by")
+                ):
+                    errors.append(
+                        f"Archive snapshot lacks approved human review: {manifest_path}"
+                    )
+                if not isinstance(manifest.get("files"), list):
+                    errors.append(f"Archive files must be a list: {manifest_path}")
+
+    pipeline_root = root / "pipeline"
+    pipeline_path = pipeline_root / "pipeline.yaml"
+    if pipeline_path.is_file():
+        try:
+            document = load_yaml(pipeline_path)
+            pipeline = document.get("pipeline")
+            sources = document.get("sources")
+            steps = document.get("steps")
+            if document.get("schema_version") != ANALYSIS_ARTIFACT_SCHEMA_VERSION:
+                errors.append(f"Unsupported pipeline schema: {pipeline_path}")
+            if not isinstance(pipeline, dict) or pipeline.get("status") not in {
+                "candidate",
+                "release-ready",
+            }:
+                errors.append("pipeline.yaml status must be candidate or release-ready")
+            if not isinstance(sources, list) or not sources:
+                errors.append("pipeline.yaml must contain archive sources")
+            else:
+                for source in sources:
+                    if not isinstance(source, dict):
+                        errors.append("Every pipeline source must be a mapping")
+                        continue
+                    selector = str(source.get("selector", ""))
+                    try:
+                        target = snapshot_path(root, selector)
+                        manifest_path = target / "archive_manifest.yaml"
+                        if not manifest_path.is_file():
+                            errors.append(
+                                f"Pipeline archive source is missing: {selector}"
+                            )
+                        elif source.get("manifest_sha256") != sha256_file(
+                            manifest_path
+                        ):
+                            errors.append(
+                                f"Pipeline archive manifest changed: {selector}"
+                            )
+                    except ValueError as error:
+                        errors.append(str(error))
+            if not isinstance(steps, list) or not steps:
+                errors.append("pipeline.yaml must contain ordered steps")
+        except (OSError, ValueError, yaml.YAMLError) as error:
+            errors.append(str(error))
+    elif pipeline_root.is_dir() and any(pipeline_root.iterdir()):
+        errors.append("pipeline/ contains files but lacks pipeline.yaml")
+
+    release_check = verify_pipeline_release(root)
+    errors.extend(release_check["errors"])
+    return {"errors": errors, "warnings": warnings}
+
+
 def audit_project(root: Path) -> dict[str, Any]:
     errors: list[str] = []
     warnings: list[str] = []
@@ -1177,6 +2086,28 @@ def audit_project(root: Path) -> dict[str, Any]:
         errors.append("Manifest must contain a project mapping")
     elif project.get("profile") not in PROFILE_NAMES:
         errors.append(f"Unknown project profile: {project.get('profile')!r}")
+    profile = project.get("profile") if isinstance(project, dict) else None
+    analysis = manifest.get("analysis")
+    expected_lifecycle = (
+        "explore_archive_pipeline"
+        if isinstance(profile, str) and profile in ANALYSIS_LIFECYCLE_PROFILES
+        else "profile_specific"
+    )
+    if not isinstance(analysis, dict):
+        errors.append("Manifest must contain an analysis mapping")
+    elif analysis.get("lifecycle") is None:
+        warnings.append(
+            "Manifest lacks optional analysis.lifecycle; adopt the current "
+            "control template when convenient"
+        )
+    elif analysis.get("lifecycle") != expected_lifecycle:
+        errors.append(
+            "Manifest analysis.lifecycle conflicts with project.profile: "
+            f"{analysis.get('lifecycle')!r}"
+        )
+    lifecycle_audit = audit_analysis_lifecycle(root, profile)
+    errors.extend(lifecycle_audit["errors"])
+    warnings.extend(lifecycle_audit["warnings"])
 
     notion = manifest.get("notion")
     if not isinstance(notion, dict):
@@ -1230,7 +2161,7 @@ def audit_project(root: Path) -> dict[str, Any]:
         "ok": not errors,
         "errors": errors,
         "warnings": warnings,
-        "profile": project.get("profile") if isinstance(project, dict) else None,
+        "profile": profile,
         "pending_sync": pending,
         "pixi_policy": pixi_policy,
     }
@@ -1830,6 +2761,36 @@ def print_sync_audit(value: dict[str, Any]) -> None:
         print(f"ERROR {error}")
 
 
+def print_lifecycle_plan(
+    value: dict[str, Any],
+    applied: dict[str, Any] | None,
+) -> None:
+    print(f"{value['mode']} project={value['project']}")
+    for key in (
+        "task_path",
+        "archive_path",
+        "pipeline_path",
+        "release_path",
+        "selector",
+    ):
+        if value.get(key):
+            print(f"  {key}: {value[key]}")
+    if applied is None:
+        print("Dry-run only; pass --apply to write.")
+    else:
+        print("Applied.")
+
+
+def print_archive_verification(value: dict[str, Any]) -> None:
+    print(
+        f"Archive verification {'PASS' if value['ok'] else 'FAIL'}: {value['selector']}"
+    )
+    if value.get("file_count") is not None:
+        print(f"  files: {value['file_count']}")
+    for error in value["errors"]:
+        print(f"ERROR {error}")
+
+
 def main() -> None:
     args = parse_args()
     logger = configure_logging()
@@ -1868,6 +2829,70 @@ def main() -> None:
         if args.command == "close":
             value = close_session(root, args)
             print_json(value) if args.json else print_close(value)
+            return
+        if args.command == "explore-create":
+            value = plan_explore_task(
+                root,
+                order=args.order,
+                core=args.core,
+                summary=args.summary,
+                question=args.question,
+                method=args.method,
+                expected_outputs=args.expected_output,
+                stop_condition=args.stop_condition,
+                approved_by=args.approved_by,
+            )
+            applied = apply_explore_task(value) if args.apply else None
+            (
+                print_json({"plan": value, "applied": applied})
+                if args.json
+                else print_lifecycle_plan(value, applied)
+            )
+            return
+        if args.command == "archive-promote":
+            value = plan_archive_promotion(
+                root,
+                task_name=args.task,
+                reviewed_by=args.reviewed_by,
+                review_summary=args.review_summary,
+                validations=args.validation,
+            )
+            applied = apply_archive_promotion(value) if args.apply else None
+            (
+                print_json({"plan": value, "applied": applied})
+                if args.json
+                else print_lifecycle_plan(value, applied)
+            )
+            return
+        if args.command == "archive-verify":
+            value = verify_archive_snapshot(root, args.snapshot)
+            print_json(value) if args.json else print_archive_verification(value)
+            if not value["ok"]:
+                raise SystemExit(1)
+            return
+        if args.command == "pipeline-create":
+            value = plan_pipeline_creation(root, selectors=args.snapshot)
+            applied = apply_pipeline_creation(value) if args.apply else None
+            (
+                print_json({"plan": value, "applied": applied})
+                if args.json
+                else print_lifecycle_plan(value, applied)
+            )
+            return
+        if args.command == "pipeline-release":
+            value = plan_pipeline_release(
+                root,
+                entrypoint=args.entrypoint,
+                reviewed_by=args.reviewed_by,
+                review_summary=args.review_summary,
+                validations=args.validation,
+            )
+            applied = apply_pipeline_release(value) if args.apply else None
+            (
+                print_json({"plan": value, "applied": applied})
+                if args.json
+                else print_lifecycle_plan(value, applied)
+            )
             return
         if args.command == "sync-export":
             value = export_sync_payload(root, args)

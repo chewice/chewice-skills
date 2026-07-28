@@ -19,6 +19,20 @@
 - 记录 inputs、validation、environment、exclusions、random seed、overlap 和
   limitations。
 
+## Analysis Lifecycle
+
+- 对 `generic-analysis` 和 `bioinformatics`，先在聊天中提出 question、method、
+  expected outputs 和 stop condition；human 明确同意后才创建目录或执行计算。
+- `explore/` 允许并行小任务；目录名使用
+  `P<order>-<core>-<short-english-summary>/`，例如
+  `P0-QC-low-quality-cells-removed/`。`P0` 表示唯一顺序，`QC`/`cluster`/`GRN`
+  表示核心任务，末段是简短英文总结。
+- 每个 explore task 的 scripts、derived data 和 figures 都留在自己的目录。
+- 只有人工审核后才能将完整 task 冻结为 `archive/<task>/vNNN/`；不得编辑或
+  覆盖 snapshot，且入库不自动构成 verified evidence。
+- `pipeline/` 只从获批 archive 整理独立主流程；runtime 不得依赖 `explore/`
+  或 `archive/`，发表前经人工审核生成 release manifest。
+
 ## Safety
 
 - 保留现有路径和 source data。

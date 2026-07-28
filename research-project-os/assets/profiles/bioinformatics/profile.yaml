@@ -1,21 +1,22 @@
 name: bioinformatics
 description: 使用 Scientific Python/R 的 bioinformatics analysis project。
+analysis_lifecycle: explore_archive_pipeline
 directories:
-  - analysis
+  - archive
   - config
-  - data/interim
   - data/metadata
   - data/public
   - docs
+  - explore
+  - pipeline
   - reports
-  - results
-  - scripts
   - tests
 required_context:
   - docs/ai_context/data_lineage.md
   - docs/ai_context/project_structure.md
   - docs/ai_context/status_policy.md
 interpretation_boundary: >-
+  先由 human 确认分析方向，再在 explore/ 中执行并经人工审核入库 archive/。
   报告 inferential results 前，记录 biological replicate、inference unit、
   covariates、exclusions、random seed、multiple-testing family 和 dataset
-  overlap。
+  overlap；pipeline/ 的发布状态不自动证明 scientific validity。

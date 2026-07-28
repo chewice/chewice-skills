@@ -3,7 +3,7 @@ authors = ["zdh <goodalleveryday@gmail.com>"]
 channels = ["conda-forge"]
 name = "research-project-os-skill"
 platforms = ["linux-64", "win-64"]
-version = "0.3.2"
+version = "0.4.0"
 
 [tasks]
 lint = "ruff check research-project-os/scripts scripts tests"

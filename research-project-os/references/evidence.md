@@ -17,6 +17,10 @@ project root, the environment is locked, overwrite behavior is defined, and
 claim-relevant tests or sensitivity checks passed. Structural audit never
 establishes scientific truth.
 
+An approved archive snapshot establishes the reviewed artifact boundary, not
+the claim. A release-ready pipeline establishes a publication file boundary,
+not scientific validity. Register and verify evidence separately.
+
 For literature evidence, record query, sources, run date, deduplication,
 exclusions, identifiers, and whether support came from metadata, abstract, or
 full text.

@@ -7,6 +7,8 @@ import subprocess
 import sys
 import tempfile
 
+import yaml
+
 
 ROOT = Path(__file__).resolve().parents[1]
 CLI = ROOT / "research-project-os/scripts/research_project_os.py"
@@ -47,6 +49,98 @@ def main() -> None:
         )
         run("audit", "--project", str(project))
         run("start", "--project", str(project))
+        explore_args = (
+            "explore-create",
+            "--project",
+            str(project),
+            "--order",
+            "0",
+            "--core",
+            "QC",
+            "--summary",
+            "stable thresholds selected",
+            "--question",
+            "哪些 QC thresholds 稳定？",
+            "--method",
+            "Sensitivity analysis。",
+            "--expected-output",
+            "QC table",
+            "--stop-condition",
+            "Threshold sensitivity 已记录。",
+            "--approved-by",
+            "smoke-reviewer",
+        )
+        run(*explore_args)
+        run(*explore_args, "--apply")
+        task_name = "P0-QC-stable-thresholds-selected"
+        task_root = project / "explore" / task_name
+        (task_root / "scripts/qc.py").write_text(
+            "print('qc')\n",
+            encoding="utf-8",
+        )
+        promote_args = (
+            "archive-promote",
+            "--project",
+            str(project),
+            "--task",
+            task_name,
+            "--reviewed-by",
+            "smoke-reviewer",
+            "--review-summary",
+            "QC 可进入主流程。",
+            "--validation",
+            "Sensitivity analysis passed。",
+        )
+        run(*promote_args)
+        run(*promote_args, "--apply")
+        selector = f"{task_name}@v001"
+        run(
+            "archive-verify",
+            "--project",
+            str(project),
+            "--snapshot",
+            selector,
+        )
+        pipeline_args = (
+            "pipeline-create",
+            "--project",
+            str(project),
+            "--snapshot",
+            selector,
+        )
+        run(*pipeline_args)
+        run(*pipeline_args, "--apply")
+        pipeline_path = project / "pipeline/pipeline.yaml"
+        pipeline = yaml.safe_load(pipeline_path.read_text(encoding="utf-8"))
+        pipeline["steps"][0]["implementation"] = "src/qc.py"
+        pipeline_path.write_text(
+            yaml.safe_dump(pipeline, allow_unicode=True, sort_keys=False),
+            encoding="utf-8",
+        )
+        (project / "pipeline/src/qc.py").write_text(
+            "def run():\n    return 'ok'\n",
+            encoding="utf-8",
+        )
+        (project / "pipeline/run.py").write_text(
+            "from src.qc import run\nprint(run())\n",
+            encoding="utf-8",
+        )
+        release_args = (
+            "pipeline-release",
+            "--project",
+            str(project),
+            "--entrypoint",
+            "run.py",
+            "--reviewed-by",
+            "smoke-reviewer",
+            "--review-summary",
+            "Pipeline 可发布。",
+            "--validation",
+            "End-to-end smoke passed。",
+        )
+        run(*release_args)
+        run(*release_args, "--apply")
+        run("audit", "--project", str(project))
         run(
             "close",
             "--project",

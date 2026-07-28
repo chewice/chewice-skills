@@ -31,6 +31,7 @@ class SkillContractTests(unittest.TestCase):
         self.assertEqual(
             {path.name for path in references.glob("*.md")},
             {
+                "analysis_lifecycle.md",
                 "evidence.md",
                 "governance.md",
                 "migration_policy.md",
@@ -41,7 +42,7 @@ class SkillContractTests(unittest.TestCase):
             len(path.read_text(encoding="utf-8").split())
             for path in references.glob("*.md")
         )
-        self.assertLessEqual(total_words, 1_100)
+        self.assertLessEqual(total_words, 1_600)
         for target in re.findall(r"\]\((references/[^)]+)\)", skill.read_text()):
             self.assertTrue((ROOT / "research-project-os" / target).is_file(), target)
 

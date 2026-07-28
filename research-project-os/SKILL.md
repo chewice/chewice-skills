@@ -1,11 +1,9 @@
 ---
 name: research-project-os
-description: Initialize, adopt, inspect, start, close, and audit research projects with durable Agent context, evidence/status governance, Git provenance, root-level Pixi policy, and reviewable ProjectYYYY Notion payloads. Use for research lifecycle control, resumable handoffs, evidence promotion, governance audits, or portfolio synchronization. Do not use as the primary workflow for package solving, code refactoring, data acquisition, scientific analysis, literature retrieval, or figure export; register those workflows' durable outputs only when lifecycle tracking is needed.
+description: Govern research projects with durable Agent context, evidence/status rules, Git provenance, root-level Pixi, reviewable Notion payloads, and a human-gated explore-to-archive-to-pipeline analysis lifecycle. Use for project initialization or adoption, exploratory task organization, reviewed result promotion, publication pipeline preparation, resumable handoffs, audits, or portfolio synchronization. Do not use as the primary workflow for dependency solving, data acquisition, scientific analysis, literature retrieval, or figure export; govern their durable outputs.
 ---
 
 # Research Project OS
-
-Externalize project memory so research work is resumable, reviewable, and evidence-aware.
 
 ## Run the CLI
 
@@ -33,12 +31,27 @@ Use `--overwrite` only for an explicitly reviewed control-file replacement and
 `--init-git` only when requested.
 
 Never stage, commit, push, solve environments, or write to Notion implicitly.
-The CLI only creates local control files and reviewable JSON payloads.
 
 Choose `generic-analysis`, `bioinformatics`, `literature-review`, or
-`software-development`. Profiles define initial directories and interpretation
-boundaries for `init`; during `adopt`, missing business directories are
-recommendations only and existing project structure remains authoritative.
+`software-development`. Profiles govern `init`; `adopt` only recommends missing
+business directories and preserves the existing structure.
+
+## Govern analysis stages
+
+For `generic-analysis` and `bioinformatics`, discuss the direction before
+creating files or computing. State the question, method, expected outputs, and
+stop condition; continue only after explicit human approval. Then use
+`explore-create` to scaffold one self-contained task named
+`P<order>-<core>-<short-english-summary>`, such as
+`P0-QC-low-quality-cells-removed`.
+
+Keep task scripts, derived data, and figures inside its explore subdirectory.
+After human result review, use `archive-promote` to preserve the explore source
+and create an immutable versioned snapshot. Verify its hashes before
+`pipeline-create`. Build pipeline implementations independently of both
+`explore/` and `archive/`; use archive only as provenance. Run
+`pipeline-release` after publication review and validation. Never treat archive
+promotion or release readiness as scientific verification.
 
 ## Govern sessions
 
@@ -60,9 +73,11 @@ never consolidate them.
 
 - Read [governance.md](references/governance.md) for context, statuses, language,
   and the Pixi policy.
+- Read [analysis_lifecycle.md](references/analysis_lifecycle.md) before creating,
+  promoting, or publishing analysis tasks.
 - Read [evidence.md](references/evidence.md) before promoting evidence.
 - Read [migration_policy.md](references/migration_policy.md) before adoption.
 - Read [notion_git_contract.md](references/notion_git_contract.md) before an
   authorized Notion application.
 
-Release `0.3.2` retains manifest and payload schema `0.3.0`.
+Release `0.4.0` retains manifest and payload schema `0.3.0`.

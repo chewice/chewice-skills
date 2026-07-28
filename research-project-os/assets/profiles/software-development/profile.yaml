@@ -1,5 +1,6 @@
 name: software-development
 description: Research software、library、CLI 或 reproducible pipeline project。
+analysis_lifecycle: profile_specific
 directories:
   - docs
   - reports

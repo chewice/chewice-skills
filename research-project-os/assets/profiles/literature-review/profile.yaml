@@ -1,5 +1,6 @@
 name: literature-review
 description: Evidence synthesis、scoping review 或 literature mapping project。
+analysis_lifecycle: profile_specific
 directories:
   - docs
   - notes

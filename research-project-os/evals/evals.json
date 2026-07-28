@@ -48,6 +48,18 @@
       "prompt": "Audit this governed research project: child folders contain Pixi workspaces and I need evidence-backed migration guidance without changing them.",
       "should_trigger": true,
       "expected_output": "Reports nested Pixi policy errors and root-workspace migration advice without modifying environments."
+    },
+    {
+      "id": 9,
+      "prompt": "I want to explore QC, clustering, and GRN as separate analysis tasks, review each result before archiving it, and then assemble a publication pipeline.",
+      "should_trigger": true,
+      "expected_output": "Asks for direction before analysis, creates ordered self-contained explore tasks, promotes reviewed immutable snapshots, and derives an independent pipeline."
+    },
+    {
+      "id": 10,
+      "prompt": "Run a differential-expression model now and tell me which genes are significant.",
+      "should_trigger": false,
+      "expected_output": "Uses a scientific analysis workflow; Research Project OS only governs an approved task and durable outputs."
     }
   ]
 }

@@ -107,6 +107,7 @@ class ResearchProjectOSTests(unittest.TestCase):
             self.assertIn("已采用 Research Project OS control layer", handoff)
             self.assertIn("biological replicate", manifest)
             self.assertIn("schema_version: 0.3.0", manifest)
+            self.assertIn('lifecycle: "explore_archive_pipeline"', manifest)
             self.assertIn("portfolio_title:", manifest)
             self.assertIn("## Current objective", handoff)
 
@@ -151,7 +152,9 @@ class ResearchProjectOSTests(unittest.TestCase):
 
             self.assertNotIn("analysis", plan["directories"])
             self.assertNotIn("data/metadata", plan["directories"])
-            self.assertIn("analysis", plan["profile_directory_recommendations"])
+            self.assertIn("explore", plan["profile_directory_recommendations"])
+            self.assertIn("archive", plan["profile_directory_recommendations"])
+            self.assertIn("pipeline", plan["profile_directory_recommendations"])
             self.assertIn("data/metadata", plan["profile_directory_recommendations"])
             self.assertNotIn("docs", plan["profile_directory_recommendations"])
             self.assertNotIn("reports", plan["profile_directory_recommendations"])
@@ -463,6 +466,223 @@ class ResearchProjectOSTests(unittest.TestCase):
             self.assertIn("source query", manifest)
             self.assertIn("abstract-only evidence", manifest)
 
+    def test_analysis_task_requires_approved_direction_and_ordered_name(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            scaffold = RPOS.plan_scaffold(
+                root, "bioinformatics", "init", overwrite=False
+            )
+            RPOS.apply_scaffold(scaffold, init_git=False)
+
+            plan = RPOS.plan_explore_task(
+                root,
+                order=0,
+                core="QC",
+                summary="low quality cells removed",
+                question="哪些细胞应排除？",
+                method="比较 QC metrics 和 sensitivity analysis。",
+                expected_outputs=["QC table", "diagnostic figures"],
+                stop_condition="阈值对主要结论稳定。",
+                approved_by="reviewer",
+            )
+            self.assertEqual(plan["task_name"], "P0-QC-low-quality-cells-removed")
+            self.assertFalse((root / plan["task_path"]).exists())
+
+            RPOS.apply_explore_task(plan)
+            task_root = root / plan["task_path"]
+            self.assertTrue((task_root / "scripts").is_dir())
+            self.assertTrue((task_root / "derived").is_dir())
+            self.assertTrue((task_root / "figures").is_dir())
+            task = RPOS.load_yaml(task_root / "task.yaml")
+            self.assertEqual(task["approval"]["status"], "approved")
+
+            with self.assertRaises(ValueError):
+                RPOS.plan_explore_task(
+                    root,
+                    order=0,
+                    core="cluster",
+                    summary="cell states resolved",
+                    question="如何聚类？",
+                    method="graph clustering",
+                    expected_outputs=["clusters"],
+                    stop_condition="stability checked",
+                    approved_by="reviewer",
+                )
+            with self.assertRaises(ValueError):
+                RPOS.normalize_task_name(1, "细胞聚类", "cell states")
+
+    def test_archive_promotion_preserves_source_and_verifies_frozen_snapshot(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            RPOS.apply_scaffold(
+                RPOS.plan_scaffold(root, "generic-analysis", "init", overwrite=False),
+                init_git=False,
+            )
+            explore = RPOS.plan_explore_task(
+                root,
+                order=0,
+                core="QC",
+                summary="stable thresholds selected",
+                question="哪些阈值稳定？",
+                method="sensitivity analysis",
+                expected_outputs=["threshold table"],
+                stop_condition="thresholds selected",
+                approved_by="reviewer",
+            )
+            RPOS.apply_explore_task(explore)
+            source_script = root / explore["task_path"] / "scripts/qc.py"
+            source_script.write_text("print('qc')\n", encoding="utf-8")
+
+            promotion = RPOS.plan_archive_promotion(
+                root,
+                task_name=explore["task_name"],
+                reviewed_by="reviewer",
+                review_summary="QC 结果可进入主流程。",
+                validations=["sensitivity analysis passed"],
+            )
+            self.assertEqual(
+                promotion["selector"],
+                "P0-QC-stable-thresholds-selected@v001",
+            )
+            self.assertFalse((root / promotion["archive_path"]).exists())
+            RPOS.apply_archive_promotion(promotion)
+
+            self.assertTrue(source_script.is_file())
+            verification = RPOS.verify_archive_snapshot(root, promotion["selector"])
+            self.assertTrue(verification["ok"], verification["errors"])
+
+            archived_script = root / promotion["archive_path"] / "scripts/qc.py"
+            archived_script.write_text("print('changed')\n", encoding="utf-8")
+            verification = RPOS.verify_archive_snapshot(root, promotion["selector"])
+            self.assertFalse(verification["ok"])
+
+    def test_pipeline_release_is_independent_and_hash_governed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            RPOS.apply_scaffold(
+                RPOS.plan_scaffold(root, "generic-analysis", "init", overwrite=False),
+                init_git=False,
+            )
+            explore = RPOS.plan_explore_task(
+                root,
+                order=0,
+                core="GRN",
+                summary="robust network retained",
+                question="哪个 GRN 稳定？",
+                method="bootstrap validation",
+                expected_outputs=["network table"],
+                stop_condition="edge stability measured",
+                approved_by="reviewer",
+            )
+            RPOS.apply_explore_task(explore)
+            (root / explore["task_path"] / "scripts/grn.py").write_text(
+                "print('grn')\n",
+                encoding="utf-8",
+            )
+            promotion = RPOS.plan_archive_promotion(
+                root,
+                task_name=explore["task_name"],
+                reviewed_by="reviewer",
+                review_summary="GRN 可进入主流程。",
+                validations=["bootstrap passed"],
+            )
+            RPOS.apply_archive_promotion(promotion)
+
+            pipeline_plan = RPOS.plan_pipeline_creation(
+                root,
+                selectors=[promotion["selector"]],
+            )
+            RPOS.apply_pipeline_creation(pipeline_plan)
+            pipeline_path = root / "pipeline/pipeline.yaml"
+            pipeline = RPOS.load_yaml(pipeline_path)
+            pipeline["steps"][0]["implementation"] = "src/grn.py"
+            pipeline_path.write_text(RPOS.yaml_text(pipeline), encoding="utf-8")
+            (root / "pipeline/src/grn.py").write_text(
+                "def run():\n    return 'ok'\n",
+                encoding="utf-8",
+            )
+            (root / "pipeline/run.py").write_text(
+                "from src.grn import run\nprint(run())\n",
+                encoding="utf-8",
+            )
+
+            release = RPOS.plan_pipeline_release(
+                root,
+                entrypoint="run.py",
+                reviewed_by="reviewer",
+                review_summary="主流程可发布。",
+                validations=["end-to-end test passed"],
+            )
+            self.assertFalse((root / release["release_path"]).exists())
+            RPOS.apply_pipeline_release(release)
+            self.assertTrue(RPOS.verify_pipeline_release(root)["ok"])
+
+            (root / "pipeline/src/grn.py").write_text(
+                "def run():\n    return 'changed'\n",
+                encoding="utf-8",
+            )
+            self.assertFalse(RPOS.verify_pipeline_release(root)["ok"])
+
+    def test_pipeline_release_rejects_archive_runtime_dependency(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            RPOS.apply_scaffold(
+                RPOS.plan_scaffold(root, "generic-analysis", "init", overwrite=False),
+                init_git=False,
+            )
+            explore = RPOS.plan_explore_task(
+                root,
+                order=0,
+                core="cluster",
+                summary="stable clusters selected",
+                question="哪些 clusters 稳定？",
+                method="consensus clustering",
+                expected_outputs=["cluster labels"],
+                stop_condition="stability measured",
+                approved_by="reviewer",
+            )
+            RPOS.apply_explore_task(explore)
+            (root / explore["task_path"] / "scripts/cluster.py").write_text(
+                "print('cluster')\n",
+                encoding="utf-8",
+            )
+            promotion = RPOS.plan_archive_promotion(
+                root,
+                task_name=explore["task_name"],
+                reviewed_by="reviewer",
+                review_summary="cluster 可进入主流程。",
+                validations=["stability passed"],
+            )
+            RPOS.apply_archive_promotion(promotion)
+            RPOS.apply_pipeline_creation(
+                RPOS.plan_pipeline_creation(
+                    root,
+                    selectors=[promotion["selector"]],
+                )
+            )
+            pipeline_path = root / "pipeline/pipeline.yaml"
+            pipeline = RPOS.load_yaml(pipeline_path)
+            pipeline["steps"][0]["implementation"] = "src/cluster.py"
+            pipeline_path.write_text(RPOS.yaml_text(pipeline), encoding="utf-8")
+            (root / "pipeline/src/cluster.py").write_text(
+                "open('../archive/result.tsv')\n",
+                encoding="utf-8",
+            )
+            (root / "pipeline/run.py").write_text(
+                "print('run')\n",
+                encoding="utf-8",
+            )
+            with self.assertRaises(ValueError):
+                RPOS.plan_pipeline_release(
+                    root,
+                    entrypoint="run.py",
+                    reviewed_by="reviewer",
+                    review_summary="待发布。",
+                    validations=["test passed"],
+                )
+
     def test_release_is_decoupled_from_stable_schemas_and_evals_cover_boundaries(
         self,
     ) -> None:
@@ -471,8 +691,8 @@ class ResearchProjectOSTests(unittest.TestCase):
             (ROOT / "research-project-os/evals/evals.json").read_text(encoding="utf-8")
         )
 
-        self.assertEqual(workspace["workspace"]["version"], "0.3.2")
-        self.assertEqual(RPOS.RELEASE_VERSION, "0.3.2")
+        self.assertEqual(workspace["workspace"]["version"], "0.4.0")
+        self.assertEqual(RPOS.RELEASE_VERSION, "0.4.0")
         self.assertEqual(RPOS.MANIFEST_SCHEMA_VERSION, "0.3.0")
         self.assertEqual(RPOS.SYNC_PAYLOAD_SCHEMA_VERSION, "0.3.0")
         trigger_values = {case["should_trigger"] for case in evals["evals"]}
@@ -577,6 +797,7 @@ class ResearchProjectOSTests(unittest.TestCase):
             "collection://projects",
         )
         self.assertIsNone(migrated["notion"]["portfolio_page_id"])
+        self.assertEqual(migrated["analysis"]["lifecycle"], "profile_specific")
         self.assertEqual(legacy["schema_version"], "0.2.0")
 
     def test_application_receipt_requires_complete_read_back(self) -> None:

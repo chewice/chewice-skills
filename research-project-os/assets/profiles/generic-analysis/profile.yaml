@@ -1,16 +1,18 @@
 name: generic-analysis
 description: 通用 data analysis 或 quantitative research project。
+analysis_lifecycle: explore_archive_pipeline
 directories:
-  - analysis
+  - archive
   - data
   - docs
+  - explore
+  - pipeline
   - reports
-  - results
-  - scripts
   - tests
 required_context:
   - docs/ai_context/project_structure.md
   - docs/ai_context/status_policy.md
 interpretation_boundary: >-
-  在记录 inputs、code、validation 和 limitations 前，exploratory outputs
-  不能视为 verified evidence。
+  先由 human 确认分析方向，再在 explore/ 中执行；人工审核后的冻结快照才可
+  进入 archive/，pipeline/ 只能从 archive/ 的获批逻辑整理。任何阶段转换都不
+  自动构成 verified evidence。

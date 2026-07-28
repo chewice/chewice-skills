@@ -1,4 +1,4 @@
 interface:
   display_name: "Research Project OS"
-  short_description: "Govern research lifecycles and root Pixi workspaces"
-  default_prompt: "Use $research-project-os to audit or resume this research project with evidence governance and one root Pixi workspace."
+  short_description: "Govern reviewed research tasks and release pipelines"
+  default_prompt: "Use $research-project-os to organize this analysis through human-gated explore, archive, and publication-ready pipeline stages."

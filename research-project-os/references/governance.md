@@ -18,6 +18,12 @@ Use these states without collapsing them:
 
 Execution is not validation. Human review grants `stable` and `approved`.
 
+For analysis profiles, keep artifact stages distinct from these states:
+`explore/` contains approved-to-run tasks, `archive/` contains immutable
+human-reviewed snapshots, and `pipeline/` contains the independent release
+workflow. Multiple explore tasks may coexist. Promotion does not itself grant
+`verified` evidence or `stable` analysis.
+
 Use Chinese for human-facing project narrative. Preserve commands, paths,
 keys, IDs, state tokens, code, and parsed headings. Existing repository rules
 take precedence.
