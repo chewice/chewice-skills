@@ -16,7 +16,8 @@ required_context:
   - docs/ai_context/project_structure.md
   - docs/ai_context/status_policy.md
 interpretation_boundary: >-
-  先由 human 确认分析方向，再在 explore/ 中执行并经人工审核入库 archive/。
-  报告 inferential results 前，记录 biological replicate、inference unit、
-  covariates、exclusions、random seed、multiple-testing family 和 dataset
-  overlap；pipeline/ 的发布状态不自动证明 scientific validity。
+  先由 human 确认方向；explore/ 使用线性叙事 code，保留 intermediate objects
+  和 diagnostics，避免过早函数化。入库 archive/ 前需人工审核。报告 inferential
+  results 前，记录 biological replicate、inference unit、covariates、exclusions、
+  random seed、multiple-testing family 和 dataset overlap；pipeline/ 的发布状态
+  不自动证明 scientific validity。

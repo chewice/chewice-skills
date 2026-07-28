@@ -23,3 +23,7 @@ outputs 仅在影响 provenance、decision 或 handoff 时登记。
 `generic-analysis` 与 `bioinformatics` 使用 human-gated
 `explore → archive → pipeline`。CLI 管理 task scaffold、不可覆盖 snapshot、
 provenance 和 release boundary，不替代 scientific analysis 或 evidence review。
+explore 采用 narrative-linear code 与 task README，优先人工可读和快速迭代；
+pipeline 才引入稳定 abstraction、parameterization 和 systematic tests。
+两个阶段的每个 code file 都保留 machine-readable `zh-CN` outline contract：
+中文提纲和 section headings，英文 identifiers 与 paths。

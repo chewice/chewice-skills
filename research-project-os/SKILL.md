@@ -1,6 +1,6 @@
 ---
 name: research-project-os
-description: Govern research projects with durable Agent context, evidence/status rules, Git provenance, root-level Pixi, reviewable Notion payloads, and a human-gated explore-to-archive-to-pipeline analysis lifecycle. Use for project initialization or adoption, exploratory task organization, reviewed result promotion, publication pipeline preparation, resumable handoffs, audits, or portfolio synchronization. Do not use as the primary workflow for dependency solving, data acquisition, scientific analysis, literature retrieval, or figure export; govern their durable outputs.
+description: Govern research projects with durable Agent context, evidence/status rules, Git provenance, root-level Pixi, readable narrative exploration, reviewed archives, publication pipelines, and reviewable Notion payloads. Use for project initialization or adoption, exploratory task organization, result promotion, resumable handoffs, audits, publication preparation, or portfolio synchronization. Do not use as the primary workflow for dependency solving, data acquisition, scientific analysis, literature retrieval, or figure export; govern their durable outputs.
 ---
 
 # Research Project OS
@@ -17,57 +17,58 @@ pixi run --locked --manifest-path "$SKILL_WORKSPACE/pixi.toml" \
   python "$SKILL_ROOT/scripts/research_project_os.py" --help
 ```
 
-Use `inspect` for unknown state; `init` only for an empty directory; `adopt` for
-an existing project; `start` to resume; `close` to archive the handoff;
-`audit` for governance; and `sync-export`/`sync-audit` for local Notion
-payloads.
+Use `inspect` for unknown state, `init` for an empty directory, `adopt` for an
+existing project, `start` to resume, `close` for handoffs, `audit` for
+governance, and `sync-export`/`sync-audit` for local Notion payloads.
 
 ## Work safely
 
-Run every mutation without `--apply` first. Review the plan, then apply only
-when authorized. `adopt` preserves existing paths, `AGENTS.md`, README, data,
-environment files, and `.gitignore`; profile directories remain suggestions.
-Use `--overwrite` only for an explicitly reviewed control-file replacement and
+Run every mutation without `--apply` first. Apply only after review and
+authorization. `adopt` preserves existing paths and recommends missing profile
+directories. Use `--overwrite` only for reviewed control-file replacement and
 `--init-git` only when requested.
 
 Never stage, commit, push, solve environments, or write to Notion implicitly.
 
 Choose `generic-analysis`, `bioinformatics`, `literature-review`, or
-`software-development`. Profiles govern `init`; `adopt` only recommends missing
-business directories and preserves the existing structure.
+`software-development`.
 
 ## Govern analysis stages
 
-For `generic-analysis` and `bioinformatics`, discuss the direction before
-creating files or computing. State the question, method, expected outputs, and
-stop condition; continue only after explicit human approval. Then use
-`explore-create` to scaffold one self-contained task named
+For analysis profiles, state the question, method, expected outputs, and stop
+condition; create files or compute only after human approval. Use
+`explore-create` for one self-contained task named
 `P<order>-<core>-<short-english-summary>`, such as
 `P0-QC-low-quality-cells-removed`.
 
-Keep task scripts, derived data, and figures inside its explore subdirectory.
-After human result review, use `archive-promote` to preserve the explore source
-and create an immutable versioned snapshot. Verify its hashes before
-`pipeline-create`. Build pipeline implementations independently of both
-`explore/` and `archive/`; use archive only as provenance. Run
-`pipeline-release` after publication review and validation. Never treat archive
-promotion or release readiness as scientific verification.
+Treat explore code as an executable lab notebook: organize it top-to-bottom
+with explicit intermediates and nearby observations. Give every script a short
+Chinese outline and matching numbered Chinese section/cell headings; split by
+meaningful workflow steps, not fixed line counts. Keep one-off logic inline and
+tolerate duplication. Avoid generic helpers, classes, config layers, and
+cross-file abstractions until logic stabilizes.
+
+Keep scripts, derived data, figures, and the narrative `README.md` inside the
+task. After human review, use `archive-promote` for an immutable snapshot and
+verify hashes before `pipeline-create`. Refactor approved logic into modular,
+tested pipeline code independent of `explore/` and `archive/`, retaining
+Chinese outlines per file. Run
+`pipeline-release` after publication review. Archive or release status never
+implies scientific verification.
 
 ## Govern sessions
 
-Load the nearest `AGENTS.md`, `project_manifest.yaml`, `CURRENT_HANDOFF.md`,
-required context, relevant evidence, and Git state. Define one minimum task and
-its interpretation boundary. Register validated outputs and decisions, then
-close the session with the next minimum action.
+Load the nearest `AGENTS.md`, manifest, handoff, required context, relevant
+evidence, and Git state. Define one minimum task and interpretation boundary.
+Register validated outputs and decisions; close with the next minimum action.
 
 Write project explanations in Chinese by default. Keep paths, keys, IDs,
 statuses, commands, code symbols, and machine-parsed headings unchanged.
 
-Projects using Pixi follow `root_workspace`: one root manifest and tracked
-`pixi.lock`; root `.pixi/` is ignored and optional. Child work uses features,
-environments, namespaced tasks, and `task.cwd`. `inspect` only reports;
-`audit` fails on nested workspaces, locks, or `.pixi/`; `init` and `adopt`
-never consolidate them.
+For Pixi, keep one root manifest and tracked lock; ignore root `.pixi/`. Use
+features, environments, namespaced tasks, and `task.cwd` for child work.
+`audit` fails on nested workspaces, locks, or `.pixi/`; no command consolidates
+them.
 
 ## Load details only when needed
 
@@ -80,4 +81,4 @@ never consolidate them.
 - Read [notion_git_contract.md](references/notion_git_contract.md) before an
   authorized Notion application.
 
-Release `0.4.0` retains manifest and payload schema `0.3.0`.
+Release `0.4.2` retains manifest and payload schema `0.3.0`.

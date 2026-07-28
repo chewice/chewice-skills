@@ -495,6 +495,31 @@ class ResearchProjectOSTests(unittest.TestCase):
             self.assertTrue((task_root / "figures").is_dir())
             task = RPOS.load_yaml(task_root / "task.yaml")
             self.assertEqual(task["approval"]["status"], "approved")
+            self.assertEqual(task["exploration"]["style"], "narrative_linear")
+            self.assertEqual(
+                task["exploration"]["function_policy"],
+                "extract_after_stabilization",
+            )
+            self.assertTrue(task["exploration"]["outline_required"])
+            self.assertEqual(task["exploration"]["outline_language"], "zh-CN")
+            self.assertEqual(
+                task["exploration"]["outline_granularity"],
+                "meaningful_workflow_sections",
+            )
+            readme = (task_root / "README.md").read_text(encoding="utf-8")
+            self.assertIn("## Run order", readme)
+            self.assertIn("单次分析逻辑保持 inline", readme)
+            self.assertIn("intermediate objects", readme)
+            self.assertIn("# %% 1. 读取输入与参数", readme)
+            self.assertIn("编号中文 section/cell", readme)
+
+            task["exploration"]["style"] = "premature_abstraction"
+            (task_root / "task.yaml").write_text(
+                RPOS.yaml_text(task),
+                encoding="utf-8",
+            )
+            with self.assertRaises(ValueError):
+                RPOS.validate_explore_task(root, plan["task_name"])
 
             with self.assertRaises(ValueError):
                 RPOS.plan_explore_task(
@@ -594,6 +619,11 @@ class ResearchProjectOSTests(unittest.TestCase):
                 root,
                 selectors=[promotion["selector"]],
             )
+            self.assertEqual(
+                pipeline_plan["pipeline"]["code_style"]["outline_language"],
+                "zh-CN",
+            )
+            self.assertTrue(pipeline_plan["pipeline"]["code_style"]["outline_required"])
             RPOS.apply_pipeline_creation(pipeline_plan)
             pipeline_path = root / "pipeline/pipeline.yaml"
             pipeline = RPOS.load_yaml(pipeline_path)
@@ -691,8 +721,8 @@ class ResearchProjectOSTests(unittest.TestCase):
             (ROOT / "research-project-os/evals/evals.json").read_text(encoding="utf-8")
         )
 
-        self.assertEqual(workspace["workspace"]["version"], "0.4.0")
-        self.assertEqual(RPOS.RELEASE_VERSION, "0.4.0")
+        self.assertEqual(workspace["workspace"]["version"], "0.4.2")
+        self.assertEqual(RPOS.RELEASE_VERSION, "0.4.2")
         self.assertEqual(RPOS.MANIFEST_SCHEMA_VERSION, "0.3.0")
         self.assertEqual(RPOS.SYNC_PAYLOAD_SCHEMA_VERSION, "0.3.0")
         trigger_values = {case["should_trigger"] for case in evals["evals"]}

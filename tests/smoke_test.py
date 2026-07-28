@@ -74,6 +74,13 @@ def main() -> None:
         run(*explore_args, "--apply")
         task_name = "P0-QC-stable-thresholds-selected"
         task_root = project / "explore" / task_name
+        task = yaml.safe_load((task_root / "task.yaml").read_text(encoding="utf-8"))
+        if task["exploration"]["style"] != "narrative_linear":
+            raise SystemExit("explore task lacks narrative_linear style")
+        if task["exploration"]["outline_language"] != "zh-CN":
+            raise SystemExit("explore task lacks Chinese outline contract")
+        if not (task_root / "README.md").is_file():
+            raise SystemExit("explore task lacks narrative README")
         (task_root / "scripts/qc.py").write_text(
             "print('qc')\n",
             encoding="utf-8",
@@ -112,6 +119,8 @@ def main() -> None:
         run(*pipeline_args, "--apply")
         pipeline_path = project / "pipeline/pipeline.yaml"
         pipeline = yaml.safe_load(pipeline_path.read_text(encoding="utf-8"))
+        if pipeline["code_style"]["outline_language"] != "zh-CN":
+            raise SystemExit("pipeline lacks Chinese outline contract")
         pipeline["steps"][0]["implementation"] = "src/qc.py"
         pipeline_path.write_text(
             yaml.safe_dump(pipeline, allow_unicode=True, sort_keys=False),

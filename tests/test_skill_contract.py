@@ -46,6 +46,25 @@ class SkillContractTests(unittest.TestCase):
         for target in re.findall(r"\]\((references/[^)]+)\)", skill.read_text()):
             self.assertTrue((ROOT / "research-project-os" / target).is_file(), target)
 
+    def test_explore_style_defers_abstraction_to_pipeline(self) -> None:
+        skill = (ROOT / "research-project-os/SKILL.md").read_text(encoding="utf-8")
+        lifecycle = (
+            ROOT / "research-project-os/references/analysis_lifecycle.md"
+        ).read_text(encoding="utf-8")
+        agents = (ROOT / "research-project-os/assets/base/AGENTS.md.tmpl").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("executable lab notebook", skill)
+        self.assertIn("Keep one-off logic inline", skill)
+        self.assertIn("允许少量重复", lifecycle)
+        self.assertIn("Chinese outline", skill)
+        self.assertIn("Chinese outline contract", lifecycle)
+        self.assertIn("# %% 1. 读取输入与参数", lifecycle)
+        self.assertIn("跨文件 abstractions", agents)
+        self.assertIn("编号中文", agents)
+        self.assertIn("模块化、参数化、复用接口", agents)
+
     def test_validator_candidate_precedence(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)

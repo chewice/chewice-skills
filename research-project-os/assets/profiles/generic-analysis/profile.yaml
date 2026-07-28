@@ -13,6 +13,6 @@ required_context:
   - docs/ai_context/project_structure.md
   - docs/ai_context/status_policy.md
 interpretation_boundary: >-
-  先由 human 确认分析方向，再在 explore/ 中执行；人工审核后的冻结快照才可
-  进入 archive/，pipeline/ 只能从 archive/ 的获批逻辑整理。任何阶段转换都不
-  自动构成 verified evidence。
+  先由 human 确认方向；explore/ 使用线性叙事 code，保留 intermediate results，
+  避免过早函数化。人工审核后的冻结快照才可进入 archive/，模块化与复用只在
+  pipeline/ 中整理。任何阶段转换都不自动构成 verified evidence。

@@ -38,7 +38,7 @@ PROFILE_NAMES = (
     "literature-review",
     "software-development",
 )
-RELEASE_VERSION = "0.4.0"
+RELEASE_VERSION = "0.4.2"
 MANIFEST_SCHEMA_VERSION = "0.3.0"
 SYNC_PAYLOAD_SCHEMA_VERSION = "0.3.0"
 ANALYSIS_ARTIFACT_SCHEMA_VERSION = "1.0.0"
@@ -794,12 +794,59 @@ def plan_explore_task(
             "approved_by": approved_by.strip(),
             "approved_on": date.today().isoformat(),
         },
+        "exploration": {
+            "style": "narrative_linear",
+            "function_policy": "extract_after_stabilization",
+            "outline_required": True,
+            "outline_language": "zh-CN",
+            "outline_granularity": "meaningful_workflow_sections",
+            "primary_artifact": None,
+        },
         "artifact_layout": {
+            "narrative": "README.md",
             "scripts": "scripts",
             "derived_data": "derived",
             "figures": "figures",
         },
     }
+    expected_lines = "\n".join(f"- {value}" for value in outputs)
+    task_readme = f"""# {task_name}
+
+## Direction
+
+- Question: {question.strip()}
+- Method: {method.strip()}
+- Stop condition: {stop_condition.strip()}
+
+## Expected outputs
+
+{expected_lines}
+
+## Exploration style
+
+- 按实际执行顺序组织 code sections 或 notebook cells，使 reader 能从上到下复现。
+- 每个 code script 顶部先写简短中文提纲，并使用对应的编号中文 section/cell
+  headings。按有意义的 workflow steps 切分，通常 3–8 段；短脚本可以更少，不按
+  固定行数机械切段。code identifiers、paths 和 machine-readable values 保持英文。
+- Python 可用 `# %% 1. 读取输入与参数`，R 可用
+  `# ---- 1. 读取输入与参数 ----`，notebook 使用中文 Markdown headings。
+- 保留有意义的 intermediate objects、tables 和 figures，并在相邻位置记录观察。
+- 单次分析逻辑保持 inline；允许少量重复，不为“整洁”过早创建 helpers、classes、
+  generic wrappers、config layers 或跨文件 abstractions。
+- 仅当逻辑已经稳定、确实重复，或提取后能明显降低风险时使用短且命名明确的函数。
+
+## Run order
+
+1. 尚未记录。执行分析时按顺序补充 primary artifact 和 command。
+
+## Observations
+
+- 尚未记录。
+
+## Interpretation and limitations
+
+- 尚未记录。
+"""
     relative = Path("explore") / task_name
     return {
         "mode": "explore-create",
@@ -812,6 +859,7 @@ def plan_explore_task(
         ],
         "task": task,
         "task_yaml": yaml_text(task),
+        "task_readme": task_readme,
     }
 
 
@@ -823,10 +871,12 @@ def apply_explore_task(plan: dict[str, Any]) -> dict[str, Any]:
     for relative in plan["directories"]:
         (root / relative).mkdir(parents=True, exist_ok=False)
     atomic_write(task_root / "task.yaml", plan["task_yaml"])
+    atomic_write(task_root / "README.md", plan["task_readme"])
     return {
         "written": True,
         "task_path": plan["task_path"],
         "task_file": f"{plan['task_path']}/task.yaml",
+        "task_readme": f"{plan['task_path']}/README.md",
     }
 
 
@@ -851,6 +901,17 @@ def validate_explore_task(root: Path, task_name: str) -> dict[str, Any]:
         raise ValueError(f"Explore task lacks human direction approval: {task_path}")
     if not approval.get("approved_by"):
         raise ValueError(f"Explore task approval lacks approved_by: {task_path}")
+    exploration = document.get("exploration")
+    if exploration is not None and (
+        not isinstance(exploration, dict)
+        or exploration.get("style") != "narrative_linear"
+        or exploration.get("function_policy") != "extract_after_stabilization"
+        or exploration.get("outline_required") not in {None, True}
+        or exploration.get("outline_language") not in {None, "zh-CN"}
+        or exploration.get("outline_granularity")
+        not in {None, "meaningful_workflow_sections"}
+    ):
+        raise ValueError(f"Invalid explore coding style contract: {task_path}")
     return document
 
 
@@ -1112,6 +1173,11 @@ def plan_pipeline_creation(
             "entrypoint": None,
             "runtime_independent_from": ["explore", "archive"],
         },
+        "code_style": {
+            "outline_required": True,
+            "outline_language": "zh-CN",
+            "outline_granularity": "meaningful_workflow_sections",
+        },
         "sources": sources,
         "steps": steps,
     }
@@ -1230,6 +1296,14 @@ def plan_pipeline_release(
     document = load_yaml(pipeline_path)
     if document.get("schema_version") != ANALYSIS_ARTIFACT_SCHEMA_VERSION:
         raise ValueError(f"Unsupported pipeline schema: {pipeline_path}")
+    code_style = document.get("code_style")
+    if code_style is not None and (
+        not isinstance(code_style, dict)
+        or code_style.get("outline_required") is not True
+        or code_style.get("outline_language") != "zh-CN"
+        or code_style.get("outline_granularity") != "meaningful_workflow_sections"
+    ):
+        raise ValueError("pipeline.yaml has an invalid Chinese outline contract")
     pipeline = document.get("pipeline")
     sources = document.get("sources")
     steps = document.get("steps")

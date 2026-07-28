@@ -60,6 +60,18 @@
       "prompt": "Run a differential-expression model now and tell me which genes are significant.",
       "should_trigger": false,
       "expected_output": "Uses a scientific analysis workflow; Research Project OS only governs an approved task and durable outputs."
+    },
+    {
+      "id": 11,
+      "prompt": "Inside my approved explore/P0-QC-cell-filtering task, write the first-pass analysis as a reusable framework with helper classes and configuration wrappers.",
+      "should_trigger": true,
+      "expected_output": "Keeps exploration narrative and linear, leaves one-off logic inline with visible intermediate results, and defers reusable abstractions to pipeline."
+    },
+    {
+      "id": 12,
+      "prompt": "Organize the Python, R, and shell scripts in this governed explore task so readers can understand each analysis step.",
+      "should_trigger": true,
+      "expected_output": "Adds a concise Chinese outline and matching numbered Chinese section headings to every script while preserving English code identifiers."
     }
   ]
 }

@@ -27,6 +27,45 @@ dry-run 只展示计划，不代表方向获批。
 将 task 的 code、二级数据和图分别保留在自己的 `scripts/`、`derived/` 和
 `figures/` 内；不要把 explore task 的 artifact 散落到项目级目录。
 
+## Exploration coding style
+
+把 explore code 当作可执行 lab notebook，而不是 production library。优先使用
+单个主 notebook、Quarto/R Markdown，或带有明确 cell/section 分隔的 Python/R
+script；按实际执行顺序自上而下组织：
+
+1. question、assumptions、inputs 和 parameters；
+2. transformation、intermediate objects 和 diagnostics；
+3. observations、temporary decisions 和 limitations；
+4. derived outputs 与 figures。
+
+让关键 parameters 靠近首次使用处，为 intermediate tables/plots 使用有意义的名称，
+并在对应 code section 旁记录观察。单次逻辑保持 inline，允许少量重复；不要为了
+“代码整洁”预先创建 generic helpers、classes、wrappers、config layers 或跨文件
+abstractions。只有逻辑已稳定且重复使用，或提取能明显隔离风险时，才写短小、命名
+具体的函数。若函数隐藏 scientific choices 或迫使 reader 跨文件追踪，就保留线性
+代码。
+
+### Chinese outline contract
+
+每个 executable code script 都在文件顶部列出简短中文提纲，并使用一一对应的编号
+中文 section headings。按输入、检查、转换、诊断、输出等有意义的 workflow steps
+切分，通常 3–8 段；短脚本可更少，禁止按固定行数机械切段。结构变化时同步更新提纲。
+
+```text
+Python:   # %% 1. 读取输入与参数
+R:        # ---- 1. 读取输入与参数 ----
+Shell:    # 1. 读取输入与参数
+Notebook: 使用编号中文 Markdown headings
+```
+
+outline 和 section title 使用中文；variables、functions、paths、commands、keys 和
+其他 machine-readable values 保持英文。Pipeline 虽可模块化，但其中每个 code file
+仍遵守同一规则，并按该文件的单一职责切分。
+
+每个 task 的 `README.md` 记录 primary artifact、实际 run order、观察和限制。
+探索完成不要求 production API；人工审核优先检查分析意图、执行顺序和中间结果是否
+易读。把模块化、参数化、复用接口和系统性 tests 留到 `pipeline/`。
+
 ## Promotion contract
 
 用 `archive-promote` 记录 reviewer、review summary 和 validation results。保留

@@ -28,10 +28,20 @@
   `P0-QC-low-quality-cells-removed/`。`P0` 表示唯一顺序，`QC`/`cluster`/`GRN`
   表示核心任务，末段是简短英文总结。
 - 每个 explore task 的 scripts、derived data 和 figures 都留在自己的目录。
+- 把 explore code 写成可执行 lab notebook：使用单个主 notebook、Quarto/R
+  Markdown，或按实际运行顺序分 section/cell 的 script；在相邻位置保留
+  intermediate objects、diagnostics、observations 和 limitations。
+- 每个 explore 和 pipeline code file 顶部写简短中文提纲，并使用对应的编号中文
+  section/cell headings。按有意义的 workflow steps 切分，通常 3–8 段；短脚本可
+  更少，不按固定行数机械切段。code identifiers、paths、commands 和 keys 保持英文。
+- 单次逻辑保持 inline，允许少量重复；不要过早创建 generic helpers、classes、
+  wrappers、config layers 或跨文件 abstractions。仅对已稳定且重复的操作，或需要
+  隔离风险的操作，提取短小且命名具体的函数。
 - 只有人工审核后才能将完整 task 冻结为 `archive/<task>/vNNN/`；不得编辑或
   覆盖 snapshot，且入库不自动构成 verified evidence。
-- `pipeline/` 只从获批 archive 整理独立主流程；runtime 不得依赖 `explore/`
-  或 `archive/`，发表前经人工审核生成 release manifest。
+- 把模块化、参数化、复用接口和系统性 tests 留到 `pipeline/`。它只从获批
+  archive 整理独立主流程；runtime 不得依赖 `explore/` 或 `archive/`，发表前经
+  人工审核生成 release manifest。
 
 ## Safety
 
