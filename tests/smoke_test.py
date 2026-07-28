@@ -1,4 +1,4 @@
-"""End-to-end smoke test for the bundled CLI."""
+"""End-to-end smoke test for the bundled 0.6 CLI."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CLI = ROOT / "research-project-os/scripts/research_project_os.py"
 
 
-def run(*arguments: str) -> None:
+def run(*arguments: str) -> str:
     result = subprocess.run(
         [sys.executable, str(CLI), *arguments],
         check=False,
@@ -26,43 +26,46 @@ def run(*arguments: str) -> None:
             f"Command failed ({result.returncode}): {' '.join(arguments)}\n"
             f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
         )
+    return result.stdout
 
 
 def main() -> None:
     with tempfile.TemporaryDirectory() as temporary:
         project = Path(temporary) / "pilot"
         run("inspect", "--project", str(project))
-        run(
-            "init",
-            "--project",
-            str(project),
-            "--profile",
-            "bioinformatics",
-        )
-        run(
-            "init",
-            "--project",
-            str(project),
-            "--profile",
-            "bioinformatics",
-            "--apply",
-        )
-        run("audit", "--project", str(project))
-        run("start", "--project", str(project))
-        (project / "QUESTIONS.md").write_text(
-            """# Research Questions
+        run("init", "--project", str(project))
+        run("init", "--project", str(project), "--apply")
+        questions = project / "QUESTIONS.md"
+        questions.write_text(
+            """# Project Questions
+
+## Project purpose
+
+验证可复现 QC。
+
+## Input constraints
+
+- 原始输入只读。
+
+## Output requirements
+
+- 中文 HTML。
+
+## FAQ
+
+### 标准是什么？
+
+输入不变且输出可复现。
 
 ## Current question
 
 - ID: `Q-001`
 - Question: 哪些 QC thresholds 稳定？
-- Context: smoke test
-- Completion criterion: Threshold sensitivity 已记录。
-- Human decision: `approved_to_run`
+- Completion criterion: 生成审核报告。
 
-## Next questions
+## Question queue
 
-- 尚未登记。
+- Q-002：聚类是否稳定？
 
 ## Answered questions
 
@@ -80,46 +83,117 @@ def main() -> None:
             "QC",
             "--summary",
             "stable thresholds selected",
-            "--question-id",
-            "Q-001",
-            "--question",
-            "哪些 QC thresholds 稳定？",
-            "--method",
-            "Sensitivity analysis。",
-            "--expected-output",
-            "QC table",
-            "--stop-condition",
-            "Threshold sensitivity 已记录。",
-            "--approved-by",
-            "smoke-reviewer",
         )
         run(*explore_args)
         run(*explore_args, "--apply")
         task_name = "P0-QC-stable-thresholds-selected"
         task_root = project / "explore" / task_name
-        task = yaml.safe_load((task_root / "task.yaml").read_text(encoding="utf-8"))
-        if task["exploration"]["style"] != "narrative_linear":
-            raise SystemExit("explore task lacks narrative_linear style")
-        if task["exploration"]["outline_language"] != "zh-CN":
-            raise SystemExit("explore task lacks Chinese outline contract")
-        if not (task_root / "README.md").is_file():
-            raise SystemExit("explore task lacks narrative README")
+        (project / "data").mkdir()
+        (project / "data/input.txt").write_text("input\n", encoding="utf-8")
         (task_root / "scripts/qc.py").write_text(
-            "print('qc')\n",
+            """# 提纲
+# 1. 读取输入
+# 2. 写出结果
+
+# %% 1. 读取输入
+from pathlib import Path
+value = Path("../../../data/input.txt").read_text()
+
+# %% 2. 写出结果
+Path("../derived/result.txt").write_text(value + "result\\n")
+""",
             encoding="utf-8",
         )
+        run_args = (
+            "run",
+            "--project",
+            str(project),
+            "--input",
+            "data/input.txt",
+            "--output",
+            "derived/result.txt",
+            "--cwd",
+            f"explore/{task_name}/scripts",
+        )
+        run(*run_args, "--", sys.executable, "qc.py")
+        run(*run_args, "--apply", "--", sys.executable, "qc.py")
+        run_id = next((task_root / "runs").iterdir()).name
+        receipt = f"runs/{run_id}/receipt.yaml"
+        (task_root / "README.md").write_text(
+            f"""# {task_name}
+
+## Direction
+- Question ID: `Q-001`
+
+## Inputs
+- `data/input.txt`
+
+## Method
+- 执行 QC。
+
+## Expected outputs
+- `derived/result.txt`
+
+## Stop condition
+- 结果已生成。
+
+## Run order
+1. `scripts/qc.py`
+
+## Observations
+- 输出稳定。
+
+## Limitations
+- 测试数据。
+""",
+            encoding="utf-8",
+        )
+        (task_root / "report.md").write_text(
+            f"""---
+schema_version: "1.0.0"
+kind: explore
+language: zh-CN
+title: "QC 报告"
+task: "{task_name}"
+run_receipts:
+  - "{receipt}"
+---
+## 研究问题
+哪些 QC thresholds 稳定？
+## 输入与方法
+使用 audited run。
+## 结果
+输出稳定。
+## 限制
+测试数据。
+## 结论与下一问题
+可供审核。
+## 可复现信息
+Receipt 已记录。
+""",
+            encoding="utf-8",
+        )
+        report_args = (
+            "report-build",
+            "--project",
+            str(project),
+            "--source",
+            f"explore/{task_name}/report.md",
+            "--output",
+            f"explore/{task_name}/report.html",
+            "--kind",
+            "explore",
+        )
+        run(*report_args)
+        run(*report_args, "--apply")
         promote_args = (
             "archive-promote",
             "--project",
             str(project),
             "--task",
             task_name,
-            "--reviewed-by",
-            "smoke-reviewer",
-            "--review-summary",
-            "QC 可进入主流程。",
-            "--validation",
-            "Sensitivity analysis passed。",
+            "--review-note",
+            "人工确认 QC 结果。",
         )
         run(*promote_args)
         run(*promote_args, "--apply")
@@ -142,80 +216,86 @@ def main() -> None:
         run(*pipeline_args, "--apply")
         pipeline_path = project / "pipeline/pipeline.yaml"
         pipeline = yaml.safe_load(pipeline_path.read_text(encoding="utf-8"))
-        if pipeline["code_style"]["outline_language"] != "zh-CN":
-            raise SystemExit("pipeline lacks Chinese outline contract")
+        pipeline["pipeline"]["entrypoint"] = "run.py"
         pipeline["steps"][0]["implementation"] = "src/qc.py"
         pipeline_path.write_text(
             yaml.safe_dump(pipeline, allow_unicode=True, sort_keys=False),
             encoding="utf-8",
         )
-        (project / "pipeline/src/qc.py").write_text(
-            "def run():\n    return 'ok'\n",
-            encoding="utf-8",
-        )
         (project / "pipeline/run.py").write_text(
-            "from src.qc import run\nprint(run())\n",
+            "# 提纲\n# 1. 运行\n\n# %% 1. 运行\nprint('ok')\n",
             encoding="utf-8",
         )
-        release_args = (
+        (project / "pipeline/src/qc.py").write_text(
+            "# 提纲\n# 1. 结果\n\n# %% 1. 结果\nresult = 'ok'\n",
+            encoding="utf-8",
+        )
+        (project / "pipeline/report.md").write_text(
+            f"""---
+schema_version: "1.0.0"
+kind: release
+language: zh-CN
+title: "正式报告"
+snapshots:
+  - "{selector}"
+run_receipts: []
+---
+## 项目目的
+验证 QC pipeline。
+## 输入与方法
+使用审核 snapshot。
+## 主要结果
+流程成功。
+## 限制
+测试数据。
+## 结论
+可以发布。
+## 可复现信息
+来源已记录。
+""",
+            encoding="utf-8",
+        )
+        final_report = (
+            "report-build",
+            "--project",
+            str(project),
+            "--source",
+            "pipeline/report.md",
+            "--output",
+            "reports/final.html",
+            "--kind",
+            "release",
+        )
+        run(*final_report)
+        run(*final_report, "--apply")
+        release = (
             "pipeline-release",
             "--project",
             str(project),
-            "--entrypoint",
-            "run.py",
-            "--reviewed-by",
-            "smoke-reviewer",
-            "--review-summary",
-            "Pipeline 可发布。",
-            "--validation",
-            "End-to-end smoke passed。",
+            "--report",
+            "reports/final.html",
+            "--review-note",
+            "人工确认发布。",
         )
-        run(*release_args)
-        run(*release_args, "--apply")
+        run(*release)
+        run(*release, "--apply")
         run("audit", "--project", str(project))
-        run(
+        close = (
             "close",
             "--project",
             str(project),
             "--summary",
-            "已完成项目 smoke test。",
+            "完成 QC lifecycle smoke。",
             "--completed",
-            "已运行 audit。",
-            "--evidence",
-            "Smoke test 已通过。",
+            "完成 archive 与 release。",
+            "--output",
+            "reports/final.html",
             "--next-step",
-            "人工审阅项目。",
+            "由 human 选择下一问题。",
         )
-        run(
-            "close",
-            "--project",
-            str(project),
-            "--summary",
-            "已完成项目 smoke test。",
-            "--completed",
-            "已运行 audit。",
-            "--evidence",
-            "Smoke test 已通过。",
-            "--next-step",
-            "人工审阅项目。",
-            "--apply",
-        )
+        run(*close)
+        run(*close, "--apply")
         run("audit", "--project", str(project))
-
-        existing = Path(temporary) / "existing"
-        existing.mkdir()
-        (existing / "workflow.py").write_text("print('keep')\n", encoding="utf-8")
-        run(
-            "adopt",
-            "--project",
-            str(existing),
-            "--profile",
-            "bioinformatics",
-            "--apply",
-        )
-        if (existing / "analysis").exists() or (existing / "data").exists():
-            raise SystemExit("adopt created profile business directories")
-        run("audit", "--project", str(existing))
     print("Smoke test passed")
 
 

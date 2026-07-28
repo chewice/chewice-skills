@@ -1,17 +1,20 @@
-"""Skill packaging and concise-document contracts."""
+"""Packaging, layering, and concise Skill contracts."""
 
 from __future__ import annotations
 
 import importlib.util
+import json
 from pathlib import Path
 import re
 import subprocess
 import sys
 import tempfile
+import tomllib
 import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
+SKILL = ROOT / "research-project-os"
 VALIDATOR_PATH = ROOT / "tests/validate_skill.py"
 SPEC = importlib.util.spec_from_file_location("validate_skill", VALIDATOR_PATH)
 if SPEC is None or SPEC.loader is None:
@@ -22,64 +25,128 @@ SPEC.loader.exec_module(VALIDATOR)
 
 
 class SkillContractTests(unittest.TestCase):
-    def test_skill_is_concise_and_references_are_bounded(self) -> None:
-        skill = ROOT / "research-project-os/SKILL.md"
-        references = ROOT / "research-project-os/references"
-        words = skill.read_text(encoding="utf-8").split()
-        self.assertGreaterEqual(len(words), 400)
-        self.assertLessEqual(len(words), 500)
+    def test_skill_is_concise_and_uses_three_layers(self) -> None:
+        skill = SKILL / "SKILL.md"
+        content = skill.read_text(encoding="utf-8")
+        self.assertLessEqual(len(content.splitlines()), 100)
+        self.assertLessEqual(len(content), 8_000)
+        references = SKILL / "references"
         self.assertEqual(
             {path.name for path in references.glob("*.md")},
-            {
-                "analysis_lifecycle.md",
-                "evidence.md",
-                "governance.md",
-                "migration_policy.md",
-                "notion_git_contract.md",
-            },
+            {"harness.md", "exploration.md", "reporting.md"},
         )
-        total_words = len(words) + sum(
-            len(path.read_text(encoding="utf-8").split())
-            for path in references.glob("*.md")
+        total = len(content) + sum(
+            len(path.read_text(encoding="utf-8")) for path in references.glob("*.md")
         )
-        self.assertLessEqual(total_words, 1_600)
-        for target in re.findall(r"\]\((references/[^)]+)\)", skill.read_text()):
-            self.assertTrue((ROOT / "research-project-os" / target).is_file(), target)
+        self.assertLessEqual(total, 20_000)
+        for target in re.findall(r"\]\((references/[^)]+)\)", content):
+            self.assertTrue((SKILL / target).is_file(), target)
 
-    def test_explore_style_defers_abstraction_to_pipeline(self) -> None:
-        skill = (ROOT / "research-project-os/SKILL.md").read_text(encoding="utf-8")
-        lifecycle = (
-            ROOT / "research-project-os/references/analysis_lifecycle.md"
-        ).read_text(encoding="utf-8")
-        agents = (ROOT / "research-project-os/assets/base/AGENTS.md.tmpl").read_text(
+    def test_removed_surfaces_are_absent(self) -> None:
+        profiles = SKILL / "assets/profiles"
+        notion = SKILL / "assets/base/work/notion_sync"
+        self.assertFalse(
+            profiles.exists() and any(path.is_file() for path in profiles.rglob("*"))
+        )
+        self.assertFalse(
+            notion.exists() and any(path.is_file() for path in notion.rglob("*"))
+        )
+        self.assertFalse(
+            (SKILL / "assets/base/reports/evidence_registry.yaml").exists()
+        )
+        help_text = subprocess.run(
+            [
+                sys.executable,
+                str(SKILL / "scripts/research_project_os.py"),
+                "--help",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+        self.assertNotIn("sync-export", help_text)
+        self.assertNotIn("sync-audit", help_text)
+        self.assertNotIn("--profile", help_text)
+
+    def test_preserved_human_and_code_contracts(self) -> None:
+        agents = (SKILL / "assets/base/AGENTS.md.tmpl").read_text(encoding="utf-8")
+        questions = (SKILL / "assets/base/QUESTIONS.md").read_text(encoding="utf-8")
+        exploration = (SKILL / "references/exploration.md").read_text(encoding="utf-8")
+        reporting = (SKILL / "references/reporting.md").read_text(encoding="utf-8")
+        script = (SKILL / "research_project_os/lifecycle.py").read_text(
             encoding="utf-8"
         )
+        self.assertIn(
+            "You may use superpowers, but do not write any spec or plan.",
+            agents,
+        )
+        for required_context in (
+            "## Session bootstrap",
+            "`AGENTS.md`：稳定规则与安全边界",
+            "`QUESTIONS.md`：Project purpose",
+            "`CURRENT_HANDOFF.md`：当前 objective",
+            "`project_manifest.yaml`：ownership",
+            "默认不加载历史 report",
+            "若上下文缺失、互相冲突或 current question 未明确",
+        ):
+            self.assertIn(required_context, agents)
+        self.assertIn("## Superpowers", agents)
+        self.assertIn("不得绕过", agents)
+        self.assertIn("结束实质工作时通过 `close`", agents)
+        self.assertIn("本文件完全由 human 维护", questions)
+        for heading in (
+            "Project purpose",
+            "Input constraints",
+            "Output requirements",
+            "FAQ",
+            "Current question",
+        ):
+            self.assertIn(f"## {heading}", questions)
+        self.assertIn("允许少量重复", exploration)
+        self.assertIn("# %% 1. 读取输入与参数", exploration)
+        self.assertIn("不得包含 HTML", agents)
+        self.assertIn("markdown-it-py", reporting)
+        self.assertIn("HTTPS citations", reporting)
+        template = re.search(
+            r'def analysis_script_text\(\).*?return """(?P<body>.*?)"""',
+            script,
+            flags=re.DOTALL,
+        )
+        self.assertIsNotNone(template)
+        generated = template.group("body").lower()
+        for forbidden in ("<html", "<style", "build_report", "report-build"):
+            self.assertNotIn(forbidden, generated)
 
-        self.assertIn("executable lab notebook", skill)
-        self.assertIn("Keep one-off logic inline", skill)
-        self.assertIn("允许少量重复", lifecycle)
-        self.assertIn("Chinese outline", skill)
-        self.assertIn("Chinese outline contract", lifecycle)
-        self.assertIn("# %% 1. 读取输入与参数", lifecycle)
-        self.assertIn("跨文件 abstractions", agents)
-        self.assertIn("编号中文", agents)
-        self.assertIn("模块化、参数化、复用接口", agents)
+    def test_reporting_api_is_public_and_cli_is_thin(self) -> None:
+        package = SKILL / "research_project_os"
+        self.assertTrue((package / "reporting.py").is_file())
+        self.assertTrue((package / "lifecycle.py").is_file())
+        self.assertTrue((package / "handoff.py").is_file())
+        self.assertTrue((package / "audit.py").is_file())
+        init = (package / "__init__.py").read_text(encoding="utf-8")
+        for symbol in ("ReportBuild", "ReportKind", "build_report", "validate_report"):
+            self.assertIn(symbol, init)
+        entrypoint = (SKILL / "scripts/research_project_os.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertLessEqual(len(entrypoint.splitlines()), 25)
+        self.assertIn("from research_project_os.cli import main", entrypoint)
 
-    def test_research_questions_are_human_owned_and_sequential(self) -> None:
-        skill = (ROOT / "research-project-os/SKILL.md").read_text(encoding="utf-8")
-        questions = (
-            ROOT / "research-project-os/assets/base/QUESTIONS.md"
-        ).read_text(encoding="utf-8")
-        lifecycle = (
-            ROOT / "research-project-os/references/analysis_lifecycle.md"
-        ).read_text(encoding="utf-8")
+    def test_workspace_dependency_and_release(self) -> None:
+        workspace = tomllib.loads((ROOT / "pixi.toml").read_text(encoding="utf-8"))
+        self.assertEqual(workspace["workspace"]["version"], "0.6.0")
+        self.assertIn("markdown-it-py", workspace["dependencies"])
+        self.assertNotIn("pip", workspace["dependencies"])
 
-        self.assertIn("human-owned research agenda", skill)
-        self.assertIn("do not analyze queued questions", skill)
-        self.assertIn("本文件由 human 维护", questions)
-        self.assertIn("Agent 默认只读", questions)
-        self.assertIn("approved_to_run", questions)
-        self.assertIn("一次最多有一个未归档、未取消的任务", lifecycle)
+    def test_eval_boundaries_cover_html_and_audited_run(self) -> None:
+        evals = json.loads((SKILL / "evals/evals.json").read_text(encoding="utf-8"))
+        prompts = "\n".join(value["prompt"] for value in evals["evals"])
+        self.assertIn("HTML report", prompts)
+        self.assertIn("full input/output provenance", prompts)
+        self.assertEqual(
+            {value["should_trigger"] for value in evals["evals"]},
+            {True, False},
+        )
 
     def test_validator_candidate_precedence(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -105,17 +172,18 @@ class SkillContractTests(unittest.TestCase):
             source = base / "source"
             skill = source / "research-project-os"
             (skill / "scripts").mkdir(parents=True)
+            (skill / "research_project_os").mkdir()
             (source / "pixi.toml").write_text("[workspace]\nname='test'\n")
             (source / "pixi.lock").write_text("version: 6\n")
             (skill / "SKILL.md").write_text(
                 "---\nname: research-project-os\ndescription: test\n---\n"
             )
             (skill / "scripts/research_project_os.py").write_text("print('test')\n")
-            subprocess.run(["git", "init", "-q", "-b", "main", source], check=True)
-            subprocess.run(
-                ["git", "-C", str(source), "add", "."],
-                check=True,
+            (skill / "research_project_os/__init__.py").write_text(
+                "__version__ = '0.6.0'\n"
             )
+            subprocess.run(["git", "init", "-q", "-b", "main", source], check=True)
+            subprocess.run(["git", "-C", str(source), "add", "."], check=True)
             subprocess.run(
                 [
                     "git",
@@ -155,19 +223,11 @@ class SkillContractTests(unittest.TestCase):
             )
             self.assertIn("DRY-RUN", dry_run.stdout)
             self.assertFalse(workspace.exists())
-
             subprocess.run([*command, "--apply"], check=True)
             self.assertTrue((workspace / "pixi.toml").is_file())
             self.assertTrue((workspace / "pixi.lock").is_file())
-            self.assertFalse((workspace / "research-project-os/pixi.toml").exists())
-            self.assertEqual(
-                codex_link.resolve(),
-                workspace / "research-project-os",
-            )
-            self.assertEqual(
-                agents_link.resolve(),
-                workspace / "research-project-os",
-            )
+            self.assertEqual(codex_link.resolve(), workspace / "research-project-os")
+            self.assertEqual(agents_link.resolve(), workspace / "research-project-os")
 
 
 if __name__ == "__main__":
