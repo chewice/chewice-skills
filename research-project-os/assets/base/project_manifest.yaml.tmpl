@@ -1,60 +1,61 @@
-schema_version: 0.3.0
+schema_version: "{{MANIFEST_SCHEMA}}"
 
 project:
   id: "{{PROJECT_ID}}"
   name: "{{PROJECT_NAME}}"
-  profile: "{{PROFILE}}"
+  template: research
   status: active
-  current_stage: setup
   repository_root: "."
 
-source_of_truth:
-  code_and_history: git
-  current_state: CURRENT_HANDOFF.md
-  research_questions: QUESTIONS.md
-  evidence_registry: reports/evidence_registry.yaml
+ownership:
+  human:
+    - QUESTIONS.md
+  agent:
+    - CURRENT_HANDOFF.md
+    - explore/*/README.md
+    - explore/*/report.md
+    - explore/*/scripts
+    - explore/*/derived
+    - explore/*/figures
+    - pipeline/pipeline.yaml
+    - pipeline/report.md
+    - pipeline/src
+    - pipeline/config
+    - pipeline/tests
+  cli:
+    - project_manifest.yaml
+    - explore/*/task.yaml
+    - explore/*/report.html
+    - explore/*/report.build.yaml
+    - explore/*/runs
+    - archive
+    - reports/*.html
+    - reports/*.build.yaml
+    - pipeline/release.yaml
+    - work/audit/lifecycle.jsonl
 
-governance:
-  pixi:
-    policy: root_workspace
-    allow_nested_package_manifests: true
-  required_context:
-{{REQUIRED_CONTEXT}}
-  current_handoff: CURRENT_HANDOFF.md
-  research_questions_path: QUESTIONS.md
-  research_questions_authority: human
-  handoff_archive_dir: docs/handoffs/archive
-  tasks_path: docs/ai_context/tasks.md
-  decisions_path: docs/ai_context/decisions.md
-  open_questions_path: docs/ai_context/open_questions.md
-  evidence_registry_path: reports/evidence_registry.yaml
-  notion_sync_queue: work/notion_sync
-  status_policy_path: docs/ai_context/status_policy.md
+paths:
+  instructions: AGENTS.md
+  questions: QUESTIONS.md
+  handoff: CURRENT_HANDOFF.md
+  handoff_archive: docs/handoffs/archive
+  explore: explore
+  archive: archive
+  pipeline: pipeline
+  reports: reports
+  lifecycle_log: work/audit/lifecycle.jsonl
 
-analysis:
-  status: exploratory
-  lifecycle: "{{ANALYSIS_LIFECYCLE}}"
-  interpretation_boundary: >-
-    {{INTERPRETATION_BOUNDARY}}
-  dataset_overlap_status: unknown
+environment:
+  manager: pixi
+  policy: root_workspace
+  manifest: pixi.toml
+  lock: pixi.lock
+  nested_workspaces: forbidden
 
-notion:
-  synchronization_status: pending_configuration
-  portfolio_year: {{PORTFOLIO_YEAR}}
-  portfolio_title: "{{PORTFOLIO_TITLE}}"
-  portfolio_page_id: null
-  control_page_id: null
-  project_page_id: null
-  project_ordinal: null
-  databases: {}
-
-identifiers:
-  project: PRJ-
-  session: SES-
-  task: TASK-
-  question: Q-
-  observation: OBS-
-  hypothesis: HYP-
-  evidence: EVID-
-  decision: DEC-
-  report: REPORT-
+lifecycle:
+  model: explore_archive_pipeline
+  single_active_explore: true
+  human_review_required: true
+  report_format: html
+  report_language: zh-CN
+  input_hash: sha256

@@ -2,58 +2,62 @@
 
 ## Language
 
-项目说明默认使用中文。稳定的 engineering terms、machine-readable contract 和
-文件名保持英文。
+- 面向 human 的说明、handoff 和 HTML report 默认使用中文。
+- 专业术语、code、paths、commands、IDs 和 machine-readable values 保持英文。
 
-## Session Protocol
+## Session bootstrap
 
-- 修改项目逻辑前，读取 `project_manifest.yaml`、`CURRENT_HANDOFF.md` 和
-  `QUESTIONS.md`。
-- 只加载 required context 和与当前 task 相关的 evidence。
-- 项目状态发生实质变化时更新 handoff。
+- 在回答项目问题、设计分析、修改代码或执行命令前，必须先读取：
+  1. `AGENTS.md`：稳定规则与安全边界；
+  2. `QUESTIONS.md`：Project purpose、Input constraints、Output requirements、
+     FAQ、Current question 与 Question queue；
+  3. `CURRENT_HANDOFF.md`：当前 objective、已完成结果、outputs、blockers、
+     interpretation boundary、next minimum action 与 resume commands；
+  4. `project_manifest.yaml`：ownership、paths、Pixi 与 lifecycle 配置。
+- 若存在当前 explore task，再读取该 task 的 `task.yaml`、`README.md` 与当前
+  `report.md`；默认不加载历史 report、旧 receipts、handoff archive 或 archive
+  snapshot 内容。
+- 开始工作前先确认 current question、handoff 状态、I/O 限制和 stop condition。
+  若上下文缺失、互相冲突或 current question 未明确，停止执行并请 human 决定。
+
+## Context and ownership
+
+- `QUESTIONS.md` 由 human 维护，Agent 与 CLI 只读；不得代替 human 填写、改写、
+  重排或自动推进问题队列。
+- `CURRENT_HANDOFF.md` 由 Agent 维护。恢复 session 时先按其 next minimum action
+  继续；结束实质工作时通过 `close` 归档旧 handoff 并写入新的恢复入口。
+- task/archive/release manifests、run receipts 和 lifecycle log 只由 CLI 写入。
+- archive snapshot、released pipeline 与 released HTML 一经创建不得修改。
+
+## Superpowers
+
 - You may use superpowers, but do not write any spec or plan.
+- superpowers 只能辅助当前已批准任务，不得创建 spec/plan 文件，也不得绕过
+  `QUESTIONS.md` ownership、human approval、单问题推进、dry-run、audited `run`、
+  handoff、Pixi 或安全限制。
 
-## Evidence
+## Exploration
 
-- 区分 execution、observation、hypothesis、evidence 和 decision。
-- 不得把 exploratory output 直接提升为 `verified` 或 `stable` 结论。
-- 记录 inputs、validation、environment、exclusions、random seed、overlap 和
-  limitations。
+- 一次只讨论或执行一个 current question；先讨论 inputs、method、outputs 和 stop
+  condition，human 明确批准后才创建 task 或运行计算。
+- 目录名使用 `P<order>-<core>-<short-english-summary>/`；scripts、derived、
+  figures、runs 和 report 全部留在 task 内。
+- 结果完成后停止并报告结论与限制，不自行修改 `QUESTIONS.md` 或开始下一题。
+- explore code 按实际执行顺序线性组织，显示 intermediate objects、diagnostics、
+  observations 和 limitations。允许少量重复，不提前创建 generic helpers、
+  classes、wrappers、config layers 或跨文件 abstractions。
+- 每个 executable code file 顶部写简短中文提纲，并使用对应编号中文 section
+  headings；按 workflow 语义切分，不按固定行数切分。
+- analysis scripts 只负责计算与 tables/figures；不得包含 HTML、CSS、模板或
+  report rendering。报告使用独立 `report-build` API。
+- 人工审核后才可 archive；pipeline 只从已验证 archive 重写，runtime 不得依赖
+  `explore/` 或 `archive/`。
 
-## Analysis Lifecycle
+## Inputs, outputs, and environment
 
-- 根目录 `QUESTIONS.md` 由 human 维护，Agent 默认只读。一次只讨论或执行其中
-  唯一的 `Current question`；`Next questions` 不得提前分析。
-- 对 `generic-analysis` 和 `bioinformatics`，先围绕当前问题讨论 method、
-  expected outputs 和 stop condition；只有 `Human decision` 为
-  `approved_to_run` 且 human 明确同意后，才创建目录或执行计算。
-- 一次最多有一个未归档、未取消的 explore task；目录名使用
-  `P<order>-<core>-<short-english-summary>/`，例如
-  `P0-QC-low-quality-cells-removed/`。`P0` 表示唯一顺序，`QC`/`cluster`/`GRN`
-  表示核心任务，末段是简短英文总结。
-- 每个 explore task 的 scripts、derived data 和 figures 都留在自己的目录。
-- 得到结果后停止，先向 human 报告答案、限制和候选下游问题；不得自行开始下一题
-  或修改 `QUESTIONS.md`。
-- 把 explore code 写成可执行 lab notebook：使用单个主 notebook、Quarto/R
-  Markdown，或按实际运行顺序分 section/cell 的 script；在相邻位置保留
-  intermediate objects、diagnostics、observations 和 limitations。
-- 每个 explore 和 pipeline code file 顶部写简短中文提纲，并使用对应的编号中文
-  section/cell headings。按有意义的 workflow steps 切分，通常 3–8 段；短脚本可
-  更少，不按固定行数机械切段。code identifiers、paths、commands 和 keys 保持英文。
-- 单次逻辑保持 inline，允许少量重复；不要过早创建 generic helpers、classes、
-  wrappers、config layers 或跨文件 abstractions。仅对已稳定且重复的操作，或需要
-  隔离风险的操作，提取短小且命名具体的函数。
-- 只有人工审核后才能将完整 task 冻结为 `archive/<task>/vNNN/`；不得编辑或
-  覆盖 snapshot，且入库不自动构成 verified evidence。
-- 把模块化、参数化、复用接口和系统性 tests 留到 `pipeline/`。它只从获批
-  archive 整理独立主流程；runtime 不得依赖 `explore/` 或 `archive/`，发表前经
-  人工审核生成 release manifest。
-
-## Safety
-
-- 保留现有路径和 source data。
-- Pixi 只使用根 workspace；子项目使用 features、environments、namespaced
-  tasks 和 `task.cwd`。
-- generated artifacts 必须通过显式 overwrite flag 才能覆盖。
-- 除非用户明确要求，否则不得 commit、push 或写入 Notion。
-- credentials、sensitive data 和大型 generated objects 不得进入 Git。
+- 所有声明输入只读；实际分析通过 audited `rpos run` 执行并记录前后 SHA-256。
+- 声明输出必须位于当前 task；formal report 必须是 `reports/*.html`。
+- Pixi 只允许根 workspace 与根 `pixi.lock`；禁止嵌套 workspace、lock 和 `.pixi/`。
+- 所有 mutation 先 dry-run，再显式 `--apply`；不得隐式 overwrite。
+- 不自动运行 `git add`、`git commit`、`git push`、环境求解或外部同步。
+- credentials、sensitive data、source data 和大型 generated objects 不得进入 Git。

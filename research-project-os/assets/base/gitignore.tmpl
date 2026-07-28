@@ -1,20 +1,26 @@
+# Pixi environment
+/.pixi/
+
+# Python caches
 __pycache__/
 *.py[cod]
-.DS_Store
+.ruff_cache/
+
+# Credentials
 .env
 .env.*
-*.pem
-*.key
-/.pixi/
-!pixi.lock
+credentials*
+secrets*
+tokens*
 
-results/*
-!results/.gitkeep
-work/notion_sync/pending/*
-!work/notion_sync/pending/.gitkeep
-work/notion_sync/applied/*
-!work/notion_sync/applied/.gitkeep
-work/notion_sync/conflicts/*
-!work/notion_sync/conflicts/.gitkeep
-work/notion_sync/superseded/*
-!work/notion_sync/superseded/.gitkeep
+# Large source/generated data
+*.fastq
+*.fastq.gz
+*.fq
+*.fq.gz
+*.h5ad
+*.loom
+*.zarr/
+
+# Root lock is provenance and must remain trackable
+!pixi.lock

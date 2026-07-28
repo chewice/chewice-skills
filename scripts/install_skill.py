@@ -46,6 +46,7 @@ def validate_workspace(root: Path) -> None:
         root / "pixi.lock",
         root / SKILL_NAME / "SKILL.md",
         root / SKILL_NAME / "scripts/research_project_os.py",
+        root / SKILL_NAME / "research_project_os/__init__.py",
     )
     missing = [str(path) for path in required if not path.is_file()]
     if missing:
