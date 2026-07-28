@@ -1,29 +1,16 @@
 # Architecture
 
-Research Project OS 由精简 Skill、确定性 CLI、control-layer templates、profiles
-和按需 references 组成。
+Research Project OS `0.6.0` 使用一个 Skill 入口和三个按需层：
 
-| Mode | Behavior |
-| --- | --- |
-| `inspect`, `start`, `audit`, `sync-audit` | 只读 |
-| `init`, `adopt`, `close`, `sync-export` | 默认 dry-run，需 `--apply` |
-| `explore-create`, `archive-promote`, `pipeline-create`, `pipeline-release` | 默认 dry-run，需 `--apply` |
-| `archive-verify` | 只读 hash verification |
+- `harness`：scaffold、ownership、context、Pixi、safety 与 audit。
+- `exploration`：逐题 explore、audited run、archive 与 pipeline。
+- `reporting`：独立 Markdown → HTML API。
 
-`adopt` 保留现有布局并只添加 control layer。所有命令都不会自动 stage、
-commit、push、求解环境或调用 Notion。
+CLI entrypoint 只负责参数与输出；实现位于 `research_project_os/` package。项目长期
+上下文收敛为 `AGENTS.md`、`QUESTIONS.md`、`CURRENT_HANDOFF.md` 和
+`project_manifest.yaml`。Notion、多 profile、中央 evidence/status/task/decision
+台账已移除。
 
-Git 保存 code、根级 environment lock、handoff 和 evidence；Notion payload
-只承载经审阅的 portfolio navigation 与摘要。Pixi 使用单一根 workspace；
-inspect/audit 只治理布局，不修改环境。
-
-科研分析、数据获取、文献检索和图形导出由专门 workflow 执行，其 durable
-outputs 仅在影响 provenance、decision 或 handoff 时登记。
-
-`generic-analysis` 与 `bioinformatics` 使用 human-gated
-`explore → archive → pipeline`。CLI 管理 task scaffold、不可覆盖 snapshot、
-provenance 和 release boundary，不替代 scientific analysis 或 evidence review。
-explore 采用 narrative-linear code 与 task README，优先人工可读和快速迭代；
-pipeline 才引入稳定 abstraction、parameterization 和 systematic tests。
-两个阶段的每个 code file 都保留 machine-readable `zh-CN` outline contract：
-中文提纲和 section headings，英文 identifiers 与 paths。
+所有 mutation 默认 dry-run，apply 使用 atomic write 和 source revalidation。
+计算通过 `run` 记录完整 SHA-256、stdout/stderr、Git/Pixi provenance。报告由独立
+API 统一渲染，analysis scripts 不包含 HTML logic。

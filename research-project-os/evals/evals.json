@@ -3,81 +3,51 @@
   "evals": [
     {
       "id": 1,
-      "prompt": "Adopt this existing research repository without moving its scripts or data, then prepare a resumable handoff.",
+      "prompt": "Adopt this existing research repository without moving its code or data, then prepare resumable Agent context.",
       "should_trigger": true,
-      "expected_output": "Inspects, adopts without restructuring, and records a resumable handoff."
+      "expected_output": "Inspects first, preserves existing paths, adds only the lightweight harness, and prepares a handoff."
     },
     {
       "id": 2,
-      "prompt": "Close this research session and prepare a reviewed Project2026 Notion portfolio payload without sending it.",
+      "prompt": "My QUESTIONS.md contains project purpose, FAQ, QC as current, and clustering next. Start the work.",
       "should_trigger": true,
-      "expected_output": "Archives the handoff and creates a reviewable local payload without calling Notion."
+      "expected_output": "Reads the human-owned context, discusses QC direction, and does not edit the queue or start clustering."
     },
     {
       "id": 3,
-      "prompt": "Pixi cannot solve my CUDA and PyPI dependencies. Fix pixi.toml for me.",
-      "should_trigger": false,
-      "expected_output": "Routes dependency solving elsewhere; this skill only governs the resulting state."
+      "prompt": "Run the approved QC command with full input/output provenance and preserve its logs.",
+      "should_trigger": true,
+      "expected_output": "Uses the audited run wrapper with SHA-256, stdout/stderr, Git, Pixi, and task-local outputs."
     },
     {
       "id": 4,
-      "prompt": "Choose mitochondrial and gene-count QC thresholds for these single-cell samples and filter them.",
-      "should_trigger": false,
-      "expected_output": "Uses a domain QC workflow and registers approved evidence only when requested."
+      "prompt": "Turn this task's Markdown, tables, and figures into a standalone Chinese HTML report without adding HTML code to the analysis script.",
+      "should_trigger": true,
+      "expected_output": "Uses the shared reporting API/CLI, validates resources, and writes HTML plus a build manifest."
     },
     {
       "id": 5,
-      "prompt": "Run STARsolo for these GEO samples and repair the FASTQ read-role manifest.",
-      "should_trigger": false,
-      "expected_output": "Uses a specialized upstream data workflow."
+      "prompt": "Archive the reviewed exploration and assemble a main pipeline for publication.",
+      "should_trigger": true,
+      "expected_output": "Verifies receipts and report, freezes an immutable snapshot, and derives an independent pipeline."
     },
     {
       "id": 6,
-      "prompt": "Export this UMAP as editable PDF and high-resolution PNG for Illustrator.",
+      "prompt": "Fix my CUDA dependency conflict and solve pixi.lock.",
       "should_trigger": false,
-      "expected_output": "Uses a scientific figure-export workflow."
+      "expected_output": "Routes dependency solving elsewhere; this skill audits the resulting root workspace."
     },
     {
       "id": 7,
-      "prompt": "Search PubMed for recent MDD single-nucleus studies and produce a source-grounded digest.",
+      "prompt": "Choose single-cell QC thresholds and interpret which cells are biologically invalid.",
       "should_trigger": false,
-      "expected_output": "Uses literature retrieval; registers the search as evidence only when requested."
+      "expected_output": "Uses a domain analysis workflow; this skill only governs an approved task and its durable outputs."
     },
     {
       "id": 8,
-      "prompt": "Audit this governed research project: child folders contain Pixi workspaces and I need evidence-backed migration guidance without changing them.",
+      "prompt": "Inside explore, create generic helper classes, a framework config layer, and HTML templating functions.",
       "should_trigger": true,
-      "expected_output": "Reports nested Pixi policy errors and root-workspace migration advice without modifying environments."
-    },
-    {
-      "id": 9,
-      "prompt": "I want to explore QC, clustering, and GRN as separate analysis tasks, review each result before archiving it, and then assemble a publication pipeline.",
-      "should_trigger": true,
-      "expected_output": "Records the human-selected current question, executes only its one ordered explore task, stops for review, and leaves clustering and GRN queued until the human advances them."
-    },
-    {
-      "id": 10,
-      "prompt": "Run a differential-expression model now and tell me which genes are significant.",
-      "should_trigger": false,
-      "expected_output": "Uses a scientific analysis workflow; Research Project OS only governs an approved task and durable outputs."
-    },
-    {
-      "id": 11,
-      "prompt": "Inside my approved explore/P0-QC-cell-filtering task, write the first-pass analysis as a reusable framework with helper classes and configuration wrappers.",
-      "should_trigger": true,
-      "expected_output": "Keeps exploration narrative and linear, leaves one-off logic inline with visible intermediate results, and defers reusable abstractions to pipeline."
-    },
-    {
-      "id": 12,
-      "prompt": "Organize the Python, R, and shell scripts in this governed explore task so readers can understand each analysis step.",
-      "should_trigger": true,
-      "expected_output": "Adds a concise Chinese outline and matching numbered Chinese section headings to every script while preserving English code identifiers."
-    },
-    {
-      "id": 13,
-      "prompt": "Create a Markdown record for my research dialogue with AI. I will maintain the questions, and the agent must answer them one by one instead of running every downstream analysis.",
-      "should_trigger": true,
-      "expected_output": "Uses a human-owned QUESTIONS.md, treats queued questions as discussion-only, and waits for explicit approval before one current explore task."
+      "expected_output": "Keeps analysis linear and readable, defers abstraction to pipeline, and routes HTML through the reporting API."
     }
   ]
 }

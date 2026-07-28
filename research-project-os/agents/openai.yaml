@@ -1,4 +1,4 @@
 interface:
   display_name: "Research Project OS"
-  short_description: "Govern question-led exploration and release pipelines"
-  default_prompt: "Use $research-project-os to advance one human-owned research question at a time through readable exploration, review, archive, and publication pipeline."
+  short_description: "搭建可审计的逐题研究 harness"
+  default_prompt: "使用 $research-project-os 搭建或审计逐题推进的研究项目，保留可恢复 context、完整 run receipts、人工审核 archive 与独立中文 HTML reports。"
