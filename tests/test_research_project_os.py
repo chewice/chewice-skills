@@ -25,6 +25,38 @@ SPEC.loader.exec_module(RPOS)
 
 
 class ResearchProjectOSTests(unittest.TestCase):
+    @staticmethod
+    def set_current_question(
+        root: Path,
+        question_id: str,
+        question: str,
+        *,
+        decision: str = "approved_to_run",
+    ) -> None:
+        (root / "QUESTIONS.md").write_text(
+            f"""# Research Questions
+
+> 本文件由 human 维护，Agent 默认只读。
+
+## Current question
+
+- ID: `{question_id}`
+- Question: {question}
+- Context: test
+- Completion criterion: test
+- Human decision: `{decision}`
+
+## Next questions
+
+- 尚未登记。
+
+## Answered questions
+
+- 尚未登记。
+""",
+            encoding="utf-8",
+        )
+
     def make_governed_pixi_project(
         self,
         root: Path,
@@ -97,6 +129,7 @@ class ResearchProjectOSTests(unittest.TestCase):
 
             agents = (root / "AGENTS.md").read_text(encoding="utf-8")
             handoff = (root / "CURRENT_HANDOFF.md").read_text(encoding="utf-8")
+            questions = (root / "QUESTIONS.md").read_text(encoding="utf-8")
             manifest = (root / "project_manifest.yaml").read_text(encoding="utf-8")
 
             self.assertIn("项目说明默认使用中文", agents)
@@ -110,12 +143,20 @@ class ResearchProjectOSTests(unittest.TestCase):
             self.assertIn('lifecycle: "explore_archive_pipeline"', manifest)
             self.assertIn("portfolio_title:", manifest)
             self.assertIn("## Current objective", handoff)
+            self.assertIn("本文件由 human 维护", questions)
+            self.assertIn("Agent 默认只读", questions)
+            self.assertIn("research_questions: QUESTIONS.md", manifest)
+            self.assertIn("research_questions_authority: human", manifest)
 
     def test_adopt_preserves_existing_agents_and_gitignore(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             (root / "AGENTS.md").write_text("existing agents\n", encoding="utf-8")
             (root / ".gitignore").write_text("existing ignore\n", encoding="utf-8")
+            (root / "QUESTIONS.md").write_text(
+                "human-owned questions\n",
+                encoding="utf-8",
+            )
             (root / "analysis.py").write_text("print('existing')\n", encoding="utf-8")
             plan = RPOS.plan_scaffold(root, "bioinformatics", "adopt", overwrite=True)
             RPOS.apply_scaffold(plan, init_git=False)
@@ -126,6 +167,10 @@ class ResearchProjectOSTests(unittest.TestCase):
             self.assertEqual(
                 (root / ".gitignore").read_text(encoding="utf-8"),
                 "existing ignore\n",
+            )
+            self.assertEqual(
+                (root / "QUESTIONS.md").read_text(encoding="utf-8"),
+                "human-owned questions\n",
             )
             self.assertTrue(
                 (root / "docs/research_project_os/AGENTS.additions.md").is_file()
@@ -473,12 +518,14 @@ class ResearchProjectOSTests(unittest.TestCase):
                 root, "bioinformatics", "init", overwrite=False
             )
             RPOS.apply_scaffold(scaffold, init_git=False)
+            self.set_current_question(root, "Q-001", "哪些细胞应排除？")
 
             plan = RPOS.plan_explore_task(
                 root,
                 order=0,
                 core="QC",
                 summary="low quality cells removed",
+                question_id="Q-001",
                 question="哪些细胞应排除？",
                 method="比较 QC metrics 和 sensitivity analysis。",
                 expected_outputs=["QC table", "diagnostic figures"],
@@ -495,6 +542,7 @@ class ResearchProjectOSTests(unittest.TestCase):
             self.assertTrue((task_root / "figures").is_dir())
             task = RPOS.load_yaml(task_root / "task.yaml")
             self.assertEqual(task["approval"]["status"], "approved")
+            self.assertEqual(task["direction"]["question_id"], "Q-001")
             self.assertEqual(task["exploration"]["style"], "narrative_linear")
             self.assertEqual(
                 task["exploration"]["function_policy"],
@@ -527,6 +575,7 @@ class ResearchProjectOSTests(unittest.TestCase):
                     order=0,
                     core="cluster",
                     summary="cell states resolved",
+                    question_id="Q-001",
                     question="如何聚类？",
                     method="graph clustering",
                     expected_outputs=["clusters"],
@@ -535,6 +584,74 @@ class ResearchProjectOSTests(unittest.TestCase):
                 )
             with self.assertRaises(ValueError):
                 RPOS.normalize_task_name(1, "细胞聚类", "cell states")
+
+    def test_exploration_advances_one_human_owned_question_at_a_time(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            RPOS.apply_scaffold(
+                RPOS.plan_scaffold(root, "generic-analysis", "init", overwrite=False),
+                init_git=False,
+            )
+            self.set_current_question(
+                root,
+                "Q-001",
+                "哪些 QC thresholds 稳定？",
+                decision="discuss",
+            )
+            arguments = {
+                "order": 0,
+                "core": "QC",
+                "summary": "stable thresholds selected",
+                "question_id": "Q-001",
+                "question": "哪些 QC thresholds 稳定？",
+                "method": "sensitivity analysis",
+                "expected_outputs": ["threshold table"],
+                "stop_condition": "thresholds selected",
+                "approved_by": "reviewer",
+            }
+            with self.assertRaisesRegex(ValueError, "discussion-only"):
+                RPOS.plan_explore_task(root, **arguments)
+
+            self.set_current_question(root, "Q-001", arguments["question"])
+            questions_before_explore = (root / "QUESTIONS.md").read_bytes()
+            first = RPOS.plan_explore_task(root, **arguments)
+            RPOS.apply_explore_task(first)
+            self.assertEqual(
+                (root / "QUESTIONS.md").read_bytes(),
+                questions_before_explore,
+            )
+
+            self.set_current_question(root, "Q-002", "哪些 clusters 稳定？")
+            questions_before_archive = (root / "QUESTIONS.md").read_bytes()
+            second_arguments = {
+                **arguments,
+                "order": 1,
+                "core": "cluster",
+                "summary": "stable clusters selected",
+                "question_id": "Q-002",
+                "question": "哪些 clusters 稳定？",
+            }
+            with self.assertRaisesRegex(ValueError, "Resolve the current explore"):
+                RPOS.plan_explore_task(root, **second_arguments)
+
+            (root / first["task_path"] / "scripts/qc.py").write_text(
+                "print('qc')\n",
+                encoding="utf-8",
+            )
+            promotion = RPOS.plan_archive_promotion(
+                root,
+                task_name=first["task_name"],
+                reviewed_by="reviewer",
+                review_summary="QC 问题已审核。",
+                validations=["sensitivity passed"],
+            )
+            RPOS.apply_archive_promotion(promotion)
+            self.assertEqual(
+                (root / "QUESTIONS.md").read_bytes(),
+                questions_before_archive,
+            )
+            second = RPOS.plan_explore_task(root, **second_arguments)
+            self.assertEqual(second["task"]["direction"]["question_id"], "Q-002")
 
     def test_archive_promotion_preserves_source_and_verifies_frozen_snapshot(
         self,
@@ -545,11 +662,13 @@ class ResearchProjectOSTests(unittest.TestCase):
                 RPOS.plan_scaffold(root, "generic-analysis", "init", overwrite=False),
                 init_git=False,
             )
+            self.set_current_question(root, "Q-001", "哪些阈值稳定？")
             explore = RPOS.plan_explore_task(
                 root,
                 order=0,
                 core="QC",
                 summary="stable thresholds selected",
+                question_id="Q-001",
                 question="哪些阈值稳定？",
                 method="sensitivity analysis",
                 expected_outputs=["threshold table"],
@@ -590,11 +709,13 @@ class ResearchProjectOSTests(unittest.TestCase):
                 RPOS.plan_scaffold(root, "generic-analysis", "init", overwrite=False),
                 init_git=False,
             )
+            self.set_current_question(root, "Q-001", "哪个 GRN 稳定？")
             explore = RPOS.plan_explore_task(
                 root,
                 order=0,
                 core="GRN",
                 summary="robust network retained",
+                question_id="Q-001",
                 question="哪个 GRN 稳定？",
                 method="bootstrap validation",
                 expected_outputs=["network table"],
@@ -662,11 +783,13 @@ class ResearchProjectOSTests(unittest.TestCase):
                 RPOS.plan_scaffold(root, "generic-analysis", "init", overwrite=False),
                 init_git=False,
             )
+            self.set_current_question(root, "Q-001", "哪些 clusters 稳定？")
             explore = RPOS.plan_explore_task(
                 root,
                 order=0,
                 core="cluster",
                 summary="stable clusters selected",
+                question_id="Q-001",
                 question="哪些 clusters 稳定？",
                 method="consensus clustering",
                 expected_outputs=["cluster labels"],
@@ -721,8 +844,8 @@ class ResearchProjectOSTests(unittest.TestCase):
             (ROOT / "research-project-os/evals/evals.json").read_text(encoding="utf-8")
         )
 
-        self.assertEqual(workspace["workspace"]["version"], "0.4.2")
-        self.assertEqual(RPOS.RELEASE_VERSION, "0.4.2")
+        self.assertEqual(workspace["workspace"]["version"], "0.5.0")
+        self.assertEqual(RPOS.RELEASE_VERSION, "0.5.0")
         self.assertEqual(RPOS.MANIFEST_SCHEMA_VERSION, "0.3.0")
         self.assertEqual(RPOS.SYNC_PAYLOAD_SCHEMA_VERSION, "0.3.0")
         trigger_values = {case["should_trigger"] for case in evals["evals"]}

@@ -4,11 +4,15 @@
 
 - 项目说明默认使用中文；稳定的 engineering terms、machine-readable contract
   和文件名保持英文。
-- session start 时读取 `project_manifest.yaml` 和 `CURRENT_HANDOFF.md`。
+- session start 时读取 `project_manifest.yaml`、`CURRENT_HANDOFF.md` 和
+  human-owned `QUESTIONS.md`；Agent 默认不得修改后者。
 - You may use superpowers, but do not write any spec or plan.
 - 保留 evidence boundary 和 status transition。
-- 对分析类 profile，先在聊天中确认方向，再创建
+- 对分析类 profile，一次只讨论或执行 `QUESTIONS.md` 的唯一 current question；
+  human 标记 `approved_to_run` 并明确同意后，才创建
   `explore/P<order>-<core>-<short-english-summary>/` 或运行计算。
+- 一次最多有一个未归档、未取消的 explore task；报告当前答案和限制后停止，
+  不提前分析候选问题，也不自行推进 `QUESTIONS.md`。
 - explore task 的 scripts、derived data 和 figures 留在其 task subdir；经人工
   审核后冻结到不可覆盖的 `archive/<task>/vNNN/`。
 - explore code 按实际执行顺序线性组织，保留 intermediate objects 和相邻

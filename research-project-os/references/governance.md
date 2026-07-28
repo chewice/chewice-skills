@@ -21,8 +21,10 @@ Execution is not validation. Human review grants `stable` and `approved`.
 For analysis profiles, keep artifact stages distinct from these states:
 `explore/` contains approved-to-run tasks, `archive/` contains immutable
 human-reviewed snapshots, and `pipeline/` contains the independent release
-workflow. Multiple explore tasks may coexist. Promotion does not itself grant
-`verified` evidence or `stable` analysis.
+workflow. Historical explore tasks may coexist, but only one may remain
+unarchived and uncancelled. `QUESTIONS.md` is a human-owned, Agent-read-only
+research agenda; operational uncertainties stay in `open_questions.md`.
+Promotion does not itself grant `verified` evidence or `stable` analysis.
 
 Use Chinese for human-facing project narrative. Preserve commands, paths,
 keys, IDs, state tokens, code, and parsed headings. Existing repository rules

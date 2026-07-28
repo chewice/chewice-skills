@@ -6,7 +6,7 @@ This CLI is intentionally conservative:
 - init, adopt, close, sync-export, explore-create, archive-promote,
   pipeline-create, and pipeline-release are dry-run unless --apply is explicit;
 - existing files are preserved unless --overwrite is explicit;
-- adopt never replaces AGENTS.md, README.md, or .gitignore;
+- adopt never replaces AGENTS.md, QUESTIONS.md, README.md, or .gitignore;
 - no command stages, commits, pushes, or writes to Notion.
 """
 
@@ -38,7 +38,7 @@ PROFILE_NAMES = (
     "literature-review",
     "software-development",
 )
-RELEASE_VERSION = "0.4.2"
+RELEASE_VERSION = "0.5.0"
 MANIFEST_SCHEMA_VERSION = "0.3.0"
 SYNC_PAYLOAD_SCHEMA_VERSION = "0.3.0"
 ANALYSIS_ARTIFACT_SCHEMA_VERSION = "1.0.0"
@@ -46,9 +46,10 @@ SUPPORTED_MANIFEST_SCHEMAS = {"0.1.0", "0.2.0", MANIFEST_SCHEMA_VERSION}
 SYNC_EXPORT_KINDS = ("project-adopt", "milestone", "full-state")
 OUTPUT_KINDS = (*SYNC_EXPORT_KINDS, "session-close")
 ANALYSIS_LIFECYCLE_PROFILES = {"generic-analysis", "bioinformatics"}
-PROTECTED_ADOPTION_PATHS = {"AGENTS.md", "README.md", ".gitignore"}
+PROTECTED_ADOPTION_PATHS = {"AGENTS.md", "QUESTIONS.md", "README.md", ".gitignore"}
 REQUIRED_CONTROL_PATHS = (
     "AGENTS.md",
+    "QUESTIONS.md",
     "project_manifest.yaml",
     "CURRENT_HANDOFF.md",
     "docs/ai_context/status_policy.md",
@@ -84,6 +85,7 @@ SENSITIVE_PATTERNS = (
     ),
 )
 SESSION_PATTERN = re.compile(r"^SES-\d{8}-\d{3}$")
+QUESTION_ID_PATTERN = re.compile(r"^Q-\d{3}$")
 TASK_NAME_PATTERN = re.compile(
     r"^P(?P<order>0|[1-9]\d*)-"
     r"(?P<core>[A-Za-z][A-Za-z0-9]{0,23})-"
@@ -262,6 +264,7 @@ def parse_args() -> argparse.Namespace:
     explore_parser.add_argument("--order", type=int, required=True)
     explore_parser.add_argument("--core", required=True)
     explore_parser.add_argument("--summary", required=True)
+    explore_parser.add_argument("--question-id", required=True)
     explore_parser.add_argument("--question", required=True)
     explore_parser.add_argument("--method", required=True)
     explore_parser.add_argument("--expected-output", action="append", required=True)
@@ -537,7 +540,11 @@ def template_replacements(
 ) -> dict[str, str]:
     project_name = root.name or "research-project"
     required_context = profile.get("required_context", [])
-    required_lines = ["    - AGENTS.md", "    - CURRENT_HANDOFF.md"]
+    required_lines = [
+        "    - AGENTS.md",
+        "    - QUESTIONS.md",
+        "    - CURRENT_HANDOFF.md",
+    ]
     required_lines.extend(f"    - {path}" for path in required_context)
     today = date.today()
     return {
@@ -744,12 +751,115 @@ def task_names(root: Path) -> list[str]:
     return sorted(values)
 
 
+def current_research_question(root: Path) -> dict[str, str]:
+    path = root / "QUESTIONS.md"
+    if not path.is_file():
+        raise ValueError("Missing human-owned research agenda: QUESTIONS.md")
+    section = markdown_section(path.read_text(encoding="utf-8"), "Current question")
+    if not section:
+        raise ValueError("QUESTIONS.md must contain a Current question section")
+
+    def field(label: str) -> str:
+        match = re.search(
+            rf"^- {re.escape(label)}:\s*(.+?)\s*$",
+            section,
+            flags=re.MULTILINE,
+        )
+        if match is None:
+            raise ValueError(
+                f"QUESTIONS.md Current question lacks the {label} field"
+            )
+        return match.group(1).strip().strip("`")
+
+    question = {
+        "id": field("ID"),
+        "question": field("Question"),
+        "completion_criterion": field("Completion criterion"),
+        "human_decision": field("Human decision"),
+    }
+    if QUESTION_ID_PATTERN.fullmatch(question["id"]) is None:
+        raise ValueError("QUESTIONS.md current ID must match Q-NNN")
+    if question["human_decision"] not in {"discuss", "approved_to_run"}:
+        raise ValueError(
+            "QUESTIONS.md Human decision must be discuss or approved_to_run"
+        )
+    return question
+
+
+def normalized_human_text(value: str) -> str:
+    return re.sub(r"\s+", " ", value.strip())
+
+
+def task_has_verified_archive(root: Path, task_name: str) -> bool:
+    archive_root = root / "archive" / task_name
+    if not archive_root.is_dir():
+        return False
+    for version_root in sorted(archive_root.iterdir(), reverse=True):
+        if (
+            version_root.is_dir()
+            and ARCHIVE_VERSION_PATTERN.fullmatch(version_root.name)
+            and verify_archive_snapshot(
+                root,
+                f"{task_name}@{version_root.name}",
+            )["ok"]
+        ):
+            return True
+    return False
+
+
+def unresolved_explore_tasks(root: Path) -> list[str]:
+    explore_root = root / "explore"
+    if not explore_root.is_dir():
+        return []
+    unresolved = []
+    for task_root in sorted(explore_root.iterdir()):
+        if not task_root.is_dir() or TASK_NAME_PATTERN.fullmatch(task_root.name) is None:
+            continue
+        task_path = task_root / "task.yaml"
+        status = None
+        if task_path.is_file():
+            document = load_yaml(task_path)
+            task = document.get("task")
+            status = task.get("status") if isinstance(task, dict) else None
+        if status == "cancelled" or task_has_verified_archive(root, task_root.name):
+            continue
+        unresolved.append(task_root.name)
+    return unresolved
+
+
+def tasks_for_question(root: Path, question_id: str) -> list[str]:
+    explore_root = root / "explore"
+    if not explore_root.is_dir():
+        return []
+    matches = []
+    for task_root in sorted(explore_root.iterdir()):
+        task_path = task_root / "task.yaml"
+        if (
+            not task_root.is_dir()
+            or TASK_NAME_PATTERN.fullmatch(task_root.name) is None
+            or not task_path.is_file()
+        ):
+            continue
+        document = load_yaml(task_path)
+        task = document.get("task")
+        direction = document.get("direction")
+        if (
+            isinstance(task, dict)
+            and task.get("status") != "cancelled"
+            and isinstance(direction, dict)
+            and direction.get("question_id") == question_id
+        ):
+            matches.append(task_root.name)
+    return matches
+
+
 def plan_explore_task(
     root: Path,
     *,
     order: int,
     core: str,
     summary: str,
+    question_id: str,
     question: str,
     method: str,
     expected_outputs: list[str],
@@ -757,6 +867,32 @@ def plan_explore_task(
     approved_by: str,
 ) -> dict[str, Any]:
     profile = analysis_profile(root)
+    current = current_research_question(root)
+    if current["human_decision"] != "approved_to_run":
+        raise ValueError(
+            "Current question is discussion-only; human must set "
+            "Human decision to approved_to_run"
+        )
+    if question_id.strip() != current["id"]:
+        raise ValueError(
+            f"question_id must match QUESTIONS.md current ID {current['id']}"
+        )
+    if normalized_human_text(question) != normalized_human_text(current["question"]):
+        raise ValueError("question must exactly match QUESTIONS.md Current question")
+    if current["question"] == "尚未填写":
+        raise ValueError("QUESTIONS.md Current question has not been filled in")
+    existing_for_question = tasks_for_question(root, current["id"])
+    if existing_for_question:
+        raise ValueError(
+            f"Current question {current['id']} already has an explore task: "
+            + ", ".join(existing_for_question)
+        )
+    unresolved = unresolved_explore_tasks(root)
+    if unresolved:
+        raise ValueError(
+            "Resolve the current explore task before starting another: "
+            + ", ".join(unresolved)
+        )
     task_name = normalize_task_name(order, core, summary)
     for existing in task_names(root):
         parsed = parse_task_name(existing)
@@ -784,6 +920,7 @@ def plan_explore_task(
             "status": "ready",
         },
         "direction": {
+            "question_id": current["id"],
             "question": question.strip(),
             "method": method.strip(),
             "expected_outputs": outputs,
@@ -814,6 +951,7 @@ def plan_explore_task(
 
 ## Direction
 
+- Question ID: {current["id"]}
 - Question: {question.strip()}
 - Method: {method.strip()}
 - Stop condition: {stop_condition.strip()}
@@ -887,6 +1025,7 @@ def validate_explore_task(root: Path, task_name: str) -> dict[str, Any]:
         raise ValueError(f"Missing explore task metadata: {task_path}")
     document = load_yaml(task_path)
     task = document.get("task")
+    direction = document.get("direction")
     approval = document.get("approval")
     if document.get("schema_version") != ANALYSIS_ARTIFACT_SCHEMA_VERSION:
         raise ValueError(f"Unsupported task schema: {task_path}")
@@ -897,6 +1036,14 @@ def validate_explore_task(root: Path, task_name: str) -> dict[str, Any]:
             raise ValueError(f"Task metadata {key} does not match {task_name}")
     if task.get("stage") != "explore":
         raise ValueError(f"Explore task must use stage=explore: {task_path}")
+    if not isinstance(direction, dict):
+        raise ValueError(f"Task metadata must contain a direction mapping: {task_path}")
+    question_id = direction.get("question_id")
+    if question_id is not None and (
+        not isinstance(question_id, str)
+        or QUESTION_ID_PATTERN.fullmatch(question_id) is None
+    ):
+        raise ValueError(f"Explore task question_id must match Q-NNN: {task_path}")
     if not isinstance(approval, dict) or approval.get("status") != "approved":
         raise ValueError(f"Explore task lacks human direction approval: {task_path}")
     if not approval.get("approved_by"):
@@ -2015,6 +2162,33 @@ def audit_analysis_lifecycle(
                 validate_explore_task(root, task_path.name)
             except (OSError, ValueError, yaml.YAMLError) as error:
                 errors.append(str(error))
+        try:
+            unresolved = unresolved_explore_tasks(root)
+            if len(unresolved) > 1:
+                errors.append(
+                    "Only one explore task may remain unarchived and uncancelled: "
+                    + ", ".join(unresolved)
+                )
+            if len(unresolved) == 1:
+                current = current_research_question(root)
+                document = load_yaml(explore_root / unresolved[0] / "task.yaml")
+                direction = document.get("direction")
+                question_id = (
+                    direction.get("question_id")
+                    if isinstance(direction, dict)
+                    else None
+                )
+                if question_id is None:
+                    warnings.append(
+                        f"Legacy explore task lacks question_id: {unresolved[0]}"
+                    )
+                elif question_id != current["id"]:
+                    errors.append(
+                        f"Unresolved explore task {unresolved[0]} belongs to "
+                        f"{question_id}, not current {current['id']}"
+                    )
+        except (OSError, ValueError, yaml.YAMLError) as error:
+            errors.append(str(error))
 
     archive_root = root / "archive"
     if archive_root.is_dir():
@@ -2150,6 +2324,10 @@ def audit_project(root: Path) -> dict[str, Any]:
 
     if manifest is None:
         raise AssertionError("Required manifest disappeared during audit")
+    try:
+        current_research_question(root)
+    except (OSError, ValueError) as error:
+        errors.append(str(error))
     if manifest.get("schema_version") != MANIFEST_SCHEMA_VERSION:
         errors.append(
             f"Manifest schema must be {MANIFEST_SCHEMA_VERSION}; found "
@@ -2910,6 +3088,7 @@ def main() -> None:
                 order=args.order,
                 core=args.core,
                 summary=args.summary,
+                question_id=args.question_id,
                 question=args.question,
                 method=args.method,
                 expected_outputs=args.expected_output,

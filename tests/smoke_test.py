@@ -49,6 +49,27 @@ def main() -> None:
         )
         run("audit", "--project", str(project))
         run("start", "--project", str(project))
+        (project / "QUESTIONS.md").write_text(
+            """# Research Questions
+
+## Current question
+
+- ID: `Q-001`
+- Question: 哪些 QC thresholds 稳定？
+- Context: smoke test
+- Completion criterion: Threshold sensitivity 已记录。
+- Human decision: `approved_to_run`
+
+## Next questions
+
+- 尚未登记。
+
+## Answered questions
+
+- 尚未登记。
+""",
+            encoding="utf-8",
+        )
         explore_args = (
             "explore-create",
             "--project",
@@ -59,6 +80,8 @@ def main() -> None:
             "QC",
             "--summary",
             "stable thresholds selected",
+            "--question-id",
+            "Q-001",
             "--question",
             "哪些 QC thresholds 稳定？",
             "--method",

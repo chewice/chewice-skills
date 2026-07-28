@@ -65,6 +65,22 @@ class SkillContractTests(unittest.TestCase):
         self.assertIn("编号中文", agents)
         self.assertIn("模块化、参数化、复用接口", agents)
 
+    def test_research_questions_are_human_owned_and_sequential(self) -> None:
+        skill = (ROOT / "research-project-os/SKILL.md").read_text(encoding="utf-8")
+        questions = (
+            ROOT / "research-project-os/assets/base/QUESTIONS.md"
+        ).read_text(encoding="utf-8")
+        lifecycle = (
+            ROOT / "research-project-os/references/analysis_lifecycle.md"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("human-owned research agenda", skill)
+        self.assertIn("do not analyze queued questions", skill)
+        self.assertIn("本文件由 human 维护", questions)
+        self.assertIn("Agent 默认只读", questions)
+        self.assertIn("approved_to_run", questions)
+        self.assertIn("一次最多有一个未归档、未取消的任务", lifecycle)
+
     def test_validator_candidate_precedence(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)

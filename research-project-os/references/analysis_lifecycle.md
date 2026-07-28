@@ -11,15 +11,22 @@ explore → human review → archive → pipeline → publication review
 
 ## Direction gate
 
-运行任何新分析前，先在聊天中提出 research question、method、expected outputs 和
-stop condition。只有 human 明确同意后，才运行 `explore-create --apply` 或执行计算。
-dry-run 只展示计划，不代表方向获批。
+根目录 `QUESTIONS.md` 是 human-owned research agenda，Agent 默认只读。一次只处理
+其中唯一的 `Current question`；`Next questions` 只是候选方向，不得提前分析。
+先讨论 method、expected outputs 和 stop condition。只有 human 将
+`Human decision` 改为 `approved_to_run` 并明确同意后，才运行
+`explore-create --apply` 或执行计算。dry-run 不代表方向获批。
+
+当前问题得到结果后立即停止，报告 answer、limitations 和候选下游问题，等待 human
+审核。由 human 记录结论、决定是否入库，并把下一题移入 `Current question`。
+`docs/ai_context/open_questions.md` 只记录 Agent 的 operational blockers。
 
 ## Task contract
 
 使用 `P<order>-<core>-<short-english-summary>/`：
 
-- `P0`, `P1`, ... 是项目内唯一的分析顺序；允许多个任务并行探索，不要求前序完成。
+- `P0`, `P1`, ... 是项目内唯一的分析顺序；一次最多有一个未归档、未取消的任务。
+- 每个任务只回答一个 current `Q-` ID，不把多个下游问题打包执行。
 - `core` 是单个短 ASCII token，例如 `QC`、`cluster`、`GRN`。
 - 末段是不可变的简短英文 kebab-case 总结，例如
   `P0-QC-low-quality-cells-removed/`。它是 task label，不是 verified claim。

@@ -7,7 +7,8 @@
 
 ## Session Protocol
 
-- 修改项目逻辑前，读取 `project_manifest.yaml` 和 `CURRENT_HANDOFF.md`。
+- 修改项目逻辑前，读取 `project_manifest.yaml`、`CURRENT_HANDOFF.md` 和
+  `QUESTIONS.md`。
 - 只加载 required context 和与当前 task 相关的 evidence。
 - 项目状态发生实质变化时更新 handoff。
 - You may use superpowers, but do not write any spec or plan.
@@ -21,13 +22,18 @@
 
 ## Analysis Lifecycle
 
-- 对 `generic-analysis` 和 `bioinformatics`，先在聊天中提出 question、method、
-  expected outputs 和 stop condition；human 明确同意后才创建目录或执行计算。
-- `explore/` 允许并行小任务；目录名使用
+- 根目录 `QUESTIONS.md` 由 human 维护，Agent 默认只读。一次只讨论或执行其中
+  唯一的 `Current question`；`Next questions` 不得提前分析。
+- 对 `generic-analysis` 和 `bioinformatics`，先围绕当前问题讨论 method、
+  expected outputs 和 stop condition；只有 `Human decision` 为
+  `approved_to_run` 且 human 明确同意后，才创建目录或执行计算。
+- 一次最多有一个未归档、未取消的 explore task；目录名使用
   `P<order>-<core>-<short-english-summary>/`，例如
   `P0-QC-low-quality-cells-removed/`。`P0` 表示唯一顺序，`QC`/`cluster`/`GRN`
   表示核心任务，末段是简短英文总结。
 - 每个 explore task 的 scripts、derived data 和 figures 都留在自己的目录。
+- 得到结果后停止，先向 human 报告答案、限制和候选下游问题；不得自行开始下一题
+  或修改 `QUESTIONS.md`。
 - 把 explore code 写成可执行 lab notebook：使用单个主 notebook、Quarto/R
   Markdown，或按实际运行顺序分 section/cell 的 script；在相邻位置保留
   intermediate objects、diagnostics、observations 和 limitations。

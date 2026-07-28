@@ -53,7 +53,7 @@
       "id": 9,
       "prompt": "I want to explore QC, clustering, and GRN as separate analysis tasks, review each result before archiving it, and then assemble a publication pipeline.",
       "should_trigger": true,
-      "expected_output": "Asks for direction before analysis, creates ordered self-contained explore tasks, promotes reviewed immutable snapshots, and derives an independent pipeline."
+      "expected_output": "Records the human-selected current question, executes only its one ordered explore task, stops for review, and leaves clustering and GRN queued until the human advances them."
     },
     {
       "id": 10,
@@ -72,6 +72,12 @@
       "prompt": "Organize the Python, R, and shell scripts in this governed explore task so readers can understand each analysis step.",
       "should_trigger": true,
       "expected_output": "Adds a concise Chinese outline and matching numbered Chinese section headings to every script while preserving English code identifiers."
+    },
+    {
+      "id": 13,
+      "prompt": "Create a Markdown record for my research dialogue with AI. I will maintain the questions, and the agent must answer them one by one instead of running every downstream analysis.",
+      "should_trigger": true,
+      "expected_output": "Uses a human-owned QUESTIONS.md, treats queued questions as discussion-only, and waits for explicit approval before one current explore task."
     }
   ]
 }

@@ -1,4 +1,4 @@
 interface:
   display_name: "Research Project OS"
-  short_description: "Govern readable exploration and release pipelines"
-  default_prompt: "Use $research-project-os to organize narrative exploration with Chinese code outlines, reviewed archives, and a publication-ready pipeline."
+  short_description: "Govern question-led exploration and release pipelines"
+  default_prompt: "Use $research-project-os to advance one human-owned research question at a time through readable exploration, review, archive, and publication pipeline."
