@@ -1,0 +1,9 @@
+__pycache__/
+*.py[cod]
+*.bak
+*.xlsx
+*.xls
+.DS_Store
+.venv/
+.pixi/
+

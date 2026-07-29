@@ -1,0 +1,4 @@
+interface:
+  display_name: "微信消息转 Excel"
+  short_description: "将微信登记、评估与随访消息在本地整理为 Excel 工作簿"
+  default_prompt: "使用 $wechat-transform 在本地汇总我提供的微信登记消息，并写入既定 Excel 工作簿。"

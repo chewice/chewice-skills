@@ -1,0 +1,101 @@
+---
+name: wechat-transform
+description: 将微信转发的中文登记、评估、随访或留样消息块转换为 Excel 表格。用户要求把微信消息、聊天记录、患者或科研评估记录、随访记录、HAMD/CRF/留样记录整理成 Excel、xlsx、表格、TSV、可复制到 Excel 的格式时使用；当用户最后单独发送"开始"或"转换"，且此前对话中已有待汇总的微信消息块时，也使用本技能汇总转换。
+---
+
+# 微信消息转 Excel
+
+## 工作流程
+
+使用本技能把用户粘贴或转发的微信消息块解析后直接写入 Excel 文件。
+
+1. 转换前先读取本地 `references/field-rules.md`（本 SKILL.md 同目录下的 references/field-rules.md）。
+2. 如果用户提供文件路径，直接读取本地文件；如果用户粘贴文本，只使用这段文本。不要把隐私登记文本上传或发送到外部服务。
+3. 当输入符合普通评估或随访登记格式时，使用两步流水线：
+   a. 将输入写入 WSL 临时文件，运行 `python3 scripts/wechat_to_excel_tsv.py <tmpfile> --mode auto --raw-tsv`，分别捕获正常、随访和瑞美特 TSV。
+   b. 将每组 TSV 管道给 `uv run --with openpyxl python3 scripts/tsv_append_xlsx.py "<xlsx路径>" "<sheet名>"`，sheet 名为 `正常`、`随访` 或 `瑞美特`。
+4. **不要**输出 fenced `tsv` 代码块到聊天中。转换结果直接写入 xlsx 文件。
+5. 缺失字段保留为空。不要推断来源中没有出现的日期、院号、HAMD、姓名或诊断等隐私/临床信息。
+6. **日期字段缺失时保持为空，不要提示用户补填日期、不要询问日期格式问题、不要输出任何日期格式相关的警告或建议。**
+7. 写入完成后在聊天中简短报告：正常 N 条、随访 M 条、瑞美特 K 条，以及文件名。
+
+## xlsx 文件路径
+
+固定写入路径（WSL 视角）：
+
+```
+/mnt/d/BaiduSyncdisk/精卫/脑计划-瑞美特/脑计划/01.wechat-transfer/wechat-transform.xlsx
+```
+
+对应 Windows 路径：`D:\BaiduSyncdisk\精卫\脑计划-瑞美特\脑计划\01.wechat-transfer\wechat-transform.xlsx`
+
+- 工作表 `正常`：普通评估记录（16 列）
+- 工作表 `随访`：随访记录（5 列：姓名、日期、CRF、评估员、留取样本类型）
+- 工作表 `瑞美特`：瑞美特记录（15 列，仅 A/B/H/I/M/N/O 列有值，其余为空）
+- 每次写入时自动找到每个工作表的下一个空行追加，不与既往已写入数据冲突。
+- 脚本会在加载时自动清理除 `正常`、`随访` 和 `瑞美特` 之外的 stray 工作表。
+- **不要**通过聊天发送 xlsx 文件，也不要提供下载链接。
+
+## 批量对话模式
+
+当用户会分多轮发送多条微信消息块，并在最后单独发送 `开始` 或 `转换` 时，使用这个模式。
+
+### 接收消息阶段（静默收集）
+
+- 当用户首次表示要转换微信消息时，只回一句简短指引（如"请发送微信消息块，全部发完后回复'开始'或'转换'"）。**不要发送"信息已收到，开始处理"或其他会触发处理锁的提示语。**
+- 用户发送消息块期间，**保持静默，不要逐条回复确认**。任何回复都会触发框架的"副驾正在处理上一条消息"繁忙锁，导致后续消息块被拦截丢失。
+- 用户可能在**同一轮发送多条消息块**（一次性粘贴多段），这些消息块**全部保留**在对话历史中，不要只取第一条。
+- 用户可能在**一条消息内包含多人信息**（多条记录以空行、分隔符、或重复出现的标题行如「脑计划XXX」「姓名:」等分隔）。提取时按记录边界拆分，确保一条消息中的所有记录都被识别和转换，不得只取第一条。
+
+### 触发转换阶段
+
+- 当用户只发送 `开始`、`转换` 或 `开始转换`（可带简单标点）时，**逐条回溯当前对话中自上次完成转换以来的全部用户消息**，从中提取所有微信消息块。
+- **关键**：必须提取**全部**消息块。同一轮中的多条消息，每条都要提取。不得遗漏任何一条。如果发现只提取了部分消息块，必须重新检查对话历史。
+- 转换输入中排除控制词本身，也排除助手自己的指引回复。
+- 所有普通评估记录合并写入 `正常` 工作表。
+- 如果待处理消息中包含随访记录，额外写入 `随访` 工作表。
+- 如果待处理消息中包含"瑞美特"字样，额外写入 `瑞美特` 工作表（同时这些记录也正常写入正常/随访表）。
+- 写入完成后在聊天中简短报告：正常 N 条、随访 M 条、瑞美特 K 条。
+- 如果没有待处理消息块，提示用户先发送微信消息。
+- 如果用户在包含记录的同一条消息中明确要求立即转换，则直接转换，不等待后续控制词。
+
+## 脚本用法
+
+> **Agent 注意**：Python 脚本和 field-rules.md 存放在 WSL 的 `/home/zdh/.agents/skills/wechat-transform/`。Agent 应通过 `wsl_session_exec` 在已打开的 WSL 终端中执行以下命令。先读取 `references/field-rules.md` 了解字段规则。
+
+### 步骤 1：解析微信消息为 TSV
+
+```bash
+cd /home/zdh/.agents/skills/wechat-transform && python3 scripts/wechat_to_excel_tsv.py input.md --mode auto --raw-tsv
+```
+
+- `auto`：自动拆分普通记录、随访记录和瑞美特记录。
+- `normal`：强制按普通评估表解析。
+- `followup`：强制按随访表解析。
+- `--raw-tsv`：只输出纯 TSV，不带 fenced 代码块或标签。
+
+脚本输出三组 TSV（如存在），用空行分隔：正常、随访、瑞美特。Agent 需要分别捕获并管道给步骤 2。
+
+### 步骤 2：将 TSV 追加写入 xlsx
+
+```bash
+printf 'TSV内容\n' | uv run --with openpyxl python3 scripts/tsv_append_xlsx.py "/mnt/d/BaiduSyncdisk/精卫/脑计划-瑞美特/脑计划/01.wechat-transfer/wechat-transform.xlsx" "正常"
+```
+
+对随访 TSV 用 `"随访"`，对瑞美特 TSV 用 `"瑞美特"`。
+
+### 一键脚本（三个 sheet 同一次调用）
+
+也可以直接使用主脚本的 `--output-xlsx` 参数（需要 openpyxl）：
+
+```bash
+cd /home/zdh/.agents/skills/wechat-transform && uv run --with openpyxl python3 scripts/wechat_to_excel_tsv.py input.md --mode auto --output-xlsx "/mnt/d/BaiduSyncdisk/精卫/脑计划-瑞美特/脑计划/01.wechat-transfer/wechat-transform.xlsx"
+```
+
+## 输出规则
+
+- 转换结果**直接写入 xlsx 文件**，不要在聊天中输出 TSV 表格。
+- 聊天中只简短报告：写入文件名 + 正常 N 条 + 随访 M 条 + 瑞美特 K 条。
+- 除 `field-rules.md` 中定义的留样名称标准化外，其他中文字段尽量保留来源表述。
+- 保持来源消息中的记录顺序。
+- **不要**通过聊天发送 xlsx 文件。
