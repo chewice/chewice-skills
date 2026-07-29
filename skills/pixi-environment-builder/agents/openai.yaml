@@ -1,0 +1,4 @@
+interface:
+  display_name: "Pixi 环境构建与诊断"
+  short_description: "设计、迁移、诊断 Pixi 环境并转换 TUNA 镜像"
+  default_prompt: "使用 $pixi-environment-builder 检查项目依赖，设计或诊断可复现的 Pixi 环境，并按需转换 TUNA 镜像。"
