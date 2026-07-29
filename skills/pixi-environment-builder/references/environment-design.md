@@ -21,6 +21,20 @@ pixi add python
 操作系统时，先确认包在所有目标平台均可用；平台专用依赖应放入 target 或 feature，
 不要让一个平台的 CUDA 包破坏其他平台求解。
 
+初始化完成后，确保 manifest 默认包含：
+
+```toml
+[tasks.init]
+cmd = "bash setup-vscode.sh"
+```
+
+从 Skill 的 `assets/setup-vscode.sh` 复制脚本到项目根目录。该脚本创建
+`.vscode/settings.json`，并将 VS Code 的 Linux R 可执行文件和终端路径指向
+`${workspaceFolder}/.pixi/envs/default/bin/R`。即使项目暂时不使用 R，也保留这组默认
+初始化文件，除非用户明确要求不同配置。若项目已有 `setup-vscode.sh` 或
+`.vscode/settings.json`，先检查并合并用户配置，不要直接覆盖；只有全新项目才直接
+采用资产模板。
+
 ## 包来源
 
 通常优先使用 Conda：

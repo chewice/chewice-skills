@@ -16,8 +16,10 @@ description: "创建、迁移、审查或诊断 Pixi 工作区和环境，并预
 3. 为重要依赖明确唯一来源：Conda、PyPI、Git 或本地路径。
 4. 先设计最小顶层依赖，再根据求解器和运行验证补充约束。
 5. 使用 Pixi CLI 修改或初始化 manifest 时，优先采用当前安装版本支持的命令。
-6. 运行锁定、安装或缓存清理前说明会发生的状态变化；用户只要求诊断时保持只读。
-7. 用导入、版本、CLI、GPU 或 kernel 检查验证实际目标，而不只确认安装成功。
+6. 创建 `pixi.toml` 时，默认添加 `[tasks.init]`，令其执行项目根目录的
+   `setup-vscode.sh`，并从 `assets/setup-vscode.sh` 复制该脚本。
+7. 运行锁定、安装或缓存清理前说明会发生的状态变化；用户只要求诊断时保持只读。
+8. 用导入、版本、CLI、GPU 或 kernel 检查验证实际目标，而不只确认安装成功。
 
 ## 按需读取
 
@@ -29,6 +31,20 @@ description: "创建、迁移、审查或诊断 Pixi 工作区和环境，并预
   [references/troubleshooting.md](references/troubleshooting.md)。
 
 只读取与当前任务相关的 reference。
+
+## 新建工作区默认初始化
+
+新建 `pixi.toml` 时必须包含：
+
+```toml
+[tasks.init]
+cmd = "bash setup-vscode.sh"
+```
+
+同时将 [assets/setup-vscode.sh](assets/setup-vscode.sh) 复制到项目根目录。保留脚本中的
+`${workspaceFolder}` 字面量，不要在复制时展开。创建后运行 `bash -n setup-vscode.sh`
+并检查 manifest 中的任务；只有用户要求时才执行 `pixi run init`，因为它会覆盖
+`.vscode/settings.json`。
 
 ## 只读诊断
 
