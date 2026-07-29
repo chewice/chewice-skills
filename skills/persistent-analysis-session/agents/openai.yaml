@@ -1,0 +1,4 @@
+interface:
+  display_name: "Persistent Analysis Session"
+  short_description: "Reuse R or Python memory for exploratory analysis"
+  default_prompt: "Use $persistent-analysis-session to set up a safe localhost R or Python session that loads a large object once."
