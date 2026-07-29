@@ -40,10 +40,10 @@ explore task。scripts、derived data、figures、run receipts、Markdown source
 HTML report 全部留在该 task。回答问题并说明限制后停止，不修改问题队列，也不自动
 开始下一题。
 
-explore code 应像可执行 lab notebook：单次逻辑保持 inline，显示 intermediates，
-允许少量重复，把 reusable abstraction 留到 pipeline。每个 executable file 顶部
-必须有中文 outline，并使用对应编号的中文 section headings。analysis scripts
-不得包含 HTML、CSS、template 或 report rendering logic。
+explore code 应像可执行 lab notebook：优先减少函数封装和工程化代码，单次逻辑保持
+inline，显示 intermediates，允许少量重复，把 reusable abstraction 留到 pipeline。
+每个 executable file 顶部必须有中文 outline，并使用对应编号的中文 section
+headings。analysis scripts 不得包含 HTML、CSS、template 或 report rendering logic。
 
 实际计算只通过 audited `run`：复核输入完整 SHA-256、task-local outputs、
 stdout/stderr、Git 和 Pixi provenance。只有完整且经过 human review 的 task

@@ -39,5 +39,7 @@ status、根 Pixi hashes 和 output hashes。输入改变、命令失败、输�
 `work/audit/lifecycle.jsonl` 只保存精简 append-only events。不得自动 stage、
 commit、push、修改 source data、暴露 credentials 或向外部系统同步。
 
-说明和 handoff 默认中文，专业术语与 machine values 保持原样。遵守：
-`You may use superpowers, but do not write any spec or plan.`
+生成的 `AGENTS.md` 要求遵循第一性原理。说明和 handoff 默认中文，专业术语与
+machine values 保持原样。遵守：
+`You may use superpowers, but do not write any spec or plan.`，且 superpowers
+不得绕过 human ownership、approval、dry-run、audited execution 或安全限制。

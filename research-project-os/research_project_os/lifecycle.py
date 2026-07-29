@@ -293,6 +293,7 @@ def task_readme_text(task_name: str, question: dict[str, str]) -> str:
 ## Code contract
 
 - code 按实际执行顺序线性组织，保留 intermediate objects 和 diagnostics。
+- 优先减少函数封装和工程化代码，单次逻辑保持 inline。
 - 每个 script 顶部使用中文 outline 和对应编号中文 section headings。
 - 允许少量重复；不提前创建 generic helpers、classes、wrappers 或 config layers。
 - HTML 仅由独立 `report-build` API 生成，不写入 analysis scripts。
@@ -310,7 +311,8 @@ def analysis_script_text() -> str:
 # 按当前问题填写只读输入、明确参数与假设。
 
 # %% 2. 执行当前问题的探索
-# 保持单次逻辑线性可读，直接显示关键 intermediate objects。
+# 减少函数封装和工程化代码，保持单次逻辑线性可读。
+# 直接显示关键 intermediate objects。
 
 # %% 3. 检查中间结果与限制
 # 输出 diagnostics、observations，并记录 interpretation boundary。

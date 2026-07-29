@@ -27,9 +27,10 @@ explore code 是可执行 lab notebook，不是 production library。按实际�
 3. diagnostics 与 observations；
 4. outputs 与 limitations。
 
-单次逻辑保持 inline，允许少量重复。不要仅为整洁而引入 generic helpers、
-classes、wrappers、configuration layers 或跨文件 abstractions。只有逻辑已经稳定，
-或抽取能隔离实质风险时，才使用短小、具体的 function。
+优先减少函数封装和工程化代码，单次逻辑保持 inline 并允许少量重复。不要仅为整洁而
+引入 generic helpers、classes、wrappers、configuration layers 或跨文件
+abstractions。只有逻辑已经稳定，或抽取能隔离实质风险时，才使用短小、具体的
+function。
 
 每个 executable file 顶部使用简短中文 outline，并设置对应编号中文 section：
 

@@ -285,6 +285,13 @@ Path("../derived/result.txt").write_text(value + "result\\n")
                 load_yaml(root / "project_manifest.yaml")["schema_version"],
                 "0.4.0",
             )
+            agents = (root / "AGENTS.md").read_text(encoding="utf-8")
+            self.assertIn("遵循第一性原理", agents)
+            self.assertIn("减少函数封装和工程化代码", agents)
+            self.assertIn(
+                "You may use superpowers, but do not write any spec or plan.",
+                agents,
+            )
             second = plan_scaffold(root, "adopt")
             self.assertFalse(
                 any(

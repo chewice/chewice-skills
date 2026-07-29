@@ -71,6 +71,7 @@ class SkillContractTests(unittest.TestCase):
     def test_preserved_human_and_code_contracts(self) -> None:
         agents = (SKILL / "assets/base/AGENTS.md.tmpl").read_text(encoding="utf-8")
         questions = (SKILL / "assets/base/QUESTIONS.md").read_text(encoding="utf-8")
+        skill = (SKILL / "SKILL.md").read_text(encoding="utf-8")
         exploration = (SKILL / "references/exploration.md").read_text(encoding="utf-8")
         reporting = (SKILL / "references/reporting.md").read_text(encoding="utf-8")
         script = (SKILL / "research_project_os/lifecycle.py").read_text(
@@ -92,6 +93,7 @@ class SkillContractTests(unittest.TestCase):
             self.assertIn(required_context, agents)
         self.assertIn("## Superpowers", agents)
         self.assertIn("不得绕过", agents)
+        self.assertIn("遵循第一性原理", agents)
         self.assertIn("结束实质工作时通过 `close`", agents)
         self.assertIn("本文件完全由 human 维护", questions)
         for heading in (
@@ -103,6 +105,8 @@ class SkillContractTests(unittest.TestCase):
         ):
             self.assertIn(f"## {heading}", questions)
         self.assertIn("允许少量重复", exploration)
+        for contract in (skill, exploration, agents):
+            self.assertIn("减少函数封装和工程化代码", contract)
         self.assertIn("# %% 1. 读取输入与参数", exploration)
         self.assertIn("不得包含 HTML", agents)
         self.assertIn("markdown-it-py", reporting)
