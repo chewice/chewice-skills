@@ -4,6 +4,7 @@ set -euo pipefail
 # 目标：TODO_STAGE_PURPOSE
 # 输入：TODO_INPUT_CONTRACT
 # 输出：TODO_OUTPUT_CONTRACT
+# 相对路径基准：TODO_REPOSITORY_OR_RUNNER_WORKING_DIRECTORY
 
 analysis_script="${1:?Usage: stage-runner.sh ANALYSIS_SCRIPT INPUT OUTPUT_DIR}"
 input_path="${2:?Usage: stage-runner.sh ANALYSIS_SCRIPT INPUT OUTPUT_DIR}"

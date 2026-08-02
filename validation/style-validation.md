@@ -157,7 +157,7 @@ Skill 的“检查必须保护下一步”规则应能提示删除或补全该�
 
 - 自上而下的线性分析主线。
 - 关键方法参数和科学决定在主线或调用附近可见。
-- 语义分节表达分析阶段，不需要统一装饰语法。
+- 语义决定如何分节；需要 R OUTLINE 导航时使用 title-first section syntax 编码章节。
 - 外部 API 使用准备—调用—检查—保存边界，不推断内部。
 - 高风险转换后使用与下一步相匹配的检查。
 - 输出路径和产物角色显式，输出类型由复查和下游复用需求决定。
@@ -186,6 +186,20 @@ Skill 的“检查必须保护下一步”规则应能提示删除或补全该�
 - 是否把参数集中在文件顶部或放在使用点附近。
 
 这些项目继续作为项目级选择，不设全局硬规则。
+
+相对路径规则不固定某个 working directory：repository 或 runner 仍决定锚点；Skill 只要求
+单一、明确、可迁移，并禁止在新脚本中硬编码机器绝对路径。
+
+## 2026-08-02 增量验证
+
+- 新 R fixture 通过 `parse()`，`languageserver 0.3.18` 返回 3 个干净 section names，层级为
+  `0, 1, 0`；普通提纲 comment 没有被误报为 symbol。
+- 顶部 2 项提纲与 2 个顶层 sections 一一对应。
+- fixture 输入 `inputs/example.tsv` 与输出 `derived/` 共享 repository / runner working
+  directory 锚点，没有机器绝对路径。
+- 独立 forward test 在未获知修复结论的情况下，生成 4 个 `# n. 标题 ----` sections，顶部
+  提纲一一对应，并使用 `inputs/` 与 `derived/` 相对路径；没有增加 helper、config 或环境设置。
+- R、Python、Bash templates 分别通过 parse、AST 与 `bash -n`，机器路径扫描无命中。
 
 ## 验证失败或无法泛化的模式
 

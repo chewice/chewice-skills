@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Perform one narrow file transformation for a bioinformatics analysis."""
+"""Perform one narrow file transformation for a bioinformatics analysis.
+
+Project-internal paths are relative to the repository or runner working directory.
+"""
 
 import argparse
 from pathlib import Path
@@ -9,8 +12,10 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="TODO: describe the single transformation performed by this script."
     )
-    parser.add_argument("input", type=Path, help="Input file")
-    parser.add_argument("output_dir", type=Path, help="Output directory")
+    parser.add_argument("input", type=Path, help="Input file; use a project-relative path")
+    parser.add_argument(
+        "output_dir", type=Path, help="Output directory; use the same path anchor"
+    )
     args = parser.parse_args()
 
     if not args.input.is_file():

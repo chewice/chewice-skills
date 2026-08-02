@@ -3,6 +3,7 @@
 ## 范围
 
 - 验证日期：2026-07-30
+- 路径边界回归：2026-08-02
 - 接口：自然语言入口、JSON request contract、只读预检脚本
 - 脚本：`scripts/validate-iteration-request.py`
 - 目标：验证 Phase 1/2 阶段门、范例发现、排除规则和无写入属性
@@ -19,6 +20,8 @@
 | 未确认的 Phase 2 request | 拒绝请求 | Pass |
 | 请求模板 | 标准 JSON 可解析 | Pass |
 | 预检脚本 | Python 语法有效，无第三方依赖 | Pass |
+| `/home/data/...` 中的合法脚本 | 不把机器祖先目录 `data` 误判为来源内部目录 | Pass |
+| 来源 repository 内部 `data/` 与 `R/` | 显式文件输入被拒绝，目录扫描不发现 | Pass |
 
 ## 阶段门
 
@@ -65,6 +68,10 @@
 - `scripts/03-calculate_metrics.R`
 
 根目录脚手架没有进入 manifest。
+
+2026-08-02 回归进一步把 excluded-directory 检查限定在最近 repository root 内部。
+合法来源即使位于机器级 `/home/data/...` 路径也能通过；fixture repository 内部的
+`data/ignored.R` 与 `R/ignored.R` 仍被拒绝，目录输入只发现 `scripts/example.R`。
 
 ## 无写入验证
 

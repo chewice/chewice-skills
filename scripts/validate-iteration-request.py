@@ -8,6 +8,15 @@ import os
 import sys
 from pathlib import Path
 
+
+def relevant_path_parts(path: Path):
+    """Return path parts inside the nearest repository, not machine ancestors."""
+
+    for parent in (path, *path.parents):
+        if (parent / ".git").exists():
+            return path.relative_to(parent).parts
+    return path.parts[-2:]
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Validate a scripting-style Phase 1 or Phase 2 JSON request."
@@ -105,7 +114,7 @@ def main() -> None:
         example_path = Path(example_value).expanduser().resolve()
         if not example_path.exists():
             raise SystemExit(f"Example path does not exist: {example_path}")
-        if any(part in excluded_dirs for part in example_path.parts):
+        if any(part in excluded_dirs for part in relevant_path_parts(example_path)):
             raise SystemExit(f"Example path is inside an excluded directory: {example_path}")
 
         candidates = []
@@ -177,7 +186,7 @@ def main() -> None:
         readme = Path(readme_value).expanduser().resolve()
         if not readme.is_file() or readme.name != "README.md":
             raise SystemExit(f"Context file must be an existing README.md: {readme}")
-        if any(part in excluded_dirs for part in readme.parts):
+        if any(part in excluded_dirs for part in relevant_path_parts(readme)):
             raise SystemExit(f"README is inside an excluded directory: {readme}")
         validated_readmes.append(str(readme))
 

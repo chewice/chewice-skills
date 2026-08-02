@@ -3,6 +3,7 @@
 # 上游输入：TODO_UPSTREAM_INPUT
 # 主要输出：TODO_EXPECTED_OUTPUTS
 # 关键生物学决策：TODO_BIOLOGICAL_DECISIONS
+# 相对路径基准：TODO_REPOSITORY_OR_RUNNER_WORKING_DIRECTORY
 
 # 1. 加载依赖与指定 API -----------------------------------------------
 
@@ -11,8 +12,8 @@
 
 # 2. 定义输入、输出与主要参数 -----------------------------------------
 
-input_file <- "TODO_INPUT_FILE"
-output_dir <- "TODO_OUTPUT_DIR"
+input_file <- file.path("TODO_RELATIVE_INPUT_DIR", "TODO_INPUT_FILE")
+output_dir <- "TODO_RELATIVE_OUTPUT_DIR"
 
 # 说明当前数据或研究设计为什么需要这个值；不要照搬历史脚本。
 analysis_parameter <- TODO_PARAMETER_VALUE
@@ -69,4 +70,4 @@ saveRDS(analysis_result, object_file)
 
 message("Analysis completed.")
 message("Rows in result table: ", nrow(result_table))
-message("Outputs: ", normalizePath(output_dir))
+message("Outputs: ", output_dir)
