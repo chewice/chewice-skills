@@ -34,11 +34,17 @@ code、paths、commands 和 machine values 保持英文。
 
 ## 逐题推进
 
-先与 human 讨论 current question 的 inputs、method、expected outputs 和 stop
-condition；得到明确批准后才创建 task 或执行计算。一次只允许一个 unresolved
-explore task。scripts、derived data、figures、run receipts、Markdown source 与
-HTML report 全部留在该 task。回答问题并说明限制后停止，不修改问题队列，也不自动
-开始下一题。
+`QUESTIONS.md` 按 Q-ID 保存完整 question blocks，不把 current、queue 与 answered
+拆成三个章节。每个 block 的 `Status` 只使用 `queued`、`current`、`answered`、
+`deferred` 或 `cancelled`，且最多一个 `current`。先与 human 讨论 current block 的
+inputs、method、expected outputs 和 stop condition；得到明确批准后才创建 task 或
+执行计算。一次只允许一个 unresolved explore task。scripts、derived data、figures、
+run receipts、Markdown source 与 HTML report 全部留在该 task。回答问题并说明限制后
+停止，由 human 在原 block 选择固定的 `Review decision`、填写 `Reviewed on`、简短
+`Reviewed outcome` 和 task/archive `Evidence`；模板内的状态—审核选择表作为返回项目时
+的人为控制参考。新建项目的 `QUESTIONS.md` 在正文前提供简短 Filling guide，说明填写
+顺序、每个固定选项的意义与 review 字段用途。Agent 与 CLI 不移动 block、不修改状态，
+也不自动开始下一题。
 
 explore code 应像可执行 lab notebook：优先减少函数封装和工程化代码，单次逻辑保持
 inline，显示 intermediates，允许少量重复，把 reusable abstraction 留到 pipeline。
@@ -63,4 +69,5 @@ push、solve environment 或进行外部同步。
 - 构建或验证 HTML：
   [reporting.md](references/reporting.md)
 
-Release `0.6.0` 使用 manifest schema `0.4.0`，并只读兼容 legacy `0.3.0`。
+Release `0.7.1` 使用 manifest schema `0.4.0`，只读兼容 legacy manifest `0.3.0`
+与 split-layout `QUESTIONS.md`。

@@ -57,19 +57,42 @@ def main() -> None:
 
 输入不变且输出可复现。
 
-## Current question
+## Questions
 
-- ID: `Q-001`
-- Question: 哪些 QC thresholds 稳定？
-- Completion criterion: 生成审核报告。
+### Q-001 — 稳定 QC thresholds
 
-## Question queue
+- Status: `current`
+- Depends on: `none`
+- Review decision: `pending`
+- Reviewed on: `pending`
 
-- Q-002：聚类是否稳定？
+#### Question
 
-## Answered questions
+哪些 QC thresholds 稳定？
 
-- 尚未登记。
+#### Inputs
+
+- `data/input.txt`
+
+#### Method reference
+
+比较候选 thresholds。
+
+#### Expected outputs
+
+- 审核报告。
+
+#### Completion criterion
+
+生成审核报告。
+
+#### Reviewed outcome
+
+`pending`
+
+#### Evidence
+
+`pending`
 """,
             encoding="utf-8",
         )

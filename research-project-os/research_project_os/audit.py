@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 import json
 import os
 from pathlib import Path
@@ -20,11 +21,16 @@ from .core import (
     git_command,
     git_status,
     load_yaml,
-    markdown_field,
     parse_markdown_section,
 )
 from .lifecycle import (
+    QUESTION_REVIEW_MATRIX,
+    QUESTION_STATUSES,
+    REVIEW_DECISIONS,
+    contains_placeholder,
     explore_task_paths,
+    legacy_current_question,
+    parse_question_blocks,
     script_contract_errors,
     unresolved_tasks,
     validate_run_receipts,
@@ -314,23 +320,150 @@ def audit_questions(root: Path) -> tuple[list[str], list[str]]:
     warnings = []
     path = root / "QUESTIONS.md"
     text = path.read_text(encoding="utf-8")
-    for heading in (
-        "Project purpose",
-        "Input constraints",
-        "Output requirements",
-        "FAQ",
-        "Current question",
-        "Question queue",
-        "Answered questions",
-    ):
+    for heading in ("Project purpose", "Input constraints", "Output requirements", "FAQ"):
         if not parse_markdown_section(text, heading):
             errors.append(f"QUESTIONS.md lacks section: {heading}")
-    current = parse_markdown_section(text, "Current question")
-    question_id = markdown_field(current, "ID")
-    if question_id and QUESTION_ID_PATTERN.fullmatch(question_id) is None:
-        errors.append("QUESTIONS.md current ID must match Q-NNN")
-    if "尚未填写" in current:
-        warnings.append("QUESTIONS.md current question is not ready")
+    current_id = None
+    if parse_markdown_section(text, "Questions"):
+        questions = parse_question_blocks(text)
+        if not questions:
+            errors.append("QUESTIONS.md Questions section has no question blocks")
+        invalid = [question["heading"] for question in questions if not question["id"]]
+        if invalid:
+            errors.append(
+                "QUESTIONS.md has invalid question block headings: "
+                + ", ".join(invalid)
+            )
+        ids = [question["id"] for question in questions if question["id"]]
+        duplicates = sorted({question_id for question_id in ids if ids.count(question_id) > 1})
+        if duplicates:
+            errors.append(
+                "QUESTIONS.md has duplicate question IDs: " + ", ".join(duplicates)
+            )
+        current = []
+        for question in questions:
+            status = question["status"]
+            if status not in QUESTION_STATUSES:
+                errors.append(
+                    f"QUESTIONS.md {question['heading']} has invalid Status: "
+                    f"{status or '<missing>'}"
+                )
+                continue
+            review_decision = question["review_decision"]
+            if review_decision not in REVIEW_DECISIONS:
+                errors.append(
+                    f"QUESTIONS.md {question['heading']} has invalid Review decision: "
+                    f"{review_decision or '<missing>'}"
+                )
+            elif review_decision not in QUESTION_REVIEW_MATRIX[status]:
+                allowed = ", ".join(sorted(QUESTION_REVIEW_MATRIX[status]))
+                errors.append(
+                    f"QUESTIONS.md {question['id']} Status {status} does not allow "
+                    f"Review decision {review_decision}; choose: {allowed}"
+                )
+            reviewed_on = question["reviewed_on"].strip().strip("`")
+            if review_decision == "pending":
+                if reviewed_on.lower() != "pending":
+                    errors.append(
+                        f"QUESTIONS.md {question['id']} pending review must use "
+                        "Reviewed on: pending"
+                    )
+            elif review_decision in REVIEW_DECISIONS:
+                try:
+                    date.fromisoformat(reviewed_on)
+                except ValueError:
+                    errors.append(
+                        f"QUESTIONS.md {question['id']} reviewed decision requires "
+                        "Reviewed on: YYYY-MM-DD"
+                    )
+            if contains_placeholder(question["question"]):
+                warnings.append(
+                    f"QUESTIONS.md {question['id']} question text is not ready"
+                )
+            if status == "current":
+                current.append(question)
+                current_not_ready = False
+                for field in (
+                    "question",
+                    "inputs",
+                    "expected_outputs",
+                    "completion_criterion",
+                ):
+                    if contains_placeholder(question[field]):
+                        current_not_ready = True
+                        warnings.append(
+                            f"QUESTIONS.md current {question['id']} {field} is not ready"
+                        )
+                if current_not_ready:
+                    warnings.append("QUESTIONS.md current question is not ready")
+            if status == "answered":
+                for field in ("reviewed_outcome", "evidence"):
+                    value = question[field].strip().strip("`")
+                    if contains_placeholder(value) or value.lower() == "pending":
+                        errors.append(
+                            f"QUESTIONS.md answered {question['id']} must fill {field}"
+                        )
+            if status in {"deferred", "cancelled"} or review_decision == "rework_required":
+                outcome = question["reviewed_outcome"].strip().strip("`")
+                if contains_placeholder(outcome):
+                    errors.append(
+                        f"QUESTIONS.md {question['id']} must explain reviewed_outcome "
+                        f"for Status {status} / Review decision {review_decision}"
+                    )
+        if len(current) > 1:
+            errors.append("QUESTIONS.md must not contain more than one current question")
+        elif not current:
+            warnings.append("QUESTIONS.md has no current question")
+        else:
+            current_id = current[0]["id"]
+        known_ids = set(ids)
+        for question in questions:
+            dependency_text = question["depends_on"].strip().strip("`")
+            if not dependency_text or dependency_text.lower() == "none":
+                continue
+            dependencies = re.findall(r"Q-\d{3}", dependency_text)
+            if not dependencies:
+                errors.append(
+                    f"QUESTIONS.md {question['id']} Depends on must use Q-NNN or none"
+                )
+            missing = sorted(set(dependencies) - known_ids)
+            if missing:
+                errors.append(
+                    f"QUESTIONS.md {question['id']} has unknown dependencies: "
+                    + ", ".join(missing)
+                )
+    else:
+        for heading in ("Current question", "Question queue", "Answered questions"):
+            if not parse_markdown_section(text, heading):
+                errors.append(f"QUESTIONS.md lacks section: {heading}")
+        warnings.append(
+            "QUESTIONS.md uses the legacy split question layout; migrate to "
+            "block-based ## Questions"
+        )
+        try:
+            current = legacy_current_question(text)
+        except ValueError as error:
+            errors.append(str(error))
+        else:
+            current_id = current["id"]
+            if QUESTION_ID_PATTERN.fullmatch(current_id) is None:
+                errors.append("QUESTIONS.md current ID must match Q-NNN")
+            if contains_placeholder(current["question"]) or contains_placeholder(
+                current["completion_criterion"]
+            ):
+                warnings.append("QUESTIONS.md current question is not ready")
+    active_tasks = unresolved_tasks(root)
+    if active_tasks:
+        if current_id is None:
+            errors.append("An unresolved explore task requires one current question")
+        for task_name in active_tasks:
+            task = load_yaml(root / "explore" / task_name / "task.yaml")
+            direction = task.get("direction", {})
+            if isinstance(direction, dict) and direction.get("question_id") != current_id:
+                errors.append(
+                    f"Unresolved task {task_name} does not match current question "
+                    f"{current_id or '<none>'}"
+                )
     return errors, warnings
 
 

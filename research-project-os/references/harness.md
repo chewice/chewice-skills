@@ -9,9 +9,15 @@
 | `CURRENT_HANDOFF.md` | Agent | 当前状态、限制与恢复入口 |
 | `project_manifest.yaml` | CLI | machine paths 与 policy |
 
-Agent 与 CLI 不得修改 `QUESTIONS.md`。每次替换 handoff 时归档旧版本。`start`
-只组装四个控制文件、当前 task metadata 与 README；没有 task-specific 理由时，
-不加载旧报告、旧 receipts 或 archive snapshots。
+Agent 与 CLI 不得修改 `QUESTIONS.md`。其中每个 Q-ID 使用一个固定 block，状态只作为
+block 属性；不得按 current、queue 或 answered 拆分、搬动或复制问题。每次替换
+handoff 时归档旧版本。`start` 只组装四个控制文件、当前 task metadata 与 README；
+没有 task-specific 理由时，不加载旧报告、旧 receipts 或 archive snapshots。
+
+每个 block 用 `Status` 表示问题生命周期，用固定 `Review decision` 表示 human 判断，
+用 `Reviewed outcome` 记录简短理由与限制。CLI 只读校验合法组合与 review 日期，不得
+替 human 选择或填写。新生成的 `QUESTIONS.md` 必须在项目目的之前保留简短 Filling
+guide，解释填写顺序、所有固定选项及 review 字段用途。
 
 先运行 `inspect`，再 dry-run `init` 或 `adopt`。接管已有项目时保留现有 paths、
 data、Git history、README、instructions、questions、handoff、manifest 和 ignore

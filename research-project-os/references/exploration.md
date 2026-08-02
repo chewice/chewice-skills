@@ -3,8 +3,8 @@
 使用以下 artifact sequence：
 
 ```text
-current question → human approval → explore → human review → archive
-→ pipeline → HTML release
+question block `current` → human approval → explore → human review
+→ 同一 block `answered` + compact outcome/evidence → archive → pipeline → HTML release
 ```
 
 task 命名为 `P<order>-<core>-<short-english-summary>`，例如
@@ -12,9 +12,12 @@ task 命名为 `P<order>-<core>-<short-english-summary>`，例如
 task。task 目录集中保存 `task.yaml`、`README.md`、`report.md`、渲染后的
 `report.html`、build manifest、scripts、derived data、figures 与 run receipts。
 
-执行前先讨论 inputs、method、expected outputs 和 stop condition。human approval
-发生在交互中，不要求在 `QUESTIONS.md` 重复登记状态。完成后说明答案、限制和可能的
-下一问题，然后停止；问题路线始终由 human 维护。
+执行前先讨论 current block 的 inputs、method、expected outputs 和 stop condition。
+human approval 发生在交互中，不要求在 `QUESTIONS.md` 重复登记批准。完成后说明答案、
+限制和可能的下一问题，然后停止；由 human 在原 block 将状态改为 `answered`，填写
+固定 `Review decision`、review 日期、简短 `Reviewed outcome` 与 task/archive
+`Evidence`。queued、deferred、cancelled 和 answered blocks 均保留原位，问题路线
+始终由 human 维护。
 
 若 task 因失败 receipt 或方向改变而不再继续，经 human 明确确认后使用
 `explore-cancel --task ... --review-note ...`；保留 task 内容，只由 CLI 将

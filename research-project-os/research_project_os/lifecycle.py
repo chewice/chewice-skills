@@ -45,7 +45,32 @@ from .reporting import (
 )
 
 
-PLACEHOLDERS = ("尚未填写", "TODO", "TBD")
+PLACEHOLDERS = ("尚未填写", "待讨论", "TODO", "TBD", "pending")
+QUESTION_STATUSES = frozenset(
+    {"queued", "current", "answered", "deferred", "cancelled"}
+)
+REVIEW_DECISIONS = frozenset(
+    {
+        "pending",
+        "accepted",
+        "accepted_with_limitations",
+        "inconclusive",
+        "rework_required",
+        "not_applicable",
+    }
+)
+QUESTION_REVIEW_MATRIX = {
+    "queued": frozenset({"pending"}),
+    "current": frozenset({"pending", "rework_required"}),
+    "answered": frozenset(
+        {"accepted", "accepted_with_limitations", "inconclusive"}
+    ),
+    "deferred": frozenset({"pending", "inconclusive", "rework_required"}),
+    "cancelled": frozenset({"not_applicable"}),
+}
+QUESTION_BLOCK_HEADING_PATTERN = re.compile(
+    r"^(?P<id>Q-\d{3})(?:\s+(?:—|-)\s+(?P<title>.+))?$"
+)
 SCRIPT_SUFFIXES = {".py", ".r", ".sh"}
 CHINESE_PATTERN = re.compile(r"[\u3400-\u9fff]")
 REPORTING_LOGIC_PATTERN = re.compile(
@@ -56,25 +81,150 @@ REPORTING_LOGIC_PATTERN = re.compile(
 )
 
 
+def question_subsection(block: str, heading: str) -> str:
+    match = re.search(
+        rf"^#### {re.escape(heading)}\s*$\n(?P<body>.*?)(?=^#### |^### |^## |\Z)",
+        block,
+        flags=re.MULTILINE | re.DOTALL,
+    )
+    return match.group("body").strip() if match else ""
+
+
+def parse_question_blocks(text: str) -> list[dict[str, str]]:
+    section = parse_markdown_section(text, "Questions")
+    if not section:
+        return []
+    headings = list(
+        re.finditer(r"^###\s+(?P<heading>.+?)\s*$", section, flags=re.MULTILINE)
+    )
+    questions = []
+    for index, heading in enumerate(headings):
+        end = headings[index + 1].start() if index + 1 < len(headings) else len(section)
+        body = section[heading.end() : end].strip()
+        rendered_heading = heading.group("heading").strip()
+        parsed = QUESTION_BLOCK_HEADING_PATTERN.fullmatch(rendered_heading)
+        questions.append(
+            {
+                "heading": rendered_heading,
+                "id": parsed.group("id") if parsed else "",
+                "title": (parsed.group("title") or "").strip() if parsed else "",
+                "status": (markdown_field(body, "Status") or "").lower(),
+                "depends_on": markdown_field(body, "Depends on") or "",
+                "review_decision": (
+                    markdown_field(body, "Review decision") or ""
+                ).lower(),
+                "reviewed_on": markdown_field(body, "Reviewed on") or "",
+                "question": question_subsection(body, "Question"),
+                "inputs": question_subsection(body, "Inputs"),
+                "method_reference": question_subsection(body, "Method reference"),
+                "expected_outputs": question_subsection(body, "Expected outputs"),
+                "completion_criterion": question_subsection(
+                    body, "Completion criterion"
+                ),
+                "reviewed_outcome": question_subsection(body, "Reviewed outcome"),
+                "evidence": question_subsection(body, "Evidence"),
+            }
+        )
+    return questions
+
+
+def legacy_markdown_field(section: str, label: str) -> str:
+    lines = section.splitlines()
+    for index, line in enumerate(lines):
+        match = re.match(rf"^- {re.escape(label)}:\s*(.*)$", line)
+        if match is None:
+            continue
+        values = [match.group(1).strip().strip("`")]
+        for continuation in lines[index + 1 :]:
+            if continuation.startswith(("  ", "\t")):
+                values.append(continuation.strip())
+                continue
+            if not continuation.strip() and any(values):
+                continue
+            break
+        return " ".join(value for value in values if value).strip()
+    return ""
+
+
+def legacy_current_question(text: str) -> dict[str, str]:
+    section = parse_markdown_section(text, "Current question")
+    if not section:
+        raise ValueError(
+            "QUESTIONS.md must contain a block-based Questions section or a legacy "
+            "Current question section"
+        )
+    return {
+        "id": legacy_markdown_field(section, "ID"),
+        "question": legacy_markdown_field(section, "Question"),
+        "inputs": "",
+        "method_reference": legacy_markdown_field(section, "Method reference"),
+        "expected_outputs": "",
+        "completion_criterion": legacy_markdown_field(
+            section, "Completion criterion"
+        ),
+        "format": "legacy",
+    }
+
+
+def contains_placeholder(value: str) -> bool:
+    return not value or any(marker.lower() in value.lower() for marker in PLACEHOLDERS)
+
+
 def current_research_question(root: Path) -> dict[str, str]:
     path = root / "QUESTIONS.md"
     if not path.is_file():
         raise ValueError("Missing human-owned QUESTIONS.md")
-    section = parse_markdown_section(
-        path.read_text(encoding="utf-8"),
-        "Current question",
-    )
-    if not section:
-        raise ValueError("QUESTIONS.md must contain a Current question section")
-    question = {
-        "id": markdown_field(section, "ID") or "",
-        "question": markdown_field(section, "Question") or "",
-        "completion_criterion": (markdown_field(section, "Completion criterion") or ""),
-    }
+    text = path.read_text(encoding="utf-8")
+    if parse_markdown_section(text, "Questions"):
+        questions = parse_question_blocks(text)
+        invalid = [question["heading"] for question in questions if not question["id"]]
+        if invalid:
+            raise ValueError(
+                "QUESTIONS.md has invalid question block headings: " + ", ".join(invalid)
+            )
+        current = [question for question in questions if question["status"] == "current"]
+        if len(current) != 1:
+            raise ValueError(
+                "QUESTIONS.md must contain exactly one question block with Status: current"
+            )
+        question = {**current[0], "format": "blocks"}
+        decision = question["review_decision"]
+        if decision not in QUESTION_REVIEW_MATRIX["current"]:
+            allowed = ", ".join(sorted(QUESTION_REVIEW_MATRIX["current"]))
+            raise ValueError(
+                "QUESTIONS.md current Review decision must be one of: " + allowed
+            )
+        reviewed_on = question["reviewed_on"].strip().strip("`")
+        if decision == "pending" and reviewed_on.lower() != "pending":
+            raise ValueError(
+                "QUESTIONS.md pending current question must use Reviewed on: pending"
+            )
+        if decision == "rework_required":
+            try:
+                date.fromisoformat(reviewed_on)
+            except ValueError as error:
+                raise ValueError(
+                    "QUESTIONS.md rework_required current question needs "
+                    "Reviewed on: YYYY-MM-DD"
+                ) from error
+            if contains_placeholder(question["reviewed_outcome"]):
+                raise ValueError(
+                    "QUESTIONS.md rework_required current question must explain "
+                    "Reviewed outcome"
+                )
+        required = (
+            "question",
+            "inputs",
+            "expected_outputs",
+            "completion_criterion",
+        )
+    else:
+        question = legacy_current_question(text)
+        required = ("question", "completion_criterion")
     if QUESTION_ID_PATTERN.fullmatch(question["id"]) is None:
         raise ValueError("QUESTIONS.md current ID must match Q-NNN")
-    for field, value in question.items():
-        if not value or any(marker.lower() in value.lower() for marker in PLACEHOLDERS):
+    for field in required:
+        if contains_placeholder(question[field]):
             raise ValueError(f"QUESTIONS.md current {field} has not been filled in")
     return question
 
@@ -264,15 +414,15 @@ def task_readme_text(task_name: str, question: dict[str, str]) -> str:
 
 ## Inputs
 
-- 尚未填写
+{question.get("inputs") or "- 尚未填写"}
 
 ## Method
 
-- 尚未填写
+{question.get("method_reference") or "- 尚未填写"}
 
 ## Expected outputs
 
-- 尚未填写
+{question.get("expected_outputs") or "- 尚未填写"}
 
 ## Stop condition
 

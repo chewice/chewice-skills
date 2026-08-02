@@ -10,7 +10,7 @@
 - 在回答项目问题、设计分析、修改代码或执行命令前，必须先读取：
   1. `AGENTS.md`：稳定规则与安全边界；
   2. `QUESTIONS.md`：Project purpose、Input constraints、Output requirements、
-     FAQ、Current question 与 Question queue；
+     FAQ，以及按 Q-ID 排列的 question blocks 与状态；
   3. `CURRENT_HANDOFF.md`：当前 objective、已完成结果、outputs、blockers、
      interpretation boundary、next minimum action 与 resume commands；
   4. `project_manifest.yaml`：ownership、paths、Pixi 与 lifecycle 配置。
@@ -23,7 +23,7 @@
 ## Context and ownership
 
 - `QUESTIONS.md` 由 human 维护，Agent 与 CLI 只读；不得代替 human 填写、改写、
-  重排或自动推进问题队列。
+  重排、复制问题 block 或自动推进状态。
 - `CURRENT_HANDOFF.md` 由 Agent 维护。恢复 session 时先按其 next minimum action
   继续；结束实质工作时通过 `close` 归档旧 handoff 并写入新的恢复入口。
 - task/archive/release manifests、run receipts 和 lifecycle log 只由 CLI 写入。
@@ -45,9 +45,13 @@
 
 - 一次只讨论或执行一个 current question；先讨论 inputs、method、outputs 和 stop
   condition，human 明确批准后才创建 task 或运行计算。
+- current question 是 `QUESTIONS.md` 中唯一标记为 `Status: current` 的 block；
+  queued、answered、deferred 与 cancelled 问题保留原位，不按状态搬动。
 - 目录名使用 `P<order>-<core>-<short-english-summary>/`；scripts、derived、
   figures、runs 和 report 全部留在 task 内。
-- 结果完成后停止并报告结论与限制，不自行修改 `QUESTIONS.md` 或开始下一题。
+- 结果完成后停止并报告结论与限制，由 human 在同一 question block 填写简短
+  `Review decision`、`Reviewed on`、`Reviewed outcome` 与 task/archive `Evidence`；
+  Agent 不自行选择、修改或开始下一题。
 - explore code 按实际执行顺序线性组织，显示 intermediate objects、diagnostics、
   observations 和 limitations。优先减少函数封装和工程化代码，允许少量重复，不提前
   创建 generic helpers、classes、wrappers、config layers 或跨文件 abstractions。

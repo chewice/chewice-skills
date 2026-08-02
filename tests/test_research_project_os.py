@@ -98,19 +98,77 @@ class ResearchProjectOSTests(unittest.TestCase):
 
 可复现性。
 
-## Current question
+## Questions
 
-- ID: `{question_id}`
-- Question: {question}
-- Completion criterion: {completion}
+### {question_id} — 稳定 QC thresholds
 
-## Question queue
+- Status: `current`
+- Depends on: `none`
+- Review decision: `pending`
+- Reviewed on: `pending`
 
-- Q-002：哪些 clusters 稳定？
+#### Question
 
-## Answered questions
+{question}
 
-- 尚未登记。
+#### Inputs
+
+- `data/input.txt`
+
+#### Method reference
+
+比较多个候选 thresholds。
+
+#### Expected outputs
+
+- 敏感性分析表。
+
+#### Completion criterion
+
+{completion}
+
+#### Reviewed outcome
+
+`pending`
+
+#### Evidence
+
+`pending`
+
+### Q-002 — 稳定 clusters
+
+- Status: `queued`
+- Depends on: `{question_id}`
+- Review decision: `pending`
+- Reviewed on: `pending`
+
+#### Question
+
+哪些 clusters 稳定？
+
+#### Inputs
+
+待 Q-001 完成后讨论。
+
+#### Method reference
+
+待讨论。
+
+#### Expected outputs
+
+待讨论。
+
+#### Completion criterion
+
+待讨论。
+
+#### Reviewed outcome
+
+`pending`
+
+#### Evidence
+
+`pending`
 """,
             encoding="utf-8",
         )
@@ -292,6 +350,13 @@ Path("../derived/result.txt").write_text(value + "result\\n")
                 "You may use superpowers, but do not write any spec or plan.",
                 agents,
             )
+            questions = (root / "QUESTIONS.md").read_text(encoding="utf-8")
+            self.assertLess(
+                questions.index("## Filling guide"),
+                questions.index("## Project purpose"),
+            )
+            self.assertIn("### Status reference", questions)
+            self.assertIn("### Review decision reference", questions)
             second = plan_scaffold(root, "adopt")
             self.assertFalse(
                 any(
@@ -349,6 +414,150 @@ Path("../derived/result.txt").write_text(value + "result\\n")
                     root, order=1, core="cluster", summary="stable groups"
                 )
             self.assertTrue((root / first["task_path"] / "report.build.yaml").is_file())
+
+    def test_question_blocks_keep_statuses_in_one_registry(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.make_project(root)
+            self.set_question(root)
+            current = current_research_question(root)
+            self.assertEqual(current["id"], "Q-001")
+            self.assertEqual(current["format"], "blocks")
+            self.assertIn("data/input.txt", current["inputs"])
+            result = audit_project(root)
+            self.assertTrue(result["ok"], result["errors"])
+            self.assertFalse(
+                any("legacy split" in warning for warning in result["warnings"])
+            )
+
+    def test_question_blocks_reject_multiple_current_questions(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.make_project(root)
+            self.set_question(root)
+            path = root / "QUESTIONS.md"
+            path.write_text(
+                path.read_text(encoding="utf-8").replace(
+                    "- Status: `queued`", "- Status: `current`"
+                ),
+                encoding="utf-8",
+            )
+            result = audit_project(root)
+            self.assertFalse(result["ok"])
+            self.assertTrue(
+                any("more than one current" in error for error in result["errors"])
+            )
+            with self.assertRaisesRegex(ValueError, "exactly one question block"):
+                current_research_question(root)
+
+    def test_answered_question_requires_compact_outcome_and_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.make_project(root)
+            self.set_question(root)
+            path = root / "QUESTIONS.md"
+            text = path.read_text(encoding="utf-8")
+            text = text.replace("- Status: `current`", "- Status: `answered`", 1)
+            text = text.replace(
+                "- Review decision: `pending`",
+                "- Review decision: `accepted_with_limitations`",
+                1,
+            )
+            text = text.replace(
+                "- Reviewed on: `pending`", "- Reviewed on: `2026-08-02`", 1
+            )
+            path.write_text(text, encoding="utf-8")
+            result = audit_project(root)
+            self.assertFalse(result["ok"])
+            self.assertTrue(
+                any("must fill reviewed_outcome" in error for error in result["errors"])
+            )
+            text = text.replace("`pending`", "人工审核确认 QC 结论。", 1)
+            text = text.replace("`pending`", "`P0-QC-stable-cells@v001`", 1)
+            path.write_text(text, encoding="utf-8")
+            result = audit_project(root)
+            self.assertTrue(result["ok"], result["errors"])
+            self.assertTrue(
+                any("no current question" in warning for warning in result["warnings"])
+            )
+
+    def test_question_review_decision_must_match_status(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.make_project(root)
+            self.set_question(root)
+            path = root / "QUESTIONS.md"
+            path.write_text(
+                path.read_text(encoding="utf-8").replace(
+                    "- Review decision: `pending`",
+                    "- Review decision: `accepted`",
+                    1,
+                ),
+                encoding="utf-8",
+            )
+            result = audit_project(root)
+            self.assertFalse(result["ok"])
+            self.assertTrue(
+                any(
+                    "does not allow Review decision" in error
+                    for error in result["errors"]
+                )
+            )
+            with self.assertRaisesRegex(ValueError, "Review decision"):
+                current_research_question(root)
+
+    def test_legacy_question_layout_remains_read_only_compatible(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.make_project(root)
+            (root / "QUESTIONS.md").write_text(
+                """# Project Questions
+
+## Project purpose
+
+验证兼容性。
+
+## Input constraints
+
+- 输入只读。
+
+## Output requirements
+
+- 输出审核结果。
+
+## FAQ
+
+### 标准是什么？
+
+可复现。
+
+## Current question
+
+- ID: `Q-001`
+- Question:
+  哪些 QC thresholds
+  在 sensitivity analysis 中稳定？
+- Completion criterion:
+  生成审核报告。
+
+## Question queue
+
+- 尚未登记。
+
+## Answered questions
+
+- 尚未登记。
+""",
+                encoding="utf-8",
+            )
+            current = current_research_question(root)
+            self.assertEqual(current["format"], "legacy")
+            self.assertIn("sensitivity analysis", current["question"])
+            result = audit_project(root)
+            self.assertTrue(result["ok"], result["errors"])
+            self.assertTrue(
+                any("legacy split" in warning for warning in result["warnings"])
+            )
 
     def test_cancelled_task_preserves_content_and_unblocks_next_question_task(
         self,
@@ -1098,7 +1307,7 @@ run_receipts: []
             self.assertRegex(events[0]["event_id"], r"^EVT-\d{8}-\d{3}$")
 
     def test_release_constants(self) -> None:
-        self.assertEqual(RELEASE_VERSION, "0.6.0")
+        self.assertEqual(RELEASE_VERSION, "0.7.1")
         self.assertEqual(MANIFEST_SCHEMA_VERSION, "0.4.0")
 
     def test_fresh_project_audit_passes_with_warnings(self) -> None:

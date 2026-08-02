@@ -96,14 +96,43 @@ class SkillContractTests(unittest.TestCase):
         self.assertIn("遵循第一性原理", agents)
         self.assertIn("结束实质工作时通过 `close`", agents)
         self.assertIn("本文件完全由 human 维护", questions)
+        self.assertIn("## Filling guide", questions)
+        self.assertLess(
+            questions.index("## Filling guide"),
+            questions.index("## Project purpose"),
+        )
         for heading in (
             "Project purpose",
             "Input constraints",
             "Output requirements",
             "FAQ",
-            "Current question",
+            "Questions",
         ):
             self.assertIn(f"## {heading}", questions)
+        for status in ("queued", "current", "answered", "deferred", "cancelled"):
+            self.assertIn(f"`{status}`", questions)
+        for meaning in (
+            "问题已登记，但尚未批准启动",
+            "当前唯一正在讨论、执行或按审核意见返工的问题",
+            "human 已审核并决定关闭",
+            "暂时搁置",
+            "明确停止，不再尝试回答",
+        ):
+            self.assertIn(meaning, questions)
+        for decision in (
+            "pending",
+            "accepted",
+            "accepted_with_limitations",
+            "inconclusive",
+            "rework_required",
+            "not_applicable",
+        ):
+            self.assertIn(f"`{decision}`", questions)
+        self.assertIn("- Review decision: `pending`", questions)
+        self.assertIn("- Reviewed on: `pending`", questions)
+        self.assertIn("详细结果留在 task/archive", questions)
+        self.assertIn("#### Reviewed outcome", questions)
+        self.assertIn("#### Evidence", questions)
         self.assertIn("允许少量重复", exploration)
         for contract in (skill, exploration, agents):
             self.assertIn("减少函数封装和工程化代码", contract)
@@ -138,7 +167,7 @@ class SkillContractTests(unittest.TestCase):
 
     def test_workspace_dependency_and_release(self) -> None:
         workspace = tomllib.loads((ROOT / "pixi.toml").read_text(encoding="utf-8"))
-        self.assertEqual(workspace["workspace"]["version"], "0.6.0")
+        self.assertEqual(workspace["workspace"]["version"], "0.7.1")
         self.assertIn("markdown-it-py", workspace["dependencies"])
         self.assertNotIn("pip", workspace["dependencies"])
 
@@ -184,7 +213,7 @@ class SkillContractTests(unittest.TestCase):
             )
             (skill / "scripts/research_project_os.py").write_text("print('test')\n")
             (skill / "research_project_os/__init__.py").write_text(
-                "__version__ = '0.6.0'\n"
+                "__version__ = '0.7.1'\n"
             )
             subprocess.run(["git", "init", "-q", "-b", "main", source], check=True)
             subprocess.run(["git", "-C", str(source), "add", "."], check=True)
