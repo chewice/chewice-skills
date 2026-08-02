@@ -14,9 +14,9 @@
   3. `CURRENT_HANDOFF.md`：当前 objective、已完成结果、outputs、blockers、
      interpretation boundary、next minimum action 与 resume commands；
   4. `project_manifest.yaml`：ownership、paths、Pixi 与 lifecycle 配置。
-- 若存在当前 explore task，再读取该 task 的 `task.yaml`、`README.md` 与当前
-  `report.md`；默认不加载历史 report、旧 receipts、handoff archive 或 archive
-  snapshot 内容。
+- 若存在当前 explore task，再读取该 task 的 `task.yaml` 与 `README.md`；只有明确保留了
+  `report.md` 且当前工作需要编辑 source 时才读取它。默认不加载历史 report、旧 receipts、
+  handoff archive 或 archive snapshot 内容。
 - 开始工作前先确认 current question、handoff 状态、I/O 限制和 stop condition。
   若上下文缺失、互相冲突或 current question 未明确，停止执行并请 human 决定。
 

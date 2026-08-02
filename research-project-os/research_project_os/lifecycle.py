@@ -31,6 +31,7 @@ from .core import (
     relative_to_root,
     safe_project_path,
     sha256_file,
+    sha256_text,
     stable_json,
     utc_now,
     utc_text,
@@ -39,7 +40,7 @@ from .core import (
 from .reporting import (
     REPORT_SCHEMA_VERSION,
     ReportKind,
-    build_report,
+    build_report_text,
     parse_report_source,
     validate_report,
 )
@@ -403,6 +404,29 @@ def report_source_text(task_name: str, question: dict[str, str]) -> str:
 """
 
 
+def report_build_metadata(root: Path, output: Path) -> dict[str, Any]:
+    manifest_path = output.with_suffix(".build.yaml")
+    manifest = load_yaml(manifest_path)
+    report = manifest.get("report")
+    if not isinstance(report, dict):
+        raise ValueError(f"Malformed report build manifest: {manifest_path}")
+    metadata = report.get("source_metadata")
+    if isinstance(metadata, dict):
+        return metadata
+    source_value = report.get("source")
+    if not isinstance(source_value, str):
+        raise ValueError(f"Report build manifest lacks source metadata: {manifest_path}")
+    source = safe_project_path(
+        root,
+        source_value,
+        label="report source",
+        must_exist=True,
+        reject_symlink=True,
+    )
+    metadata, _ = parse_report_source(source)
+    return metadata
+
+
 def task_readme_text(task_name: str, question: dict[str, str]) -> str:
     return f"""# {task_name}
 
@@ -567,10 +591,10 @@ def apply_explore_task(plan: dict[str, Any]) -> dict[str, Any]:
         (root / relative).mkdir(parents=True, exist_ok=False)
     atomic_write(task_root / "task.yaml", plan["task_yaml"])
     atomic_write(task_root / "README.md", plan["readme"])
-    atomic_write(task_root / "report.md", plan["report_source"])
     atomic_write(task_root / "scripts/analysis.py", plan["analysis_script"])
-    build = build_report(
-        source=task_root / "report.md",
+    build = build_report_text(
+        source_text=plan["report_source"],
+        source_base=task_root,
         output=task_root / "report.html",
         project_root=root,
         kind=ReportKind.EXPLORE,
@@ -1073,7 +1097,7 @@ def plan_archive_promotion(
     )
     errors.extend(report_check["errors"])
     if not errors:
-        metadata, _ = parse_report_source(task_root / "report.md")
+        metadata = report_build_metadata(root, task_root / "report.html")
         if metadata.get("task") != task_name:
             errors.append("Report task does not match the explore task")
         declared = set(str(value) for value in metadata.get("run_receipts", []))
@@ -1275,9 +1299,6 @@ def apply_pipeline_creation(plan: dict[str, Any]) -> dict[str, Any]:
     for relative in plan["directories"]:
         (root / relative).mkdir(parents=True, exist_ok=True)
     atomic_write(path, plan["pipeline_yaml"])
-    report_source = root / "pipeline/report.md"
-    if not report_source.exists():
-        atomic_write(report_source, plan["report_source"])
     event = append_lifecycle_event(
         root,
         action="pipeline-create",
@@ -1287,7 +1308,7 @@ def apply_pipeline_creation(plan: dict[str, Any]) -> dict[str, Any]:
     return {
         "written": True,
         "pipeline_path": "pipeline/pipeline.yaml",
-        "report_source": "pipeline/report.md",
+        "report_template_sha256": sha256_text(plan["report_source"]),
         "event": event,
     }
 
@@ -1414,15 +1435,7 @@ def plan_pipeline_release(
         if source.get("manifest_sha256") != verification["manifest_sha256"]:
             raise ValueError(f"Pipeline source manifest changed: {selector}")
         source_selectors.append(str(selector))
-    build_manifest = load_yaml(report_path.with_suffix(".build.yaml"))
-    report_source = safe_project_path(
-        root,
-        str(build_manifest.get("report", {}).get("source", "")),
-        label="release report source",
-        must_exist=True,
-        reject_symlink=True,
-    )
-    report_metadata, _ = parse_report_source(report_source)
+    report_metadata = report_build_metadata(root, report_path)
     if report_metadata.get("snapshots") != source_selectors:
         raise ValueError("Release report snapshots do not match pipeline sources")
     pipeline_records = file_records(root / "pipeline", exclude={"release.yaml"})

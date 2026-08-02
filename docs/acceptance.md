@@ -17,5 +17,6 @@
 - archive 不可变且可独立验证；pipeline runtime 不依赖 explore/archive。
 - analysis scripts 优先减少函数封装和工程化代码，保持线性、可读、中文 outline，
   不含 HTML/CSS/rendering。
-- Markdown API 与 CLI 生成确定性中文 HTML，检查章节、资源、链接和 build manifest。
+- inline Markdown API 与 CLI 默认只生成确定性中文 HTML 和 build manifest；显式 source
+  模式才保留 Markdown，并继续检查章节、资源与链接。
 - lint、unit、smoke、Skill validator、installation symlink 与 forward tests 全部通过。

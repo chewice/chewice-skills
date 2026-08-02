@@ -39,7 +39,8 @@ code、paths、commands 和 machine values 保持英文。
 `deferred` 或 `cancelled`，且最多一个 `current`。先与 human 讨论 current block 的
 inputs、method、expected outputs 和 stop condition；得到明确批准后才创建 task 或
 执行计算。一次只允许一个 unresolved explore task。scripts、derived data、figures、
-run receipts、Markdown source 与 HTML report 全部留在该 task。回答问题并说明限制后
+run receipts 与 HTML report 全部留在该 task。默认只交付 HTML；只有 human 明确要求
+Markdown，或确需保留可编辑 source 时，才额外保存 `report.md`。回答问题并说明限制后
 停止，由 human 在原 block 选择固定的 `Review decision`、填写 `Reviewed on`、简短
 `Reviewed outcome` 和 task/archive `Evidence`；模板内的状态—审核选择表作为返回项目时
 的人为控制参考。新建项目的 `QUESTIONS.md` 在正文前提供简短 Filling guide，说明填写

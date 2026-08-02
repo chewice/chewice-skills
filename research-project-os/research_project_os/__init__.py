@@ -11,6 +11,7 @@ from .reporting import (
     ReportBuild,
     ReportKind,
     build_report,
+    build_report_text,
     validate_report,
 )
 
@@ -23,5 +24,6 @@ __all__ = [
     "ReportBuild",
     "ReportKind",
     "build_report",
+    "build_report_text",
     "validate_report",
 ]

@@ -4,7 +4,7 @@ Research Project OS `0.7.1` 使用一个 Skill 入口和三个按需层：
 
 - `harness`：scaffold、ownership、context、Pixi、safety 与 audit。
 - `exploration`：逐题 explore、audited run、archive 与 pipeline。
-- `reporting`：独立 Markdown → HTML API。
+- `reporting`：独立 inline/persistent Markdown → HTML API，默认只交付 HTML。
 
 CLI entrypoint 只负责参数与输出；实现位于 `research_project_os/` package。项目长期
 上下文收敛为 `AGENTS.md`、`QUESTIONS.md`、`CURRENT_HANDOFF.md` 和

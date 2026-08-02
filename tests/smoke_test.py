@@ -14,12 +14,13 @@ ROOT = Path(__file__).resolve().parents[1]
 CLI = ROOT / "research-project-os/scripts/research_project_os.py"
 
 
-def run(*arguments: str) -> str:
+def run(*arguments: str, stdin_text: str | None = None) -> str:
     result = subprocess.run(
         [sys.executable, str(CLI), *arguments],
         check=False,
         capture_output=True,
         text=True,
+        input=stdin_text,
     )
     if result.returncode != 0:
         raise SystemExit(
@@ -171,8 +172,7 @@ Path("../derived/result.txt").write_text(value + "result\\n")
 """,
             encoding="utf-8",
         )
-        (task_root / "report.md").write_text(
-            f"""---
+        report_text = f"""---
 schema_version: "1.0.0"
 kind: explore
 language: zh-CN
@@ -193,22 +193,22 @@ run_receipts:
 可供审核。
 ## 可复现信息
 Receipt 已记录。
-""",
-            encoding="utf-8",
-        )
+"""
         report_args = (
             "report-build",
             "--project",
             str(project),
-            "--source",
-            f"explore/{task_name}/report.md",
+            "--stdin",
+            "--source-base",
+            f"explore/{task_name}",
             "--output",
             f"explore/{task_name}/report.html",
             "--kind",
             "explore",
         )
-        run(*report_args)
-        run(*report_args, "--apply")
+        run(*report_args, stdin_text=report_text)
+        run(*report_args, "--apply", stdin_text=report_text)
+        assert not (task_root / "report.md").exists()
         promote_args = (
             "archive-promote",
             "--project",
@@ -253,8 +253,7 @@ Receipt 已记录。
             "# 提纲\n# 1. 结果\n\n# %% 1. 结果\nresult = 'ok'\n",
             encoding="utf-8",
         )
-        (project / "pipeline/report.md").write_text(
-            f"""---
+        release_report_text = f"""---
 schema_version: "1.0.0"
 kind: release
 language: zh-CN
@@ -275,22 +274,22 @@ run_receipts: []
 可以发布。
 ## 可复现信息
 来源已记录。
-""",
-            encoding="utf-8",
-        )
+"""
         final_report = (
             "report-build",
             "--project",
             str(project),
-            "--source",
-            "pipeline/report.md",
+            "--stdin",
+            "--source-base",
+            "reports",
             "--output",
             "reports/final.html",
             "--kind",
             "release",
         )
-        run(*final_report)
-        run(*final_report, "--apply")
+        run(*final_report, stdin_text=release_report_text)
+        run(*final_report, "--apply", stdin_text=release_report_text)
+        assert not (project / "pipeline/report.md").exists()
         release = (
             "pipeline-release",
             "--project",

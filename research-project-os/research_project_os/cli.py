@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+import sys
 from typing import Any
 
 from .audit import audit_project, inspect_project
@@ -14,6 +15,7 @@ from .core import (
     project_root,
     relative_to_root,
     safe_project_path,
+    sha256_text,
 )
 from .handoff import apply_close, plan_close, start_context
 from .lifecycle import (
@@ -34,6 +36,7 @@ from .lifecycle import (
 from .reporting import (
     ReportKind,
     build_report,
+    build_report_text,
     reject_immutable_report_output,
 )
 from .scaffold import (
@@ -103,7 +106,10 @@ def parse_args(arguments: list[str] | None = None) -> argparse.Namespace:
     report = commands.add_parser("report-build")
     add_project(report)
     add_apply_json(report)
-    report.add_argument("--source", required=True)
+    report_source = report.add_mutually_exclusive_group(required=True)
+    report_source.add_argument("--source")
+    report_source.add_argument("--stdin", action="store_true")
+    report.add_argument("--source-base")
     report.add_argument("--output", required=True)
     report.add_argument(
         "--kind", choices=[value.value for value in ReportKind], required=True
@@ -264,31 +270,69 @@ def main(arguments: list[str] | None = None) -> None:
                 raise SystemExit(1)
             return
         if args.command == "report-build":
-            source = safe_project_path(
-                root,
-                args.source,
-                label="report source",
-                must_exist=True,
-            )
             output = safe_project_path(root, args.output, label="report output")
             reject_immutable_report_output(root, output)
+            source = None
+            source_text = None
+            source_base = None
+            if args.stdin:
+                source_text = sys.stdin.read()
+                if not source_text.strip():
+                    raise ValueError("--stdin requires non-empty Markdown input")
+                source_base = safe_project_path(
+                    root,
+                    args.source_base or output.parent,
+                    label="report source base",
+                    must_exist=True,
+                    allow_root=True,
+                    allow_absolute=True,
+                    reject_symlink=True,
+                )
+            else:
+                if args.source_base is not None:
+                    raise ValueError("--source-base is only valid with --stdin")
+                source = safe_project_path(
+                    root,
+                    args.source,
+                    label="report source",
+                    must_exist=True,
+                )
             plan = {
                 "mode": "report-build",
                 "project": str(root),
-                "source": relative_to_root(root, source),
+                "source_mode": "inline" if args.stdin else "markdown",
+                "source": relative_to_root(root, source) if source else None,
+                "source_base": (
+                    relative_to_root(root, source_base) if source_base else None
+                ),
+                "source_sha256": (
+                    sha256_text(source_text) if source_text is not None else None
+                ),
                 "output": relative_to_root(root, output),
                 "kind": args.kind,
                 "asset_mode": args.asset_mode,
             }
             applied = None
             if args.apply:
-                build = build_report(
-                    source=source,
-                    output=output,
-                    project_root=root,
-                    kind=ReportKind(args.kind),
-                    asset_mode=args.asset_mode,
-                )
+                if source_text is not None and source_base is not None:
+                    build = build_report_text(
+                        source_text=source_text,
+                        source_base=source_base,
+                        output=output,
+                        project_root=root,
+                        kind=ReportKind(args.kind),
+                        asset_mode=args.asset_mode,
+                    )
+                elif source is not None:
+                    build = build_report(
+                        source=source,
+                        output=output,
+                        project_root=root,
+                        kind=ReportKind(args.kind),
+                        asset_mode=args.asset_mode,
+                    )
+                else:
+                    raise ValueError("Report source is required")
                 event = append_lifecycle_event(
                     root,
                     action="report-build",

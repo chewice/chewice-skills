@@ -12,6 +12,7 @@ import re
 from typing import Any
 from urllib.parse import unquote, urlparse
 import base64
+import binascii
 
 from markdown_it import MarkdownIt
 
@@ -42,7 +43,8 @@ class ReportKind(str, Enum):
 
 @dataclass(frozen=True)
 class ReportBuild:
-    source: str
+    source: str | None
+    source_mode: str
     output: str
     manifest: str
     source_sha256: str
@@ -108,15 +110,22 @@ ATTRIBUTE_PATTERN = re.compile(
     r"(?P<quote>[\"'])(?P<url>.*?)(?P=quote)",
     flags=re.IGNORECASE,
 )
+INLINE_SOURCE_PATTERN = re.compile(
+    r'<template id="rpos-markdown-source" data-encoding="base64">'
+    r"(?P<payload>[A-Za-z0-9+/=]+)</template>"
+)
 
 
-def parse_report_source(source: Path) -> tuple[dict[str, Any], str]:
-    text = source.read_text(encoding="utf-8")
+def parse_report_text(text: str, source: Path) -> tuple[dict[str, Any], str]:
     match = re.match(r"^---\s*\n(?P<meta>.*?)\n---\s*\n(?P<body>.*)\Z", text, re.S)
     if match is None:
         raise ValueError(f"Report source lacks YAML frontmatter: {source}")
     metadata = load_yaml_text(match.group("meta"), source)
     return metadata, match.group("body")
+
+
+def parse_report_source(source: Path) -> tuple[dict[str, Any], str]:
+    return parse_report_text(source.read_text(encoding="utf-8"), source)
 
 
 def load_yaml_text(text: str, source: Path) -> dict[str, Any]:
@@ -187,7 +196,7 @@ def validate_source_contract(
 def resolve_asset(
     *,
     project_root: Path,
-    source: Path,
+    source_base: Path,
     output: Path,
     raw_url: str,
     embed: bool,
@@ -209,7 +218,7 @@ def resolve_asset(
     try:
         asset = safe_project_path(
             project_root,
-            source.parent / candidate,
+            source_base / candidate,
             label="report resource",
             must_exist=True,
             allow_absolute=True,
@@ -245,7 +254,7 @@ def rewrite_and_validate_assets(
     html_body: str,
     *,
     project_root: Path,
-    source: Path,
+    source_base: Path,
     output: Path,
     asset_mode: str,
 ) -> tuple[str, tuple[dict[str, Any], ...]]:
@@ -259,7 +268,7 @@ def rewrite_and_validate_assets(
         embed = tag == "img" and asset_mode == "embed"
         rewritten, record = resolve_asset(
             project_root=project_root,
-            source=source,
+            source_base=source_base,
             output=output,
             raw_url=raw_url,
             embed=embed,
@@ -274,12 +283,25 @@ def rewrite_and_validate_assets(
     return rewritten, tuple(records[path] for path in sorted(records))
 
 
-def render_document(title: str, metadata: dict[str, Any], body: str) -> str:
+def render_document(
+    title: str,
+    metadata: dict[str, Any],
+    body: str,
+    *,
+    inline_source: str | None = None,
+) -> str:
     meta_line = (
         f"类型：{escape(str(metadata['kind']))} · "
         f"语言：{escape(str(metadata['language']))} · "
         f"Schema：{escape(str(metadata['schema_version']))}"
     )
+    source_template = ""
+    if inline_source is not None:
+        payload = base64.b64encode(inline_source.encode("utf-8")).decode("ascii")
+        source_template = (
+            '<template id="rpos-markdown-source" data-encoding="base64">'
+            f"{payload}</template>\n"
+        )
     return (
         "<!doctype html>\n"
         '<html lang="zh-CN">\n'
@@ -293,6 +315,7 @@ def render_document(title: str, metadata: dict[str, Any], body: str) -> str:
         "<main>\n"
         f'<p class="report-meta">{meta_line}</p>\n'
         f"{body}\n"
+        f"{source_template}"
         "</main>\n"
         "</body>\n"
         "</html>\n"
@@ -326,6 +349,121 @@ def reject_immutable_report_output(project_root: Path, output: Path) -> None:
         )
 
 
+def _build_report_text(
+    *,
+    source_text: str,
+    source_label: Path,
+    source_base: Path,
+    source: Path | None,
+    output: Path,
+    project_root: Path,
+    kind: ReportKind,
+    asset_mode: str = "embed",
+) -> ReportBuild:
+    root = project_root.resolve()
+    source_base = safe_project_path(
+        root,
+        source_base,
+        label="report source base",
+        must_exist=True,
+        allow_root=True,
+        allow_absolute=True,
+        reject_symlink=True,
+    )
+    output = safe_project_path(
+        root,
+        output,
+        label="report output",
+        allow_absolute=True,
+        reject_symlink=True,
+    )
+    if output.suffix.lower() != ".html":
+        raise ValueError("Report output must be .html")
+    reject_immutable_report_output(root, output)
+    metadata, markdown = parse_report_text(source_text, source_label)
+    errors = validate_source_contract(
+        metadata,
+        markdown,
+        kind,
+        require_complete=False,
+    )
+    if errors:
+        raise ValueError("; ".join(errors))
+    forbidden_url = FORBIDDEN_URL_PATTERN.search(markdown)
+    if forbidden_url is not None:
+        raise ValueError(f"Forbidden report URL scheme: {forbidden_url.group(0)}")
+    renderer = MarkdownIt("commonmark", {"html": False}).enable("table")
+    body = renderer.render(markdown)
+    body, assets = rewrite_and_validate_assets(
+        body,
+        project_root=root,
+        source_base=source_base,
+        output=output,
+        asset_mode=asset_mode,
+    )
+    document = render_document(
+        str(metadata["title"]),
+        metadata,
+        body,
+        inline_source=source_text if source is None else None,
+    )
+    manifest_path = output.with_suffix(".build.yaml")
+    source_mode = "markdown" if source is not None else "inline"
+    source_value = relative_to_root(root, source) if source is not None else None
+    heading_list = re.findall(r"^##\s+(.+?)\s*$", markdown, flags=re.MULTILINE)
+    completeness_errors = validate_source_contract(
+        metadata,
+        markdown,
+        kind,
+        require_complete=True,
+    )
+    build_manifest = {
+        "schema_version": REPORT_SCHEMA_VERSION,
+        "renderer": {
+            "name": "research-project-os",
+            "version": RELEASE_VERSION,
+            "markdown_engine": "markdown-it-py",
+            "markdown_engine_version": MARKDOWN_IT_VERSION,
+            "raw_html": False,
+            "asset_mode": asset_mode,
+        },
+        "report": {
+            "kind": kind.value,
+            "language": "zh-CN",
+            "source_mode": source_mode,
+            "source": source_value,
+            "source_base": relative_to_root(root, source_base),
+            "output": relative_to_root(root, output),
+            "source_sha256": sha256_text(source_text),
+            "output_sha256": sha256_text(document),
+            "run_receipts": metadata.get("run_receipts", []),
+            "source_metadata": metadata,
+            "source_contract": {
+                "headings": heading_list,
+                "complete": not completeness_errors,
+                "completeness_errors": completeness_errors,
+            },
+        },
+        "assets": list(assets),
+        "provenance": {
+            "git_commit": git_commit(root),
+            "environment": environment_hashes(root),
+        },
+    }
+    atomic_write(output, document)
+    atomic_write(manifest_path, yaml_text(build_manifest))
+    return ReportBuild(
+        source=source_value,
+        source_mode=source_mode,
+        output=relative_to_root(root, output),
+        manifest=relative_to_root(root, manifest_path),
+        source_sha256=build_manifest["report"]["source_sha256"],
+        output_sha256=build_manifest["report"]["output_sha256"],
+        assets=assets,
+        kind=kind.value,
+    )
+
+
 def build_report(
     *,
     source: Path,
@@ -343,74 +481,40 @@ def build_report(
         allow_absolute=True,
         reject_symlink=True,
     )
-    output = safe_project_path(
-        root,
-        output,
-        label="report output",
-        allow_absolute=True,
-        reject_symlink=True,
-    )
-    if source.suffix.lower() != ".md" or output.suffix.lower() != ".html":
-        raise ValueError("Report source must be .md and output must be .html")
-    reject_immutable_report_output(root, output)
-    metadata, markdown = parse_report_source(source)
-    errors = validate_source_contract(
-        metadata,
-        markdown,
-        kind,
-        require_complete=False,
-    )
-    if errors:
-        raise ValueError("; ".join(errors))
-    forbidden_url = FORBIDDEN_URL_PATTERN.search(markdown)
-    if forbidden_url is not None:
-        raise ValueError(f"Forbidden report URL scheme: {forbidden_url.group(0)}")
-    renderer = MarkdownIt("commonmark", {"html": False}).enable("table")
-    body = renderer.render(markdown)
-    body, assets = rewrite_and_validate_assets(
-        body,
-        project_root=root,
+    if source.suffix.lower() != ".md":
+        raise ValueError("Report source must be .md")
+    return _build_report_text(
+        source_text=source.read_text(encoding="utf-8"),
+        source_label=source,
+        source_base=source.parent,
         source=source,
         output=output,
+        project_root=root,
+        kind=kind,
         asset_mode=asset_mode,
     )
-    document = render_document(str(metadata["title"]), metadata, body)
-    manifest_path = output.with_suffix(".build.yaml")
-    build_manifest = {
-        "schema_version": REPORT_SCHEMA_VERSION,
-        "renderer": {
-            "name": "research-project-os",
-            "version": RELEASE_VERSION,
-            "markdown_engine": "markdown-it-py",
-            "markdown_engine_version": MARKDOWN_IT_VERSION,
-            "raw_html": False,
-            "asset_mode": asset_mode,
-        },
-        "report": {
-            "kind": kind.value,
-            "language": "zh-CN",
-            "source": relative_to_root(root, source),
-            "output": relative_to_root(root, output),
-            "source_sha256": sha256_file(source),
-            "output_sha256": sha256_text(document),
-            "run_receipts": metadata.get("run_receipts", []),
-        },
-        "assets": list(assets),
-        "provenance": {
-            "git_commit": git_commit(root),
-            "environment": environment_hashes(root),
-        },
-    }
-    atomic_write(output, document)
-    atomic_write(manifest_path, yaml_text(build_manifest))
-    return ReportBuild(
-        source=relative_to_root(root, source),
-        output=relative_to_root(root, output),
-        manifest=relative_to_root(root, manifest_path),
-        source_sha256=build_manifest["report"]["source_sha256"],
-        output_sha256=build_manifest["report"]["output_sha256"],
-        assets=assets,
-        kind=kind.value,
+
+
+def build_report_text(
+    *,
+    source_text: str,
+    source_base: Path,
+    output: Path,
+    project_root: Path,
+    kind: ReportKind,
+    asset_mode: str = "embed",
+) -> ReportBuild:
+    if not source_text.strip():
+        raise ValueError("Inline report source must not be empty")
+    return _build_report_text(
+        source_text=source_text,
+        source_label=source_base / "<inline-report.md>",
+        source_base=source_base,
+        source=None,
+        output=output,
+        project_root=project_root,
+        kind=kind,
+        asset_mode=asset_mode,
     )
 
 
@@ -452,11 +556,15 @@ def validate_report(
             report = {}
         if report.get("output_sha256") != sha256_file(output):
             errors.append(f"Report HTML hash mismatch: {output}")
+        html = output.read_text(encoding="utf-8")
+        resolved_kind = kind or ReportKind(str(report.get("kind")))
+        source_mode = report.get("source_mode", "markdown")
         source_value = report.get("source")
-        if not isinstance(source_value, str):
-            errors.append(f"Report build manifest lacks source path: {manifest_path}")
-            source = None
-        else:
+        source_metadata = report.get("source_metadata")
+        source_contract = report.get("source_contract")
+        source = None
+        body = None
+        if source_mode == "markdown" and isinstance(source_value, str):
             source = safe_project_path(
                 root,
                 source_value,
@@ -466,20 +574,71 @@ def validate_report(
             )
             if report.get("source_sha256") != sha256_file(source):
                 errors.append(f"Report source hash mismatch: {source}")
-        resolved_kind = kind or ReportKind(str(report.get("kind")))
+            source_metadata, body = parse_report_source(source)
+        elif source_mode == "inline" and source_value is None:
+            if not isinstance(report.get("source_sha256"), str):
+                errors.append(f"Inline report lacks source hash: {manifest_path}")
+            if not isinstance(source_metadata, dict):
+                errors.append(f"Inline report lacks source metadata: {manifest_path}")
+            if not isinstance(source_contract, dict):
+                errors.append(f"Inline report lacks source contract: {manifest_path}")
+            else:
+                headings = source_contract.get("headings")
+                if not isinstance(headings, list) or not all(
+                    isinstance(value, str) for value in headings
+                ):
+                    errors.append(
+                        f"Inline report has malformed heading contract: {manifest_path}"
+                    )
+            match = INLINE_SOURCE_PATTERN.search(html)
+            if match is None:
+                errors.append(f"Inline report lacks embedded source: {output}")
+            else:
+                decoded = base64.b64decode(
+                    match.group("payload"), validate=True
+                ).decode("utf-8")
+                if report.get("source_sha256") != sha256_text(decoded):
+                    errors.append(f"Inline report source hash mismatch: {output}")
+                embedded_metadata, body = parse_report_text(
+                    decoded,
+                    output.with_suffix(".embedded.md"),
+                )
+                if embedded_metadata != source_metadata:
+                    errors.append(f"Inline report source metadata mismatch: {output}")
+                source_metadata = embedded_metadata
+                embedded_headings = re.findall(
+                    r"^##\s+(.+?)\s*$", body, flags=re.MULTILINE
+                )
+                if isinstance(source_contract, dict):
+                    if source_contract.get("headings") != embedded_headings:
+                        errors.append(f"Inline report heading contract mismatch: {output}")
+                    completeness_errors = validate_source_contract(
+                        source_metadata,
+                        body,
+                        resolved_kind,
+                        require_complete=True,
+                    )
+                    if source_contract.get("complete") != (not completeness_errors):
+                        errors.append(
+                            f"Inline report completeness contract mismatch: {output}"
+                        )
+                    if source_contract.get("completeness_errors") != completeness_errors:
+                        errors.append(
+                            f"Inline report completeness errors mismatch: {output}"
+                        )
+        else:
+            errors.append(f"Report build manifest has invalid source mode: {manifest_path}")
         if report.get("kind") != resolved_kind.value:
             errors.append(f"Report kind mismatch: {output}")
-        if source is not None:
-            metadata, body = parse_report_source(source)
+        if isinstance(source_metadata, dict) and body is not None:
             errors.extend(
                 validate_source_contract(
-                    metadata,
+                    source_metadata,
                     body,
                     resolved_kind,
                     require_complete=require_complete,
                 )
             )
-        html = output.read_text(encoding="utf-8")
         if '<html lang="zh-CN">' not in html or '<meta charset="utf-8">' not in html:
             errors.append(f"HTML language or charset contract failed: {output}")
         for asset in manifest.get("assets", []):
@@ -495,7 +654,7 @@ def validate_report(
             )
             if asset.get("sha256") != sha256_file(path):
                 errors.append(f"Report asset hash mismatch: {path}")
-    except (OSError, ValueError) as error:
+    except (OSError, ValueError, binascii.Error, UnicodeDecodeError) as error:
         errors.append(str(error))
     return {
         "ok": not errors,

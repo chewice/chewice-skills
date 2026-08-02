@@ -9,8 +9,9 @@ question block `current` → human approval → explore → human review
 
 task 命名为 `P<order>-<core>-<short-english-summary>`，例如
 `P0-QC-low-quality-cells-removed`。最多保留一个未 archive、未 cancelled 的
-task。task 目录集中保存 `task.yaml`、`README.md`、`report.md`、渲染后的
-`report.html`、build manifest、scripts、derived data、figures 与 run receipts。
+task。task 目录集中保存 `task.yaml`、`README.md`、`report.html`、build manifest、
+scripts、derived data、figures 与 run receipts。默认不生成 `report.md`；只有 human
+明确要求 Markdown，或确需保留可编辑 source 时，才把它作为额外产物保存。
 
 执行前先讨论 current block 的 inputs、method、expected outputs 和 stop condition。
 human approval 发生在交互中，不要求在 `QUESTIONS.md` 重复登记批准。完成后说明答案、
@@ -43,8 +44,9 @@ R:      # ---- 1. 读取输入与参数 ----
 Shell:  # 1. 读取输入与参数
 ```
 
-analysis scripts 只写 Markdown、tables 与 figures 所需的计算结果，不包含 HTML、
-CSS、templates 或 rendering；计算完成后单独调用 `report-build`。
+analysis scripts 只写 report、tables 与 figures 所需的计算结果，不包含 HTML、CSS、
+templates 或 rendering；计算完成后单独调用 `report-build`。默认以内联 Markdown source
+构建 HTML，不把 source 另存为交付文件。
 
 只有 README 与 report 完整、全部 receipts 成功、声明输入未改变、outputs 仍匹配
 hashes 且 human review 已记录时，才能创建 append-only `vNNN` archive snapshot。

@@ -157,7 +157,13 @@ class SkillContractTests(unittest.TestCase):
         self.assertTrue((package / "handoff.py").is_file())
         self.assertTrue((package / "audit.py").is_file())
         init = (package / "__init__.py").read_text(encoding="utf-8")
-        for symbol in ("ReportBuild", "ReportKind", "build_report", "validate_report"):
+        for symbol in (
+            "ReportBuild",
+            "ReportKind",
+            "build_report",
+            "build_report_text",
+            "validate_report",
+        ):
             self.assertIn(symbol, init)
         entrypoint = (SKILL / "scripts/research_project_os.py").read_text(
             encoding="utf-8"

@@ -19,6 +19,7 @@ from research_project_os import (  # noqa: E402
     RELEASE_VERSION,
     ReportKind,
     build_report,
+    build_report_text,
     validate_report,
 )
 from research_project_os.audit import (  # noqa: E402
@@ -55,7 +56,6 @@ from research_project_os.lifecycle import (  # noqa: E402
     verify_archive_snapshot,
     verify_pipeline_release,
 )
-from research_project_os.reporting import parse_report_source  # noqa: E402
 from research_project_os.scaffold import (  # noqa: E402
     apply_scaffold,
     plan_scaffold,
@@ -219,11 +219,10 @@ class ResearchProjectOSTests(unittest.TestCase):
         )
 
     @staticmethod
-    def complete_explore_report(task_root: Path, receipt: str) -> None:
-        source = task_root / "report.md"
-        metadata, _ = parse_report_source(source)
-        source.write_text(
-            f"""---
+    def complete_explore_report(task_root: Path, receipt: str) -> str:
+        manifest = load_yaml(task_root / "report.build.yaml")
+        metadata = manifest["report"]["source_metadata"]
+        return f"""---
 schema_version: "1.0.0"
 kind: explore
 language: zh-CN
@@ -258,9 +257,32 @@ run_receipts:
 ## 可复现信息
 
 Run receipt 已记录。原 title 为 {metadata["title"]}。
-""",
-            encoding="utf-8",
-        )
+"""
+
+    @staticmethod
+    def release_report_text(selector: str) -> str:
+        return f"""---
+schema_version: "1.0.0"
+kind: release
+language: zh-CN
+title: "正式报告"
+snapshots:
+  - "{selector}"
+run_receipts: []
+---
+## 项目目的
+验证主流程。
+## 输入与方法
+使用审核 snapshot。
+## 主要结果
+流程成功。
+## 限制
+测试规模有限。
+## 结论
+可以发布。
+## 可复现信息
+来源 snapshot 已记录。
+"""
 
     def create_completed_task(self, root: Path) -> tuple[str, str]:
         self.set_question(root)
@@ -301,9 +323,10 @@ Path("../derived/result.txt").write_text(value + "result\\n")
         self.assertEqual(run["status"], "success")
         self.complete_readme(task_root)
         receipt = f"runs/{run_plan['run_id']}/receipt.yaml"
-        self.complete_explore_report(task_root, receipt)
-        build_report(
-            source=task_root / "report.md",
+        report_text = self.complete_explore_report(task_root, receipt)
+        build_report_text(
+            source_text=report_text,
+            source_base=task_root,
             output=task_root / "report.html",
             project_root=root,
             kind=ReportKind.EXPLORE,
@@ -414,6 +437,16 @@ Path("../derived/result.txt").write_text(value + "result\\n")
                     root, order=1, core="cluster", summary="stable groups"
                 )
             self.assertTrue((root / first["task_path"] / "report.build.yaml").is_file())
+            self.assertFalse((root / first["task_path"] / "report.md").exists())
+            report_manifest = load_yaml(
+                root / first["task_path"] / "report.build.yaml"
+            )
+            self.assertEqual(report_manifest["report"]["source_mode"], "inline")
+            self.assertIsNone(report_manifest["report"]["source"])
+            report_html = (root / first["task_path"] / "report.html").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn('id="rpos-markdown-source"', report_html)
 
     def test_question_blocks_keep_statuses_in_one_registry(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -649,6 +682,9 @@ run_receipts: []
             )
             self.assertEqual(content, output.read_bytes())
             self.assertEqual(first.output_sha256, second.output_sha256)
+            self.assertTrue(source.is_file())
+            self.assertEqual(first.source_mode, "markdown")
+            self.assertEqual(first.source, "report.md")
             html = output.read_text(encoding="utf-8")
             self.assertIn("data:image/png;base64,", html)
             self.assertIn("&lt;script&gt;", html)
@@ -693,8 +729,9 @@ run_receipts: []
             )
             api_output = root / "api.html"
             cli_output = root / "cli.html"
-            build_report(
-                source=source,
+            build_report_text(
+                source_text=source.read_text(encoding="utf-8"),
+                source_base=root,
                 output=api_output,
                 project_root=root,
                 kind=ReportKind.EXPLORE,
@@ -706,8 +743,9 @@ run_receipts: []
                     "report-build",
                     "--project",
                     str(root),
-                    "--source",
-                    "report.md",
+                    "--stdin",
+                    "--source-base",
+                    ".",
                     "--output",
                     "cli.html",
                     "--kind",
@@ -717,6 +755,7 @@ run_receipts: []
                 check=True,
                 capture_output=True,
                 text=True,
+                input=source.read_text(encoding="utf-8"),
             )
             self.assertEqual(api_output.read_bytes(), cli_output.read_bytes())
 
@@ -1023,8 +1062,9 @@ x
             self.assertTrue(result["ok"], result["errors"])
             archive_root = root / result["archive_path"]
             with self.assertRaisesRegex(FileExistsError, "Archive content"):
-                build_report(
-                    source=archive_root / "report.md",
+                build_report_text(
+                    source_text="not reached",
+                    source_base=archive_root,
                     output=archive_root / "report.html",
                     project_root=root,
                     kind=ReportKind.EXPLORE,
@@ -1098,35 +1138,11 @@ x
                 "# 提纲\n# 1. 返回结果\n\n# %% 1. 返回结果\nresult = 'ok'\n",
                 encoding="utf-8",
             )
-            report_source = root / "pipeline/report.md"
-            report_source.write_text(
-                f"""---
-schema_version: "1.0.0"
-kind: release
-language: zh-CN
-title: "正式报告"
-snapshots:
-  - "{selector}"
-run_receipts: []
----
-## 项目目的
-验证主流程。
-## 输入与方法
-使用审核 snapshot。
-## 主要结果
-流程成功。
-## 限制
-测试规模有限。
-## 结论
-可以发布。
-## 可复现信息
-来源 snapshot 已记录。
-""",
-                encoding="utf-8",
-            )
             (root / "reports").mkdir(exist_ok=True)
-            build_report(
-                source=report_source,
+            report_text = self.release_report_text(selector)
+            build_report_text(
+                source_text=report_text,
+                source_base=root / "reports",
                 output=root / "reports/final.html",
                 project_root=root,
                 kind=ReportKind.RELEASE,
@@ -1139,8 +1155,9 @@ run_receipts: []
             apply_pipeline_release(release)
             self.assertTrue(verify_pipeline_release(root)["ok"])
             with self.assertRaisesRegex(FileExistsError, "immutable"):
-                build_report(
-                    source=report_source,
+                build_report_text(
+                    source_text=report_text,
+                    source_base=root / "reports",
                     output=root / "reports/final.html",
                     project_root=root,
                     kind=ReportKind.RELEASE,
@@ -1164,16 +1181,9 @@ run_receipts: []
                 encoding="utf-8",
             )
             (root / "pipeline/src/qc.py").write_text("result = 1\n", encoding="utf-8")
-            report_source = root / "pipeline/report.md"
-            report_source.write_text(
-                report_source.read_text(encoding="utf-8").replace(
-                    "尚未填写",
-                    "完成",
-                ),
-                encoding="utf-8",
-            )
-            build_report(
-                source=report_source,
+            build_report_text(
+                source_text=self.release_report_text(selector),
+                source_base=root / "reports",
                 output=root / "reports/final.html",
                 project_root=root,
                 kind=ReportKind.RELEASE,
@@ -1204,15 +1214,9 @@ run_receipts: []
                 "# 提纲\n# 1. 计算\n\n# %% 1. 计算\nresult = 1\n",
                 encoding="utf-8",
             )
-            report_source = root / "pipeline/report.md"
-            report_source.write_text(
-                report_source.read_text(encoding="utf-8")
-                .replace(selector, "P9-QC-unrelated@v001")
-                .replace("尚未填写", "完成"),
-                encoding="utf-8",
-            )
-            build_report(
-                source=report_source,
+            build_report_text(
+                source_text=self.release_report_text("P9-QC-unrelated@v001"),
+                source_base=root / "reports",
                 output=root / "reports/final.html",
                 project_root=root,
                 kind=ReportKind.RELEASE,
