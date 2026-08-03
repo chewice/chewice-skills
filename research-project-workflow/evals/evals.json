@@ -1,0 +1,29 @@
+{
+  "skill_name": "research-project-workflow",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "非破坏地接管这个已有研究仓库，并建立可恢复交接。",
+      "should_trigger": true,
+      "expected_output": "预览脚手架计划，保留已有路径，并创建最小控制文件。"
+    },
+    {
+      "id": 2,
+      "prompt": "为这个问题创建 BRIEF 并开始一个 Explore。",
+      "should_trigger": true,
+      "expected_output": "先确认 Human ownership，再按 Question 和 Artifact 合同推进。"
+    },
+    {
+      "id": 3,
+      "prompt": "总结工作",
+      "should_trigger": true,
+      "expected_output": "核对当前事实，统一时间戳更新索引、BRIEF、RESULT 和 Handoff，并运行 Validator。"
+    },
+    {
+      "id": 4,
+      "prompt": "把审核结果生成正式 HTML 报告。",
+      "should_trigger": false,
+      "expected_output": "转交 report-generation。"
+    }
+  ]
+}
