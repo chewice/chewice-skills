@@ -1,0 +1,29 @@
+{
+  "skill_name": "report-generation",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "把 Q-001 审核通过的 A-002 生成中文 HTML 报告。",
+      "should_trigger": true,
+      "expected_output": "验证审核门槛，先 dry-run，再输出 reports/Q-001/report.html。"
+    },
+    {
+      "id": 2,
+      "prompt": "给这个正式报告再导出 PDF。",
+      "should_trigger": true,
+      "expected_output": "检查 PDF renderer；当前未配置时明确停止。"
+    },
+    {
+      "id": 3,
+      "prompt": "创建一个新的 Explore Artifact。",
+      "should_trigger": false,
+      "expected_output": "转交 research-project-workflow。"
+    },
+    {
+      "id": 4,
+      "prompt": "批准这个分析结果并修改 Question 状态。",
+      "should_trigger": false,
+      "expected_output": "报告 Skill 不拥有研究审核与状态变更。"
+    }
+  ]
+}
