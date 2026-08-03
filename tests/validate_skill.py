@@ -1,4 +1,4 @@
-"""Run the official Skill quick validator from the local Codex installation."""
+"""Run the official Skill quick validator for both installable Skills."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ import sys
 
 
 ROOT = Path(__file__).resolve().parents[1]
+SKILLS = ("research-project-workflow", "report-generation")
 VALIDATOR_RELATIVE = Path("skills/.system/skill-creator/scripts/quick_validate.py")
 
 
@@ -39,17 +40,25 @@ def find_validator() -> Path:
     raise FileNotFoundError(f"Skill validator not found. Checked:\n{rendered}")
 
 
-def main() -> None:
+def main() -> int:
     try:
         validator = find_validator()
     except FileNotFoundError as error:
-        raise SystemExit(str(error)) from error
-    result = subprocess.run(
-        [sys.executable, str(validator), str(ROOT / "research-project-os")],
-        check=False,
-    )
-    raise SystemExit(result.returncode)
+        print(str(error), file=sys.stderr)
+        return 1
+    failed = []
+    for name in SKILLS:
+        result = subprocess.run(
+            [sys.executable, str(validator), str(ROOT / name)],
+            check=False,
+        )
+        if result.returncode != 0:
+            failed.append(name)
+    if failed:
+        print("Skill validation failed: " + ", ".join(failed), file=sys.stderr)
+        return 1
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

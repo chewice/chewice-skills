@@ -1,4 +1,4 @@
-"""End-to-end smoke test for the bundled 0.6 CLI."""
+"""End-to-end smoke test for the dual-Skill workflow."""
 
 from __future__ import annotations
 
@@ -7,318 +7,133 @@ import subprocess
 import sys
 import tempfile
 
-import yaml
-
 
 ROOT = Path(__file__).resolve().parents[1]
-CLI = ROOT / "research-project-os/scripts/research_project_os.py"
+SCAFFOLD = ROOT / "research-project-workflow/scripts/scaffold_project.py"
+VALIDATOR = ROOT / "research-project-workflow/scripts/validate_project.py"
+REPORT = ROOT / "report-generation/scripts/generate_report.py"
 
 
-def run(*arguments: str, stdin_text: str | None = None) -> str:
+def run(script: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
     result = subprocess.run(
-        [sys.executable, str(CLI), *arguments],
+        [sys.executable, str(script), *arguments],
         check=False,
         capture_output=True,
         text=True,
-        input=stdin_text,
     )
     if result.returncode != 0:
         raise SystemExit(
-            f"Command failed ({result.returncode}): {' '.join(arguments)}\n"
+            f"Command failed: {script.name} {' '.join(arguments)}\n"
             f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
         )
-    return result.stdout
+    return result
 
 
 def main() -> None:
     with tempfile.TemporaryDirectory() as temporary:
-        project = Path(temporary) / "pilot"
-        run("inspect", "--project", str(project))
-        run("init", "--project", str(project))
-        run("init", "--project", str(project), "--apply")
-        questions = project / "QUESTIONS.md"
-        questions.write_text(
-            """# Project Questions
+        project = Path(temporary) / "study"
+        run(SCAFFOLD, "--project", str(project))
+        assert not project.exists()
+        run(SCAFFOLD, "--project", str(project), "--apply")
+        assert not (project / "docs/questions/Q-001").exists()
+        assert not (project / "explore/Q-001/A-001").exists()
 
-## Project purpose
+        timestamp = "2026-08-03T19:00:00+08:00"
+        (project / "QUESTIONS.md").write_text(
+            f"""# Research Questions
 
-验证可复现 QC。
-
-## Input constraints
-
-- 原始输入只读。
-
-## Output requirements
-
-- 中文 HTML。
-
-## FAQ
-
-### 标准是什么？
-
-输入不变且输出可复现。
-
-## Questions
-
-### Q-001 — 稳定 QC thresholds
-
-- Status: `current`
-- Depends on: `none`
-- Review decision: `pending`
-- Reviewed on: `pending`
-
-#### Question
-
-哪些 QC thresholds 稳定？
-
-#### Inputs
-
-- `data/input.txt`
-
-#### Method reference
-
-比较候选 thresholds。
-
-#### Expected outputs
-
-- 审核报告。
-
-#### Completion criterion
-
-生成审核报告。
-
-#### Reviewed outcome
-
-`pending`
-
-#### Evidence
-
-`pending`
+| Q-ID | Question | Status | Brief | Updated |
+|---|---|---|---|---|
+| Q-001 | 如何验证双 Skill 流程？ | 解决中 | docs/questions/Q-001/BRIEF.md | {timestamp} |
 """,
             encoding="utf-8",
         )
-        explore_args = (
-            "explore-create",
-            "--project",
-            str(project),
-            "--order",
-            "0",
-            "--core",
-            "QC",
-            "--summary",
-            "stable thresholds selected",
-        )
-        run(*explore_args)
-        run(*explore_args, "--apply")
-        task_name = "P0-QC-stable-thresholds-selected"
-        task_root = project / "explore" / task_name
-        (project / "data").mkdir()
-        (project / "data/input.txt").write_text("input\n", encoding="utf-8")
-        (task_root / "scripts/qc.py").write_text(
-            """# 提纲
-# 1. 读取输入
-# 2. 写出结果
-
-# %% 1. 读取输入
-from pathlib import Path
-value = Path("../../../data/input.txt").read_text()
-
-# %% 2. 写出结果
-Path("../derived/result.txt").write_text(value + "result\\n")
-""",
+        brief = project / "docs/questions/Q-001/BRIEF.md"
+        brief.parent.mkdir(parents=True)
+        brief.write_text(
+            (
+                ROOT / "research-project-workflow/assets/templates/BRIEF.md"
+            )
+            .read_text(encoding="utf-8")
+            .replace("Q-XXX", "Q-001")
+            .replace("Status: 拟定", "Status: 解决中")
+            .replace("Created:", f"Created: {timestamp}")
+            .replace("Updated:", f"Updated: {timestamp}")
+            .replace("Human review status: pending", "Human review status: approved")
+            .replace(
+                "## 1. Human Question\n",
+                "## 1. Human Question\n\n如何验证双 Skill 流程？\n",
+            ),
             encoding="utf-8",
         )
-        run_args = (
-            "run",
-            "--project",
-            str(project),
-            "--input",
-            "data/input.txt",
-            "--output",
-            "derived/result.txt",
-            "--cwd",
-            f"explore/{task_name}/scripts",
-        )
-        run(*run_args, "--", sys.executable, "qc.py")
-        run(*run_args, "--apply", "--", sys.executable, "qc.py")
-        run_id = next((task_root / "runs").iterdir()).name
-        receipt = f"runs/{run_id}/receipt.yaml"
-        (task_root / "README.md").write_text(
-            f"""# {task_name}
 
-## Direction
-- Question ID: `Q-001`
-
-## Inputs
-- `data/input.txt`
-
-## Method
-- 执行 QC。
-
-## Expected outputs
-- `derived/result.txt`
-
-## Stop condition
-- 结果已生成。
-
-## Run order
-1. `scripts/qc.py`
-
-## Observations
-- 输出稳定。
-
-## Limitations
-- 测试数据。
-""",
+        artifact = project / "explore/Q-001/A-001"
+        for child in ("code", "config", "logs"):
+            (artifact / child).mkdir(parents=True, exist_ok=True)
+        (artifact / "code/analyze.py").write_text(
+            "# 提纲\n# 1. 验证流程\n\n# %% 1. 验证流程\nprint('ok')\n",
             encoding="utf-8",
         )
-        report_text = f"""---
-schema_version: "1.0.0"
-kind: explore
-language: zh-CN
-title: "QC 报告"
-task: "{task_name}"
-run_receipts:
-  - "{receipt}"
----
-## 研究问题
-哪些 QC thresholds 稳定？
-## 输入与方法
-使用 audited run。
-## 结果
-输出稳定。
-## 限制
-测试数据。
-## 结论与下一问题
-可供审核。
-## 可复现信息
-Receipt 已记录。
-"""
+        result = artifact / "RESULT.md"
+        result.write_text(
+            (
+                ROOT / "research-project-workflow/assets/templates/RESULT.md"
+            )
+            .read_text(encoding="utf-8")
+            .replace("Q-XXX", "Q-001")
+            .replace("A-XXX", "A-001")
+            .replace("Status: 草稿", "Status: 审核通过")
+            .replace("Decision: pending", "Decision: 审核通过")
+            .replace("Reviewed at:", f"Reviewed at: {timestamp}")
+            .replace("Reason:", "Reason: Human 确认最小验证通过。")
+            .replace(
+                "## 5. Technical Validation\n",
+                "## 5. Technical Validation\n\n命令成功，输出存在，最小测试通过。\n",
+            )
+            .replace(
+                "Pipeline target:",
+                "Pipeline target: pipeline/analyze.py",
+            )
+            .replace("Promoted at:", f"Promoted at: {timestamp}")
+            .replace(
+                "Promoted files:",
+                "Promoted files: pipeline/analyze.py",
+            ),
+            encoding="utf-8",
+        )
+        (project / "pipeline/analyze.py").write_text(
+            (artifact / "code/analyze.py").read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
+
+        handoff = project / "CURRENT_HANDOFF.md"
+        handoff.write_text(
+            handoff.read_text(encoding="utf-8")
+            .replace("Active question: none", "Active question: Q-001")
+            .replace("Current artifact: none", "Current artifact: A-001")
+            .replace("Current checkpoint: scaffold created", "Current checkpoint: Artifact 已审核并晋升")
+            .replace("Updated: ", f"Updated: {timestamp} # "),
+            encoding="utf-8",
+        )
+        run(VALIDATOR, "--project", str(project))
+
         report_args = (
-            "report-build",
             "--project",
             str(project),
-            "--stdin",
-            "--source-base",
-            f"explore/{task_name}",
-            "--output",
-            f"explore/{task_name}/report.html",
-            "--kind",
-            "explore",
+            "--question",
+            "Q-001",
+            "--artifact",
+            "A-001",
         )
-        run(*report_args, stdin_text=report_text)
-        run(*report_args, "--apply", stdin_text=report_text)
-        assert not (task_root / "report.md").exists()
-        promote_args = (
-            "archive-promote",
-            "--project",
-            str(project),
-            "--task",
-            task_name,
-            "--review-note",
-            "人工确认 QC 结果。",
-        )
-        run(*promote_args)
-        run(*promote_args, "--apply")
-        selector = f"{task_name}@v001"
-        run(
-            "archive-verify",
-            "--project",
-            str(project),
-            "--snapshot",
-            selector,
-        )
-        pipeline_args = (
-            "pipeline-create",
-            "--project",
-            str(project),
-            "--snapshot",
-            selector,
-        )
-        run(*pipeline_args)
-        run(*pipeline_args, "--apply")
-        pipeline_path = project / "pipeline/pipeline.yaml"
-        pipeline = yaml.safe_load(pipeline_path.read_text(encoding="utf-8"))
-        pipeline["pipeline"]["entrypoint"] = "run.py"
-        pipeline["steps"][0]["implementation"] = "src/qc.py"
-        pipeline_path.write_text(
-            yaml.safe_dump(pipeline, allow_unicode=True, sort_keys=False),
-            encoding="utf-8",
-        )
-        (project / "pipeline/run.py").write_text(
-            "# 提纲\n# 1. 运行\n\n# %% 1. 运行\nprint('ok')\n",
-            encoding="utf-8",
-        )
-        (project / "pipeline/src/qc.py").write_text(
-            "# 提纲\n# 1. 结果\n\n# %% 1. 结果\nresult = 'ok'\n",
-            encoding="utf-8",
-        )
-        release_report_text = f"""---
-schema_version: "1.0.0"
-kind: release
-language: zh-CN
-title: "正式报告"
-snapshots:
-  - "{selector}"
-run_receipts: []
----
-## 项目目的
-验证 QC pipeline。
-## 输入与方法
-使用审核 snapshot。
-## 主要结果
-流程成功。
-## 限制
-测试数据。
-## 结论
-可以发布。
-## 可复现信息
-来源已记录。
-"""
-        final_report = (
-            "report-build",
-            "--project",
-            str(project),
-            "--stdin",
-            "--source-base",
-            "reports",
-            "--output",
-            "reports/final.html",
-            "--kind",
-            "release",
-        )
-        run(*final_report, stdin_text=release_report_text)
-        run(*final_report, "--apply", stdin_text=release_report_text)
-        assert not (project / "pipeline/report.md").exists()
-        release = (
-            "pipeline-release",
-            "--project",
-            str(project),
-            "--report",
-            "reports/final.html",
-            "--review-note",
-            "人工确认发布。",
-        )
-        run(*release)
-        run(*release, "--apply")
-        run("audit", "--project", str(project))
-        close = (
-            "close",
-            "--project",
-            str(project),
-            "--summary",
-            "完成 QC lifecycle smoke。",
-            "--completed",
-            "完成 archive 与 release。",
-            "--output",
-            "reports/final.html",
-            "--next-step",
-            "由 human 选择下一问题。",
-        )
-        run(*close)
-        run(*close, "--apply")
-        run("audit", "--project", str(project))
-    print("Smoke test passed")
+        run(REPORT, *report_args)
+        assert not (project / "reports/Q-001/report.html").exists()
+        run(REPORT, *report_args, "--apply")
+        run(REPORT, "--project", str(project), "--question", "Q-001", "--validate-only")
+        assert (project / "reports/Q-001/report.html").is_file()
+        assert not (project / "reports/Q-001/report.pdf").exists()
+        assert not (project / "project_manifest.yaml").exists()
+        assert not (project / "archive").exists()
+        print("Smoke test passed")
 
 
 if __name__ == "__main__":
