@@ -1,16 +1,18 @@
 [workspace]
 authors = ["zdh <goodalleveryday@gmail.com>"]
 channels = ["conda-forge"]
-name = "research-project-os-skill"
+name = "research-project-workflow-skills"
 platforms = ["linux-64", "win-64"]
-version = "0.7.1"
+version = "1.0.0"
 
 [tasks]
-lint = "ruff check research-project-os/research_project_os research-project-os/scripts scripts tests"
+lint = "ruff check research-project-workflow/scripts report-generation/scripts scripts tests"
 test = "python -m unittest discover -s tests -p test_*.py"
 smoke = "python tests/smoke_test.py"
 validate-skill = "python tests/validate_skill.py"
-cli-help = "python research-project-os/scripts/research_project_os.py --help"
+scaffold-project = "python research-project-workflow/scripts/scaffold_project.py"
+validate-project = "python research-project-workflow/scripts/validate_project.py"
+generate-report = "python report-generation/scripts/generate_report.py"
 
 [dependencies]
 python = "3.12.*"

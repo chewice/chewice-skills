@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Install the full skill workspace and create discovery symlinks."""
+"""Install the shared workspace and create discovery links for both Skills."""
 
 from __future__ import annotations
 
@@ -13,10 +13,10 @@ from typing import Any
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
-SKILL_NAME = "research-project-os"
+SKILL_NAMES = ("research-project-workflow", "report-generation")
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args(arguments: list[str] | None = None) -> argparse.Namespace:
     codex_home = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")).expanduser()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source", default=str(REPOSITORY_ROOT))
@@ -24,39 +24,51 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--workspace",
         type=Path,
-        default=codex_home / "skill-workspaces/research-project-os-skill",
+        default=codex_home / "skill-workspaces/research-project-workflow-skills",
     )
     parser.add_argument(
-        "--codex-link",
+        "--codex-skills-dir",
         type=Path,
-        default=codex_home / f"skills/{SKILL_NAME}",
+        default=codex_home / "skills",
     )
     parser.add_argument(
-        "--agents-link",
+        "--agents-skills-dir",
         type=Path,
-        default=Path.home() / f".agents/skills/{SKILL_NAME}",
+        default=Path.home() / ".agents/skills",
     )
     parser.add_argument("--apply", action="store_true")
-    return parser.parse_args()
+    return parser.parse_args(arguments)
 
 
 def validate_workspace(root: Path) -> None:
-    required = (
-        root / "pixi.toml",
-        root / "pixi.lock",
-        root / SKILL_NAME / "SKILL.md",
-        root / SKILL_NAME / "scripts/research_project_os.py",
-        root / SKILL_NAME / "research_project_os/__init__.py",
+    required = [root / "pixi.toml", root / "pixi.lock"]
+    for name in SKILL_NAMES:
+        required.extend(
+            [
+                root / name / "SKILL.md",
+                root / name / "agents/openai.yaml",
+            ]
+        )
+    required.extend(
+        [
+            root / "research-project-workflow/scripts/scaffold_project.py",
+            root / "research-project-workflow/scripts/validate_project.py",
+            root / "report-generation/scripts/generate_report.py",
+        ]
     )
     missing = [str(path) for path in required if not path.is_file()]
     if missing:
         raise ValueError("Missing workspace files: " + ", ".join(missing))
-    forbidden = (
-        root / SKILL_NAME / "pixi.toml",
-        root / SKILL_NAME / "pixi.lock",
-        root / SKILL_NAME / ".pixi",
-    )
-    nested = [str(path) for path in forbidden if path.exists()]
+    nested = [
+        str(path)
+        for name in SKILL_NAMES
+        for path in (
+            root / name / "pixi.toml",
+            root / name / "pixi.lock",
+            root / name / ".pixi",
+        )
+        if path.exists()
+    ]
     if nested:
         raise ValueError("Nested Pixi state is forbidden: " + ", ".join(nested))
 
@@ -71,21 +83,24 @@ def link_state(link: Path, target: Path) -> str:
 
 def build_plan(args: argparse.Namespace) -> dict[str, Any]:
     workspace = args.workspace.expanduser().resolve()
-    skill_target = workspace / SKILL_NAME
-    links = [
-        args.codex_link.expanduser().absolute(),
-        args.agents_link.expanduser().absolute(),
-    ]
     if workspace.exists():
         raise FileExistsError(
-            f"Workspace already exists: {workspace}. Move it to a recoverable "
-            "backup before installing."
+            f"Workspace already exists: {workspace}. Move it to a recoverable backup."
         )
-    link_actions = [
-        {"path": link, "target": skill_target, "action": link_state(link, skill_target)}
-        for link in links
-    ]
-    conflicts = [item["path"] for item in link_actions if item["action"] == "conflict"]
+    links = []
+    for parent in (args.codex_skills_dir, args.agents_skills_dir):
+        parent = parent.expanduser().absolute()
+        for name in SKILL_NAMES:
+            link = parent / name
+            target = workspace / name
+            links.append(
+                {
+                    "path": link,
+                    "target": target,
+                    "action": link_state(link, target),
+                }
+            )
+    conflicts = [item["path"] for item in links if item["action"] == "conflict"]
     if conflicts:
         raise FileExistsError(
             "Refusing to replace discovery paths: "
@@ -95,8 +110,7 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
         "source": str(args.source),
         "ref": str(args.ref),
         "workspace": workspace,
-        "skill_target": skill_target,
-        "links": link_actions,
+        "links": links,
     }
 
 
@@ -131,10 +145,8 @@ def apply_plan(plan: dict[str, Any]) -> None:
         validate_workspace(staging)
         staging.replace(workspace)
     except Exception:
-        if staging.exists():
-            shutil.rmtree(staging)
+        shutil.rmtree(staging, ignore_errors=True)
         raise
-
     for item in plan["links"]:
         if item["action"] == "unchanged":
             continue
@@ -144,8 +156,8 @@ def apply_plan(plan: dict[str, Any]) -> None:
 
 
 def print_plan(plan: dict[str, Any], *, applied: bool) -> None:
-    mode = "APPLIED" if applied else "DRY-RUN"
-    print(f"{mode} install {plan['source']}@{plan['ref']}")
+    print(f"{'APPLIED' if applied else 'DRY-RUN'} install")
+    print(f"source: {plan['source']}@{plan['ref']}")
     print(f"workspace: {plan['workspace']}")
     for item in plan["links"]:
         print(f"{item['action']}: {item['path']} -> {item['target']}")
@@ -153,16 +165,18 @@ def print_plan(plan: dict[str, Any], *, applied: bool) -> None:
         print("Pass --apply to install.")
 
 
-def main() -> None:
-    args = parse_args()
+def main(arguments: list[str] | None = None) -> int:
+    args = parse_args(arguments)
     try:
         plan = build_plan(args)
         if args.apply:
             apply_plan(plan)
         print_plan(plan, applied=args.apply)
+        return 0
     except (FileExistsError, OSError, ValueError) as error:
-        raise SystemExit(str(error)) from error
+        print(str(error))
+        return 1
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

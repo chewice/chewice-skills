@@ -2,8 +2,9 @@
 
 ## Scope
 
-本仓库用于开发可复用的 `research-project-os` Codex Skill。可安装 Skill 位于
-`research-project-os/`；development tests 和 architecture notes 位于仓库根目录。
+本仓库用于开发可复用的 `research-project-workflow` 与 `report-generation`
+Codex Skills。可安装 Skill 位于同名目录；development tests 和 architecture notes
+位于仓库根目录。
 
 ## Language
 
@@ -12,9 +13,9 @@
 
 ## Safety
 
-- 所有 mutating CLI mode 默认保持 dry-run。
+- 所有 mutating script 默认保持 dry-run。
 - 不得自动运行 `git add`、`git commit`、`git push` 或写入 Notion。
-- 将 `adopt` 视为 non-destructive：保留现有项目路径和文件。
+- 将 scaffold/adopt 视为 non-destructive：保留现有项目路径和文件。
 - 除非显式提供 `--overwrite`，否则拒绝覆盖。
 - profiles 保持通用，不嵌入 MDD pilot project 的假设。
 
@@ -28,5 +29,5 @@
 ## Completion
 
 运行 `pixi run lint`、`pixi run test`、`pixi run smoke` 和
-`pixi run validate-skill`。检查 installation symlink，并确认 fixture output
-或 credentials 未对 Git 可见。
+`pixi run validate-skill`。检查两个 Skill 的 installation symlink，并确认 fixture
+output 或 credentials 未对 Git 可见。
