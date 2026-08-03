@@ -1,20 +1,34 @@
 # Architecture
 
-Research Project OS `0.7.1` 使用一个 Skill 入口和三个按需层：
+版本 `1.0.0` 只暴露两个团队级 Skill：
 
-- `harness`：scaffold、ownership、context、Pixi、safety 与 audit。
-- `exploration`：逐题 explore、audited run、archive 与 pipeline。
-- `reporting`：独立 inline/persistent Markdown → HTML API，默认只交付 HTML。
+```text
+research-project-workflow
+├── SKILL.md
+├── references/{scaffold,question,explore,handoff,summarize-work}.md
+├── assets/
+└── scripts/{scaffold_project,validate_project}.py
 
-CLI entrypoint 只负责参数与输出；实现位于 `research_project_os/` package。项目长期
-上下文收敛为 `AGENTS.md`、`QUESTIONS.md`、`CURRENT_HANDOFF.md` 和
-`project_manifest.yaml`。Notion、多 profile、中央 evidence/status/task/decision
-台账已移除。
+report-generation
+├── SKILL.md
+├── references/{html,pdf,templates,validation}.md
+├── assets/{templates,css}/
+└── scripts/generate_report.py
+```
 
-`QUESTIONS.md` 使用 block-based agenda：每个 Q-ID 的问题、执行边界、compact reviewed
-outcome 与 evidence 保持在同一个 block，状态变化不移动内容。CLI 只读选择唯一
-`Status: current` block，并只读兼容旧 split layout。
+两者共享仓库根级 Pixi workspace。workflow 不 import report renderer；
+report-generation 不改变 Question、Artifact 或 Pipeline 状态。
 
-所有 mutation 默认 dry-run，apply 使用 atomic write 和 source revalidation。
-计算通过 `run` 记录完整 SHA-256、stdout/stderr、Git/Pixi provenance。报告由独立
-API 统一渲染，analysis scripts 不包含 HTML logic。
+## 项目状态
+
+- `QUESTIONS.md` 只保存 Question 索引，详细依据进入 `BRIEF.md`。
+- `CURRENT_HANDOFF.md` 是唯一默认状态入口，旧历史交由 Git。
+- Explore 使用 `explore/<Q-ID>/<A-ID>/RESULT.md`，拒绝版本原样保留。
+- Question、Artifact 和 Workstream 使用三套相互独立的中文状态。
+- 只有 Human 审核通过的 Artifact 可以整理进 `pipeline/`；Pipeline runtime 由项目自身负责。
+
+## 安全
+
+所有 mutation 默认 dry-run，并在 apply 前重新验证来源。脚手架不覆盖控制文件，
+Validator 只读。报告只消费审核内容并写入 `reports/<Q-ID>/`。不存在 manifest、
+archive、release、多层 lifecycle、历史 Handoff archive 或旧命令兼容层。
