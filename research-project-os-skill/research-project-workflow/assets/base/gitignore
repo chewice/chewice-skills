@@ -1,0 +1,17 @@
+.pixi/
+__pycache__/
+*.py[cod]
+.env
+.env.*
+credentials*
+secrets*
+
+# Local and large research data
+data/
+*.rds
+*.h5ad
+*.parquet
+
+# Generated logs may contain sensitive paths or data
+logs/*
+!logs/.gitkeep

@@ -1,0 +1,4 @@
+interface:
+  display_name: "研究项目工作流"
+  short_description: "管理研究脚手架、问题、探索审核与交接"
+  default_prompt: "使用 $research-project-workflow 维护研究项目脚手架、Question/BRIEF、Explore/RESULT、Human review、Pipeline promotion 和 CURRENT_HANDOFF。"
