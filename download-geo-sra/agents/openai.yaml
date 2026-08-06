@@ -1,0 +1,6 @@
+interface:
+  display_name: "安全下载 GEO/SRA"
+  short_description: "安全续传、校验并生成中文 HTML 报告"
+  default_prompt: "使用 $download-geo-sra-safely 检查、下载、续传、校验并记录这个 GEO/SRA 数据集。"
+policy:
+  allow_implicit_invocation: true
