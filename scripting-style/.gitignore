@@ -1,0 +1,9 @@
+.pixi/
+__pycache__/
+*.py[cod]
+*.bak
+*.tmp
+.env
+.env.*
+.DS_Store
+iterations/

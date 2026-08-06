@@ -1,0 +1,362 @@
+schema_version: "1.0"
+skill: "scripting-style"
+source_root: "<SOURCE_ROOT>"
+path_policy: "all example paths are relative to source_root"
+selection_rule: "select one primary and at most one complementary example from the same stage"
+examples:
+  "01-scrna-qc":
+    - path: "01-scrna-qc/scripts/03-calculate_metrics.R"
+      language: "R"
+      task_type: "qc-metrics"
+      role: "primary"
+      represents: ["linear-analysis", "adjacent-checks", "tables-figures-objects"]
+      learn_main_flow: true
+      learn_plotting: true
+      learn_output: true
+      learn_local_helpers: false
+      do_not_generalize: ["qc-cutoffs", "paths", "object-schema"]
+    - path: "01-scrna-qc/scripts/02-starsolo.sh"
+      language: "Bash"
+      task_type: "external-quantification"
+      role: "secondary"
+      represents: ["visible-parameters", "direct-command-order"]
+      learn_main_flow: true
+      learn_plotting: false
+      learn_output: true
+      learn_local_helpers: false
+      do_not_generalize: ["tool-flags", "resources", "samples", "environment"]
+    - path: "01-scrna-qc/scripts/01-cellranger.sh"
+      language: "Bash"
+      task_type: "external-quantification"
+      role: "validation-holdout"
+      use_for_rule_learning: false
+
+  "02-annotation":
+    - path: "02-annotation/scripts/01-HS_BM_manual_annotation.R"
+      language: "R"
+      task_type: "manual-annotation"
+      role: "primary"
+      represents: ["checkpoints", "decision-points", "expert-judgment"]
+      learn_main_flow: true
+      learn_plotting: true
+      learn_output: true
+      learn_local_helpers: false
+      do_not_generalize: ["markers", "labels", "tissue-assumptions"]
+    - path: "02-annotation/scripts/05-HS_PBMC_auto_run.R"
+      language: "R"
+      task_type: "automated-annotation"
+      role: "primary"
+      represents: ["complete-linear-workflow", "visible-diagnostics"]
+      learn_main_flow: true
+      learn_plotting: true
+      learn_output: true
+      learn_local_helpers: false
+      do_not_generalize: ["reference-atlas", "cell-types", "fixed-route"]
+    - path: "02-annotation/scripts/04-HS_BM_auto_resolution.R"
+      language: "R"
+      task_type: "resolution-selection"
+      role: "secondary"
+      represents: ["parameter-comparison", "visible-selection"]
+      learn_main_flow: true
+      learn_plotting: true
+      learn_output: true
+      learn_local_helpers: false
+      do_not_generalize: ["resolution-values"]
+    - path: "02-annotation/scripts/03-HS_BM_auto_annotation-part2.R"
+      language: "R"
+      task_type: "annotation-continuation"
+      role: "validation-holdout"
+      use_for_rule_learning: false
+
+  "03-integration":
+    - path: "03-integration/scripts/01-check-batch-effect.R"
+      language: "R"
+      task_type: "uncorrected-baseline"
+      role: "secondary"
+      represents: ["baseline-before-correction", "diagnostic-plots"]
+      learn_main_flow: true
+      learn_plotting: true
+      learn_output: true
+      learn_local_helpers: false
+      do_not_generalize: ["batch-variable", "plot-settings"]
+    - path: "03-integration/scripts/02-inter-rpca.R"
+      language: "R"
+      task_type: "sample-integration"
+      role: "primary"
+      represents: ["method-rationale", "nearby-parameters", "comparable-diagnostics"]
+      learn_main_flow: true
+      learn_plotting: true
+      learn_output: true
+      learn_local_helpers: false
+      do_not_generalize: ["rpca-as-default", "historical-parameters"]
+    - path: "03-integration/scripts/04-save-data.R"
+      language: "R"
+      task_type: "narrow-export"
+      role: "secondary"
+      represents: ["single-purpose-script", "explicit-downstream-output"]
+      learn_main_flow: true
+      learn_plotting: false
+      learn_output: true
+      learn_local_helpers: false
+      do_not_generalize: ["output-format"]
+    - path: "03-integration/scripts/03-inter-harmony.R"
+      language: "R"
+      task_type: "sample-integration"
+      role: "validation-holdout"
+      use_for_rule_learning: false
+
+  "04-grn":
+    - path: "04-grn/scripts/01-metacell.R"
+      language: "R"
+      task_type: "metacell-preparation"
+      role: "primary"
+      represents: ["prepare-call-check-save", "visible-api-boundary"]
+      learn_main_flow: true
+      learn_plotting: true
+      learn_output: true
+      learn_local_helpers: true
+      do_not_generalize: ["metacell-as-mandatory", "aggregation-parameters"]
+    - path: "04-grn/scripts/03-unsupervised_partI.R"
+      language: "R"
+      task_type: "unsupervised-regulon-analysis"
+      role: "primary"
+      represents: ["question-driven-flow", "staged-output"]
+      learn_main_flow: true
+      learn_plotting: true
+      learn_output: true
+      learn_local_helpers: true
+      do_not_generalize: ["regulons", "cell-types", "cutoffs"]
+    - path: "04-grn/scripts/04-hypothesis_driven_partIII.R"
+      language: "R"
+      task_type: "hypothesis-driven-grn"
+      role: "primary"
+      represents: ["biological-hypothesis-near-analysis", "opaque-api-calls"]
+      learn_main_flow: true
+      learn_plotting: true
+      learn_output: true
+      learn_local_helpers: false
+      do_not_generalize: ["hypothesis", "targets", "regulons"]
+    - path: "04-grn/scripts/02-regulon2gmt.py"
+      language: "Python"
+      task_type: "format-conversion"
+      role: "secondary"
+      represents: ["narrow-purpose", "direct-file-bridge"]
+      learn_main_flow: true
+      learn_plotting: false
+      learn_output: true
+      learn_local_helpers: true
+      do_not_generalize: ["input-layout", "output-path"]
+    - path: "04-grn/scripts/02-run_pyscenic.sh"
+      language: "Bash"
+      task_type: "external-grn-workflow"
+      role: "secondary"
+      represents: ["visible-command-order", "narrow-orchestration"]
+      learn_main_flow: true
+      learn_plotting: false
+      learn_output: true
+      learn_local_helpers: false
+      do_not_generalize: ["environment", "resource-paths", "tool-flags"]
+    - path: "04-grn/scripts/02-regulon_activity_score.R"
+      language: "R"
+      task_type: "reusable-api"
+      role: "counterexample"
+      use_for_rule_learning: false
+      reason: "API-like implementation would overrepresent engineering abstractions"
+    - path: "04-grn/scripts/04-hypothesis_driven_partIV.R"
+      language: "R"
+      task_type: "hypothesis-driven-grn"
+      role: "validation-holdout"
+      use_for_rule_learning: false
+    - path: "04-grn/scripts/04-hypothesis_driven_partII.R"
+      language: "R"
+      task_type: "unknown-special-role"
+      role: "special-status-unclassified"
+      use_for_rule_learning: false
+      reason: "user-confirmed special role is not documented in README"
+    - path: "04-grn/scripts/06-screen_TFs_for_given_target.R"
+      language: "R"
+      task_type: "unknown-special-role"
+      role: "special-status-unclassified"
+      use_for_rule_learning: false
+      reason: "user-confirmed special role is not documented in README"
+
+  "05-from-pathway-to-program":
+    - path: "05-from-pathway-to-program/scripts/02-interpret_cNMF_results_part1.R"
+      language: "R"
+      task_type: "program-interpretation"
+      role: "primary"
+      represents: ["activity-to-interpretation", "visible-program-selection"]
+      learn_main_flow: true
+      learn_plotting: true
+      learn_output: true
+      learn_local_helpers: false
+      do_not_generalize: ["program-ids", "top-gene-count", "cutoffs"]
+    - path: "05-from-pathway-to-program/scripts/03-pathway_activity.R"
+      language: "R"
+      task_type: "pathway-activity"
+      role: "primary"
+      represents: ["visible-gene-set-choice", "score-compare-plot"]
+      learn_main_flow: true
+      learn_plotting: true
+      learn_output: true
+      learn_local_helpers: false
+      do_not_generalize: ["gene-sets", "database", "cutoffs"]
+    - path: "05-from-pathway-to-program/scripts/02-interpret_cNMF_results_part2.R"
+      language: "R"
+      task_type: "program-enrichment"
+      role: "secondary"
+      represents: ["continued-interpretation", "small-local-helper"]
+      learn_main_flow: true
+      learn_plotting: true
+      learn_output: true
+      learn_local_helpers: true
+      do_not_generalize: ["enrichment-database", "top-genes"]
+    - path: "05-from-pathway-to-program/scripts/04-metabolisum_activity.R"
+      language: "R"
+      task_type: "metabolism-activity"
+      role: "validation-holdout"
+      use_for_rule_learning: false
+
+  "06-lr-pairs":
+    - path: "06-lr-pairs/scripts/03-cellchat-standard.R"
+      language: "R"
+      task_type: "sample-level-cellchat"
+      role: "primary"
+      represents: ["repeated-sample-operation", "helper-boundary-case"]
+      learn_main_flow: true
+      learn_plotting: false
+      learn_output: true
+      learn_local_helpers: true
+      do_not_generalize: ["database", "groups", "wrapping-every-analysis"]
+    - path: "06-lr-pairs/scripts/04-cellchat-visualize.R"
+      language: "R"
+      task_type: "network-visualization"
+      role: "secondary"
+      represents: ["small-repeated-plot-operations"]
+      learn_main_flow: true
+      learn_plotting: true
+      learn_output: true
+      learn_local_helpers: true
+      do_not_generalize: ["pathways", "plot-scales"]
+    - path: "06-lr-pairs/scripts/05-cellchat-stage-compare-LRnum.R"
+      language: "R"
+      task_type: "stage-comparison"
+      role: "primary"
+      represents: ["explicit-comparison-measure", "parallel-script"]
+      learn_main_flow: true
+      learn_plotting: true
+      learn_output: true
+      learn_local_helpers: false
+      do_not_generalize: ["stage-definition", "lr-number-as-default"]
+    - path: "06-lr-pairs/scripts/07-cellchat-lr-avg-barplot.R"
+      language: "R"
+      task_type: "focused-lr-summary"
+      role: "primary"
+      represents: ["direct-data-reshape", "focused-output"]
+      learn_main_flow: true
+      learn_plotting: true
+      learn_output: true
+      learn_local_helpers: false
+      do_not_generalize: ["ligand-receptor-pairs", "groups"]
+    - path: "06-lr-pairs/scripts/05-cellchat-stage-compare-weight.R"
+      language: "R"
+      task_type: "stage-comparison"
+      role: "validation-holdout"
+      use_for_rule_learning: false
+
+  "07-trajectory":
+    - path: "07-trajectory/scripts/01-trajectory-dr.R"
+      language: "R"
+      task_type: "trajectory-dimension-reduction"
+      role: "primary"
+      represents: ["parameter-decision-chain", "diagnostic-output"]
+      learn_main_flow: true
+      learn_plotting: true
+      learn_output: true
+      learn_local_helpers: true
+      do_not_generalize: ["dimension-reduction-parameters"]
+    - path: "07-trajectory/scripts/03-lineage-mst.R"
+      language: "R"
+      task_type: "lineage-mst"
+      role: "primary"
+      represents: ["explicit-root-terminal-lineage", "api-boundary"]
+      learn_main_flow: true
+      learn_plotting: true
+      learn_output: true
+      learn_local_helpers: false
+      do_not_generalize: ["lineage-endpoints", "cell-types"]
+    - path: "07-trajectory/scripts/04-2-lineage-pcurve-Ery.R"
+      language: "R"
+      task_type: "principal-curve"
+      role: "secondary"
+      represents: ["branch-specific-script", "visible-lineage-parameters"]
+      learn_main_flow: true
+      learn_plotting: true
+      learn_output: true
+      learn_local_helpers: false
+      do_not_generalize: ["lineage", "endpoints"]
+    - path: "07-trajectory/scripts/05-1-dynamic-genes-Mega.R"
+      language: "R"
+      task_type: "dynamic-genes"
+      role: "primary"
+      represents: ["per-gene-local-helper", "visible-model-decisions"]
+      learn_main_flow: true
+      learn_plotting: true
+      learn_output: true
+      learn_local_helpers: true
+      do_not_generalize: ["lineage", "model-cutoffs", "genes"]
+    - path: "07-trajectory/scripts/06-nmf-imputation.R"
+      language: "R"
+      task_type: "trajectory-imputation"
+      role: "secondary"
+      represents: ["expensive-computation", "cache-boundary"]
+      learn_main_flow: true
+      learn_plotting: true
+      learn_output: true
+      learn_local_helpers: true
+      do_not_generalize: ["nmf-as-required", "rank", "cache-path"]
+    - path: "07-trajectory/scripts/07-1-dynamic-module-Ery.R"
+      language: "R"
+      task_type: "dynamic-modules"
+      role: "primary"
+      represents: ["long-semantic-sections", "module-diagnostics"]
+      learn_main_flow: true
+      learn_plotting: true
+      learn_output: true
+      learn_local_helpers: true
+      do_not_generalize: ["lineage", "module-count", "cutoffs"]
+    - path: "07-trajectory/scripts/08-1-gene-module-function-Ery.R"
+      language: "R"
+      task_type: "module-function"
+      role: "secondary"
+      represents: ["explicit-downstream-question", "enrichment-output"]
+      learn_main_flow: true
+      learn_plotting: true
+      learn_output: true
+      learn_local_helpers: true
+      do_not_generalize: ["modules", "gene-sets"]
+    - path: "07-trajectory/scripts/09-1-gene-module-regulators-Ery.R"
+      language: "R"
+      task_type: "module-regulators"
+      role: "secondary"
+      represents: ["explicit-regulator-question", "table-figure-object-output"]
+      learn_main_flow: true
+      learn_plotting: true
+      learn_output: true
+      learn_local_helpers: true
+      do_not_generalize: ["regulators", "modules", "cutoffs"]
+    - path: "07-trajectory/scripts/04-3-lineage-pcurve-Mono.R"
+      language: "R"
+      task_type: "principal-curve"
+      role: "validation-holdout"
+      use_for_rule_learning: false
+    - path: "07-trajectory/scripts/05-2-dynamic-genes-Ery.R"
+      language: "R"
+      task_type: "dynamic-genes"
+      role: "validation-holdout"
+      use_for_rule_learning: false
+    - path: "07-trajectory/scripts/07-2-dynamic-module-Mega.R"
+      language: "R"
+      task_type: "dynamic-modules"
+      role: "validation-holdout"
+      use_for_rule_learning: false

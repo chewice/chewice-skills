@@ -1,0 +1,33 @@
+{
+  "schema_version": "1.0",
+  "iteration_id": "YYYYMMDD-short-slug",
+  "phase": "phase1",
+  "target_skill": "<SKILL_ROOT>",
+  "new_examples": [
+    {
+      "path": "/absolute/path/to/new-example.R",
+      "stage_hint": "TODO_STAGE_OR_UNKNOWN",
+      "role_hint": "candidate"
+    },
+    {
+      "path": "/absolute/path/to/new-example.sh",
+      "stage_hint": "TODO_STAGE_OR_UNKNOWN",
+      "role_hint": "candidate"
+    }
+  ],
+  "context_readmes": [],
+  "notes": {
+    "task_context": "TODO: explain what the new examples do",
+    "known_api_boundaries": [],
+    "do_not_generalize": []
+  },
+  "phase1_review_dir": null,
+  "approval": {
+    "confirmed": false,
+    "accepted_decisions": []
+  },
+  "_instructions": [
+    "Phase 1 must keep approval.confirmed false.",
+    "After explicit confirmation, copy this request, set phase to phase2, set approval.confirmed true, fill accepted_decisions and phase1_review_dir."
+  ]
+}
