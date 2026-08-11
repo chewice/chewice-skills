@@ -12,6 +12,11 @@
 若结果需要人工复查、下游复用或重新绘图，再分别保存对应表格、对象或摘要；没有这些
 需求时，不为凑齐类型制造冗余文件。
 
+保存真正支持下游分析、reproducibility、interpretation、manuscript figures 或 QC
+review 的结果。不要默认把所有中间对象全部写盘。除非具有明确用途或用户明确要求，
+不要主动生成十几个 diagnostic table、每一步运行状态文件、completion marker、
+execution manifest、package registry 或冗余中间对象。
+
 ## 路径与命名
 
 - 在写入前显式定义输出目录，并按当前项目约定创建。

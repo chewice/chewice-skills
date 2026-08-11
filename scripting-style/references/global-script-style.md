@@ -69,7 +69,7 @@ section syntax：
 
 不要只写“使用默认参数”，也不要复制范例中的历史数值。
 
-### 检查应保护下一步
+### 检查应保护下一步，并 Fail Fast
 
 在高风险转换后立即使用与问题匹配的检查：
 
@@ -80,6 +80,105 @@ section syntax：
 - 契约：预期列、对象槽位、输出文件。
 
 检查必须能支持下一步决策。不要为“看起来完整”堆积无解释的打印。
+
+对应当满足的 invariant，优先用简洁断言立即失败，例如 R 中的 `stopifnot(...)`，
+Python 中的 `assert`，Bash 中的显式退出。只检查当前任务里真正重要、且静默出错会污染
+下游解释的数据契约。
+
+不要为每一个理论上可能发生的异常建立防御瀑布：存在性检查层层嵌套、`warning` 后继续、
+第二 fallback、第三 fallback。除非该异常在当前任务中有现实发生概率，否则不写。
+
+### 减少不必要的控制流
+
+尽量减少嵌套 `if` / `else`、`switch`、`tryCatch`、early return 和 speculative fallback。
+若分析可写成直接数据变换，就直接写。
+
+条件判断仍然适用于：
+
+- 防止静默的数据错位；
+- 验证关键输入或不可恢复契约；
+- 根据真实实验设计必须区分的处理路径。
+
+原则是减少不必要 branching，而不是消灭 branching。不要为假想未来场景预留分支。
+
+### 一个分析概念，一个局部块
+
+一个 metric、比较或决策尽量在一个连续代码块内完成：计算、必要中间变量、就地写入、
+紧邻检查。不要把简单步骤拆成 function definition → helper → configuration → call →
+post-processing → metadata merge。
+
+### 保持数据流可见，使用具体命名
+
+尽量让核心数据对象保持稳定并可追踪，例如 `counts`、`metadata`、`seu`、`sce`、
+`results`。优先就地累积结果：
+
+```r
+metadata$mito_frac <- ...
+metadata$nuclear_frac <- ...
+```
+
+除非代表真正不同的数据语义，否则不要制造无信息量的版本链或容器：
+`metadata_v1`、`metadata_tmp`、`metadata_final2`、`analysis_context`、
+`result_container`、`metric_registry`。
+
+变量名应反映科研含义（如 `mito_genes`、`case_cells`、`doublet_score`）。避免
+`obj`、`tmp`、`res2`、`data_new`、`x1`、`holder`、`context`、`manager`。
+不要为了假想通用性，把具体 biological concept 改成抽象术语。
+
+### 注释解释科学，不解释语法
+
+注释主要说明：
+
+- 为什么做这一步；
+- 指标代表什么；
+- 阈值或参数的依据；
+- 对应的 biological / statistical concept；
+- 特殊处理为什么存在。
+
+不要写没有信息量的语法旁白，例如“# create directory”或“# calculate mean”。
+有价值的注释形如：
+
+```r
+# Nuclear fraction: intronic reads / (intronic + exonic reads)
+# Use donor-level pseudobulk to avoid treating nuclei as independent replicates.
+```
+
+### 必要分析复杂度 vs 偶然架构复杂度
+
+科学问题本身可以复杂。用户明确要求的 QC、doublet、annotation、DEG、pathway、
+敏感性分析或图形，全部实现——这是 necessary analytical complexity。
+
+简洁只约束**如何写代码**，不缩减**做多少科学分析**。正确方式是并列增加
+analytical blocks，而不是因此引入 AnalysisManager、MetricRegistry、PipelineExecutor、
+ConfigLoader、DatasetAdapter 或 ResultFactory 等 accidental software complexity。
+
+### 修改既有脚本时采用 minimal-diff
+
+修改用户指定的既有科研脚本时，默认：
+
+- 保持原有 section、变量命名习惯和对象组织方式；
+- 在原位置增加逻辑；
+- 不无故搬动代码；
+- 不顺手全面重构；
+- 不把已有 script 改写成另一种 architecture。
+
+除非用户明确要求 refactor。来源范例仍只读，不得修改。
+
+### 以认知复杂度为目标
+
+多个科学上等价的实现之间，优先选择：更少抽象、更少分支、更浅嵌套、更少间接层、
+更少隐藏状态、更可见的数据流、更显式的分析决策、更局部的推理。
+
+最终目标是 minimum cognitive complexity，不是最少代码行数。允许中间变量改善思考，
+不要把多步逻辑压成难读的一行（code golf）。
+
+优先使用该生态成熟、常见、易识别的写法（如 R 中的 `Matrix::colSums`、`dplyr`、
+Seurat / SingleCellExperiment、ggplot2）。标准函数已能清楚完成任务时，不要自造
+wrapper。
+
+不要仅因数据“可能很大”就提前引入 parallel abstraction、disk cache、multiprocessing
+framework、memory scheduler 或自定义稀疏算法。只有实际出现内存不足、明显性能瓶颈或
+不合理运行时间时，才对瓶颈做局部优化，不顺便重构整个分析。
 
 ### 输出靠近产生它的分析
 
@@ -137,7 +236,7 @@ section syntax：
 
 先查看当前仓库说明和邻近脚本，再决定这些细节。
 
-## 禁止泛化
+## 禁止泛化与投机工程
 
 - 不复制绝对路径、用户目录或环境命令。
 - 不在新脚本中硬编码机器绝对路径；默认使用有明确锚点的相对路径。
@@ -145,3 +244,15 @@ section syntax：
 - 不根据单个脚本创建强制规则。
 - 不依据编号、修改时间或命名相似性宣称脚本已废弃。
 - 不从 README 的排版或环境部分学习脚本风格。
+
+除非用户明确要求或当前任务已有现实需要，否则不要主动加入：generic configuration /
+YAML / CLI framework、class hierarchy、workflow engine、caching / retry / fallback
+framework、compatibility layer、plugin architecture、logging framework、state
+management、checkpoint system、execution registry、automatic recovery、generic
+dataset adapter。
+
+YAGNI 只约束软件架构复杂度，不限制用户明确要求增加的科学分析工作。
+
+特别警惕仅凭工程惯例自动产生的理由，例如“为了更健壮 / 未来扩展 / 兼容更多数据集 /
+可维护性 / 模块化 / 安全，我对所有步骤加入检查……”。这些操作都必须有**当前任务中的
+具体理由**，不能自动实施。
