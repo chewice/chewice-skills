@@ -19,10 +19,24 @@
 - 项目内部输入、输出、脚本和资源使用相对于该锚点的路径，并在脚本头部说明锚点。
 - 同一脚本不要无说明地混用 repository-relative、task-relative 与 script-relative 路径。
 - 不硬编码 `/home/...`、用户目录、Windows drive path、`~` 或绝对 `setwd()`。
-- 项目外部声明输入由 CLI 参数或项目已有 manifest / runner 契约提供；不要为了相对化而
-  复制 source data，也不要在脚本里建立新的机器路径表。
+- 项目内已知的 sample / library / dataset ID 与相对路径，优先写成脚本常量；不要仅为
+  「将来可能复用」自动包一层 CLI。
+- 仅当输入在项目外部、无法合理相对化，或项目**已有** CLI / manifest / runner 契约时，才用
+  调用参数或该契约注入；不要为了相对化而复制 source data，也不要在脚本里建立新的机器路径表。
 - `normalizePath()`、`Path.resolve()` 等可用于运行时检查或审计，但解析结果不写回源码或
   可迁移配置。
+
+## 项目内分析常量优先于 CLI
+
+项目内科研分析默认不是可复用命令行工具。下列值属于当前分析的一部分时，可显式写在脚本前部：
+
+- sample / library / dataset ID；
+- 项目相对路径；
+- 阈值、比较组、实验分组。
+
+仅当同一脚本真正要跨多组变化输入复用，或用户 / 外围 workflow 明确要求时，再引入 CLI、
+YAML 或通用参数接口。样本集合优先来自研究设计或 analysis manifest，不要从 completion
+marker 反推。
 
 ## 放置规则
 
@@ -49,6 +63,11 @@
 ## 推荐形式
 
 ```r
+# 项目内当前分析的样本与路径常量；优于为此引入 CLI
+sample_id <- "HS_BM_P1_cells_2"
+input_dir <- "../data/cellranger"
+library_ids <- c("GSM1", "GSM2", "GSM3")
+
 # 根据 elbow 与批次分离诊断选择；不要从其他项目照搬
 n_pcs <- TODO_N_PCS
 
@@ -62,6 +81,7 @@ stage_levels <- c("TODO_EARLY", "TODO_LATE")
 
 - 参数是否在使用前可见？
 - 路径锚点是否明确，源码是否没有机器特定绝对路径？
+- 项目内已知常量是否被不必要地做成 CLI / 配置框架？
 - 科学决策是否与普通运行参数混在一起而失去解释？
 - 是否存在没有依据的历史默认值？
 - 是否为了参数组织引入了超过任务规模的工程结构？

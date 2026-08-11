@@ -26,7 +26,8 @@ machine-readable contract 保持英文。
 - 只有在显著减少真实重复、隔离窄技术细节或表达逐元素计算时，才建立小型局部函数。
 - 不得把 QC 阈值、注释选择、整合方法、root/terminal、lineage、cutoff 或基因集等
   核心生物学与统计决策隐藏进函数。
-- 减少不必要分支与防御瀑布；关键契约 Fail Fast。
+- 项目内脚本默认是 executable analysis record，不是 CLI / 流水线应用。
+- 减少不必要分支与防御瀑布；关键契约 Fail Fast；校验通过后通常消隐。
 - 以 cognitive complexity 为目标：可见数据流、具体命名、科学注释、局部分析块。
 
 ## Boundaries
@@ -36,6 +37,9 @@ machine-readable contract 保持英文。
 - 不分析或自动设计 Pixi、Conda、容器及编辑器环境。
 - 不把来源脚本中的绝对路径、环境细节或历史参数设置为通用默认值。
 - 不创建公共函数库、R package、复杂代码分析平台或统一 pipeline。
+- 不把项目内分析脚本默认写成 CLI / 流水线应用；不因将来可能复用而泛化项目常量。
+- 不从 completion markers 发现样本集；不默认落盘 `input_contract` /
+  `validation_pass` / `run_summary` 等运维产物。
 - 不主动引入 speculative 防御式分支、logging/checkpoint/retry/workflow 等工程框架。
 - 不因追求简洁而省略用户明确要求的分析块；增加分析时增加 analytical blocks，
   不升级成 framework。

@@ -7,15 +7,35 @@
 - **对象**：昂贵计算或下游继续分析所需的完整状态。
 - **表格**：可检查、比较、汇总或进入其他工具的结果。
 - **图形**：QC、方法诊断、生物学解释和最终展示。
-- **日志摘要**：运行阶段、关键数量和已生成文件。
+- **日志摘要**：脚本末尾**打印**运行阶段、关键数量和已生成文件；不默认写成
+  `run_summary.tsv` 一类运维文件。
 
 若结果需要人工复查、下游复用或重新绘图，再分别保存对应表格、对象或摘要；没有这些
 需求时，不为凑齐类型制造冗余文件。
 
-保存真正支持下游分析、reproducibility、interpretation、manuscript figures 或 QC
-review 的结果。不要默认把所有中间对象全部写盘。除非具有明确用途或用户明确要求，
-不要主动生成十几个 diagnostic table、每一步运行状态文件、completion marker、
-execution manifest、package registry 或冗余中间对象。
+默认只保存有明显分析用途的科学产物，例如：
+
+```text
+cell_qc_metrics.tsv
+donor_qc_summary.tsv
+DEG_results.tsv
+module_scores.tsv
+figures/
+```
+
+不要默认把所有中间对象全部写盘。除非具有明确用途、用户明确要求，或外围 workflow 明确
+需要，不要主动生成运维/执行管理产物，例如：
+
+```text
+complete.tsv
+run_summary.tsv
+input_contract.tsv
+execution_status.tsv
+validation_pass.tsv
+```
+
+以及每一步运行状态文件、completion marker、execution manifest、package registry 或冗余
+中间对象。成功校验通常不必落盘。
 
 ## 路径与命名
 
@@ -54,6 +74,7 @@ execution manifest、package registry 或冗余中间对象。
 - 图形分组、颜色、标签和比较方向是否清楚？
 - 对象是否能被明确的下游步骤读取？
 - 输出名能否区分不同参数、stage 或 lineage？
-- 是否产生了没有下游用途的临时文件？
+- 是否产生了没有下游用途的临时文件或仅运维意义的 `complete` / `validation_pass` /
+  `input_contract` / `run_summary` 类文件？
 
 交互式 `View()` 可以用于探索，但不能是唯一检查或唯一输出。

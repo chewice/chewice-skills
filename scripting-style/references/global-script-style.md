@@ -18,6 +18,48 @@
 整理与可视化 → 保存”的自然顺序编写。可以省略不适用步骤，但不要把主线分散进
 多个本地模块。
 
+### 默认是分析记录，不是应用
+
+项目内科研脚本默认写成 **executable analysis record**，不是 command-line application 或
+execution-management layer。主脚本应直接暴露科学工作流：
+
+```text
+定义分析输入 → 读入数据 → 检查关键假设 → 执行分析 → 检查结果 →
+保存有科学意义的产物 → 作图
+```
+
+除非用户明确要求或外围 workflow 已有契约，否则不要自动加入：
+
+- `commandArgs()`、argparse 或自定义 CLI parser；
+- 泛型 `--input`、`--output-root`、`--label`、`--expected-*` 接口；
+- 靠 completion 文件自动发现任务或样本；
+- completion markers、run-state tracking、execution summaries；
+- 仅记录「校验通过」的 input-contract / audit 表；
+- 通用 filesystem orchestration；
+- pipeline-status 词汇，如 `COMPLETE`、`PASS`、`expected`、`run state`。
+
+**项目特异性允许。** 当前分析需要的 sample / library / dataset ID、项目相对路径、阈值、
+比较组和实验分组，可以直接写在脚本前部。这不是 code smell；它往往比引入 CLI 抽象更易读、
+更易复现。不要仅因「将来可能变」而泛化这些常量。仅当同一脚本**确实**要作为跨多组输入的
+可复用工具时，才泛化或改为参数注入。
+
+仍禁止机器特定绝对路径（`/home/...`、盘符、`~`）；允许的是锚点下的项目相对路径与分析常量。
+
+**样本来自分析输入，不来自执行发现。** 已知样本或文库集合时，优先显式定义或从研究设计 /
+analysis manifest 读取，例如：
+
+```r
+library_ids <- library_manifest$library_id
+# 或固定项目分析：
+library_ids <- c("GSM1", "GSM2", "GSM3")
+```
+
+不要用上游 job 的 completion 产物反推样本集，例如扫描 `complete.tsv` 再取目录名。
+
+**尽快进入科学主线。** 依赖与短输入定义之后，应较快出现有科学意义的计算。不要让脚本前半被
+argument parsing、filesystem discovery、配置层、校验基建或执行管理占满；若读者必须先理解
+一套 execution framework 才能看到分析，应简化结构。
+
 ### 用语义分节，并让 R 章节可导航
 
 章节是否存在、如何切分，先由分析语义决定，不按固定行数或装饰模板切段。标题说明当前
@@ -51,8 +93,9 @@ section syntax：
 基准。不要混用 repository-relative、task-relative 和 script-relative 路径而不说明。
 
 不要硬编码 `/home/...`、用户目录、Windows drive path、`~`、机器安装目录或绝对
-`setwd()`。项目外部且无法合理相对化的声明输入，通过调用参数或项目已有 manifest / runner
-契约注入，不复制进 repository，也不写成新的机器路径常量。
+`setwd()`。项目内已知的 sample / library ID 与相对路径优先写成分析常量。仅当输入在项目
+外部、无法合理相对化，或项目已有 CLI / manifest / runner 契约时，才用该契约注入；不复制进
+repository，也不写成新的机器路径常量，更不要仅为项目内常量自动包一层 CLI。
 
 允许运行时为存在性检查、日志或审计解析 absolute path，但不要把解析结果写回源码或作为
 可迁移配置保存。不要为少量路径增加 YAML、环境变量层、path manager class 或通用 helper。
@@ -88,6 +131,11 @@ Python 中的 `assert`，Bash 中的显式退出。只检查当前任务里真�
 不要为每一个理论上可能发生的异常建立防御瀑布：存在性检查层层嵌套、`warning` 后继续、
 第二 fallback、第三 fallback。除非该异常在当前任务中有现实发生概率，否则不写。
 
+**校验通过后通常消隐。** 校验保护科学正确性，本身不是子系统。`stopifnot` / 等价断言通过后
+继续分析即可。不要默认构造或保存 `input_contract`、`count_check`、`run_summary`、
+`validation_summary`、`execution_status` 等对象或文件，除非它们本身回答科学、QC、provenance
+问题，或用户 / 外围 workflow 明确要求。成功校验通常不需要变成输出文件。
+
 ### 减少不必要的控制流
 
 尽量减少嵌套 `if` / `else`、`switch`、`tryCatch`、early return 和 speculative fallback。
@@ -100,6 +148,11 @@ Python 中的 `assert`，Bash 中的显式退出。只检查当前任务里真�
 - 根据真实实验设计必须区分的处理路径。
 
 原则是减少不必要 branching，而不是消灭 branching。不要为假想未来场景预留分支。
+
+区分**科学分支**与**运维分支**。保留代表真实分析差异的分支，例如 human vs mouse、
+chemistry 版本、case vs control、某项生物学测量有无、正当的统计边界情况。对主要为运维目的
+的分支保持怀疑：job 是否完成、输出文件是否存在、用户是否提供了某 CLI 参数、是否走
+fallback path、当前是哪种 execution mode。运维分支仅在 workflow 确实需要时添加。
 
 ### 一个分析概念，一个局部块
 

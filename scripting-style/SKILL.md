@@ -86,8 +86,13 @@ description: 为新的 R、Python 或 Bash 生物信息学分析脚本设计并�
 - 允许少量重复来保持不同样本、阶段或 lineage 分支独立可读。
 - 不自动引入 class、配置层、跨文件 wrapper、插件系统、公共函数库或统一 pipeline。
 - 重复已经造成实际漂移时，才提取最小共同技术步骤；不要提前为假想复用工程化。
-- 减少不必要的 `if/else`、嵌套和 speculative fallback；关键契约用简洁断言 Fail Fast，
-  不为假想异常建立防御瀑布。
+- 项目内脚本默认是 executable analysis record，不是 CLI / 流水线应用；不自动加
+  `commandArgs`、泛型 flag、completion 发现或 pipeline-status 词汇。
+- 项目内 sample / library ID、相对路径、阈值等分析常量可显式写在脚本中，优于为此
+  引入 CLI；样本集来自研究设计或 analysis manifest，不从 completion marker 反推。
+- 关键契约用简洁断言 Fail Fast，校验通过后通常消隐，不默认落盘 `input_contract` /
+  `validation_pass` / `run_summary`；减少运维分支，保留科学分支。
+- 减少不必要的 `if/else`、嵌套和 speculative fallback；不为假想异常建立防御瀑布。
 - 简洁只约束写法，不缩减用户明确要求的科学分析范围；增加分析时并列增加
   analytical blocks，不要把分析复杂度升级成架构复杂度。
 - 修改既有脚本时默认 minimal-diff：保 section、命名与对象组织，原位增逻辑，
@@ -100,7 +105,8 @@ description: 为新的 R、Python 或 Bash 生物信息学分析脚本设计并�
 - 不打开、复制、猜测或重新实现未获授权的 API 内部。
 - 不自动设计 Pixi、Conda、容器或编辑环境。
 - 新脚本中的项目内部路径默认使用单一、明确锚点下的相对路径；不硬编码机器特定绝对路径。
-- 项目外部声明输入通过现有 CLI、manifest 或 runner 契约注入，不为路径增加配置平台。
+- 项目内已知分析常量优先写在脚本中；仅当输入在项目外部、无法合理相对化，或项目已有
+  CLI / manifest / runner 契约时，才用该契约注入，不为路径增加配置平台。
 - 不修改来源范例；只在用户指定的目标文件中工作。
 
 ## 使用模板
@@ -116,18 +122,23 @@ description: 为新的 R、Python 或 Bash 生物信息学分析脚本设计并�
 ## 完成前自检
 
 - 能否从上到下说明脚本如何回答分析问题，并看见完整数据流？
-- 输入、输出、上游依赖和运行假设是否明确？
+- 依赖与短输入定义之后，是否较快进入有科学意义的计算，而非被 argparse / discovery /
+  执行基建淹没？
+- 输入、输出、上游依赖和运行假设是否明确？项目内常量是否被不必要地做成 CLI？
+- 样本集是否来自研究设计或 analysis manifest，而非 completion marker 反推？
 - 关键参数是否有当前任务的依据，而非照搬历史值？核心决定是否仍在主线可见？
 - 每个局部函数 / wrapper 是否通过了必要性门槛？删掉后是否仍清楚且只多几行？
-- 是否存在为假想场景写的分支、过度 defensive programming，或本可用
-  `stopifnot` / 等价断言表达的冗长检查？
-- 是否存在无必要的 configuration layer、中间对象版本链或空洞变量名？
+- 是否存在为假想场景写的运维分支、过度 defensive programming，或本可用
+  `stopifnot` / 等价断言表达的冗长检查？校验是否被产物化成 `input_contract` /
+  `validation_pass` / `run_summary`？
+- 是否存在无必要的 configuration layer、中间对象版本链、空洞变量名或 pipeline-status
+  词汇（`COMPLETE` / `PASS` / `run state`）？
 - 用户要求的分析块是否都实现了，而没有被“追求简洁”省略，也没有升级成 framework？
 - 若改既有脚本，是否保持了原有 section / 命名 / 对象组织，且未做未经要求的全局
   refactor？
 - API 是否只按已知契约调用？路径锚点是否明确，项目内部是否使用可迁移相对路径？
-- 当前任务需要的图、表和对象是否命名清楚、足以支持下游与解释，且未默认写盘全部
-  中间对象或工程性 marker / manifest？
+- 当前任务需要的图、表和对象是否命名清楚、足以支持下游与解释，且未默认写盘运维
+  marker / manifest？
 - R 脚本需要 OUTLINE 时，section 是否采用 `# 1. 标题 ----` 并得到干净 symbol name？
 
 若答案不理想，优先简化结构、恢复决策可见性，再交付脚本。删除不会降低 scientific
