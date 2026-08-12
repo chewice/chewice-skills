@@ -1,0 +1,4 @@
+interface:
+  display_name: "提出一个好科学问题"
+  short_description: "从研究兴趣、真实文献、实验意义与现实约束中收敛可检验问题"
+  default_prompt: "使用 $ask-a-good-question 从我的研究兴趣和可用资源出发，经过候选生成、真实文献与撞车审计、可行性和实验判别力检查，形成一个主科学问题和一个备选问题。"

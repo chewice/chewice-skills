@@ -1,0 +1,65 @@
+{
+  "skill_name": "ask-a-good-question",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "我想做抑郁症和免疫相关的研究，但方向太大，不知道真正值得追的问题是什么。",
+      "should_trigger": true,
+      "expected_output": "先澄清研究者偏好、推断层级、资源与希望改变的决定，再从知识张力生成少量正交候选，而不是直接推荐方法。"
+    },
+    {
+      "id": 2,
+      "prompt": "项目准备启动，帮我从这五个候选题里挑出一个不容易撞车、能做实验也有转化意义的问题。",
+      "should_trigger": true,
+      "expected_output": "先硬门预筛，再对至多两个入围候选做有日期和范围的真实文献审计，比较偏好、撞车、前提支持、可行性、实验判别力与转化链路，最终交还 Human 选择。"
+    },
+    {
+      "id": 3,
+      "prompt": "我手里只有一个横断面单细胞病例对照数据集，能不能帮我提出一个导致疾病的机制问题？",
+      "should_trigger": true,
+      "expected_output": "指出设计不能单独支持因果或机制措辞，按供体独立单位、竞争模型和可获得验证资源把问题降级或重构。"
+    },
+    {
+      "id": 4,
+      "prompt": "这个领域论文很少，所以一定很新、很有前景。帮我把它定成最终问题。",
+      "should_trigger": true,
+      "expected_output": "拒绝把检索稀疏等同于新颖或价值，区分未研究、不可行、无价值和数据库盲点，并要求可验证性与决策影响证据。"
+    },
+    {
+      "id": 5,
+      "prompt": "我喜欢做机制，但实验室只能拿到公开横断面转录组。请帮我找一个现实可落地的问题。",
+      "should_trigger": true,
+      "expected_output": "显式呈现偏好与资源冲突，提出可由现有资源完成的关联/候选机制问题及需要协作验证的备选，不伪装成完整机制研究。"
+    },
+    {
+      "id": 6,
+      "prompt": "这个候选问题已经很具体了，帮我在立项前全面查一下撞车、支持和反对文献。",
+      "should_trigger": false,
+      "expected_output": "转交 bear-propose；问题已确定，当前任务只是立项前证据评估。"
+    },
+    {
+      "id": 7,
+      "prompt": "给‘肠道菌群与抑郁相关’这句话找几篇支持论文。",
+      "should_trigger": false,
+      "expected_output": "转交 bear-support；这只是为既有主张寻找支持文献。"
+    },
+    {
+      "id": 8,
+      "prompt": "问题已经定了，请创建正式 BRIEF、Artifact 目录和 CURRENT_HANDOFF。",
+      "should_trigger": false,
+      "expected_output": "转交 research-project-workflow；这是已启动项目的研究治理。"
+    },
+    {
+      "id": 9,
+      "prompt": "把这个 Seurat 脚本改得线性一点，少封装函数。",
+      "should_trigger": false,
+      "expected_output": "转交 scripting-style；不进入科学问题选择。"
+    },
+    {
+      "id": 10,
+      "prompt": "帮我给已经审核好的研究结果生成 HTML 报告。",
+      "should_trigger": false,
+      "expected_output": "转交 report-generation；本 Skill 不渲染正式报告。"
+    }
+  ]
+}
