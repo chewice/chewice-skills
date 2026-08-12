@@ -1,219 +1,77 @@
-# 轻量风格验证
+# Type-first 风格验证
 
-## 范围与方法
+## 范围
 
-- 验证日期：2026-07-30
-- 状态：完成首次静态 holdout 验证
-- 初始规则来源：仅使用已确认的 Primary、Secondary 和 API-like Counterexample
-- 验证对象：9 个确认的 validation holdout
-- 方法：比较脚本分节、步骤顺序、参数位置、API 边界、中间检查、局部函数与输出保存
-- 未执行分析脚本，未检查生物学结果
-- 未打开顶层 `R/`，未读取 Pixi 文件或数据目录
+- 验证日期：2026-08-13
+- 路由契约：准确目标文件类型
+- 来源 artifact：51 R、1 Python、3 Bash、4 Notebook
+- 来源 aggregate SHA-256：`3ef2cdc9524bc3fd97ab29e4a73535f490cdb4a7a8ec7f061a5b764521e874e5`
+- 来源访问：只读；顶层项目 API 与环境文件均排除
+- 生物学执行：未运行；本验证只检查代码结构和证据可见性
 
-Holdout 中出现的具体参数、路径、工具和生物学对象没有写入通用规则。
+旧 stage-first 验证由本记录取代，原文仍可从 Git 历史追溯。由于用户确认的重构建立在全语料审查上，下列 corpus holdout 是 `retrospective_same_type_regression`，不是 blind/unseen test。fresh forward tasks 才是隔离 evaluation surface。
 
-## 结果摘要
+## 当前契约
 
-| Holdout | 结果 | 主要结论 |
-|---|---|---|
-| `01-scrna-qc/scripts/01-cellranger.sh` | Partial | 参数和重复样本块符合直接 Bash 风格；历史脚本缺少显式错误退出、输入检查和完成摘要 |
-| `02-annotation/scripts/03-HS_BM_auto_annotation-part2.R` | Pass | 线性 QC—聚类—决策—注释—保存主线、检查点和 API 边界均被规则覆盖 |
-| `03-integration/scripts/03-inter-harmony.R` | Pass | 方法参数理由、替代整合方法、诊断图和对象保存说明规则未固化 RPCA |
-| `04-grn/scripts/04-hypothesis_driven_partIV.R` | Pass | 假设—通路—TF 筛选—调控证据—可视化保持线性，API 仅在调用边界出现 |
-| `05-from-pathway-to-program/scripts/04-metabolisum_activity.R` | Partial | setup—load—score—heatmap 清楚；只保存图，证明不能强制每个脚本同时保存图、表和对象 |
-| `06-lr-pairs/scripts/05-cellchat-stage-compare-weight.R` | Partial | 两组平行 Wilcoxon 主线和输出清楚，保留重复优于强行 wrapper；上游输入检查较弱 |
-| `07-trajectory/scripts/04-3-lineage-pcurve-Mono.R` | Pass | lineage、root、terminal 和曲线参数可见；API 采用准备—调用—绘图—保存边界 |
-| `07-trajectory/scripts/05-2-dynamic-genes-Ery.R` | Partial | 逐基因局部函数边界合理，参数和输出可见；前置单基因试算存在静态变量依赖风险 |
-| `07-trajectory/scripts/07-2-dynamic-module-Mega.R` | Partial | 小型绘图函数、昂贵计算缓存和长脚本分节符合规则；含机器特定环境路径及未定义缓存字段风险 |
+| ID | 契约 |
+|---|---|
+| C1 | Write the analysis, not an application around the analysis. |
+| C2 | 具体代码形态只从目标文件类型和邻近同类型项目代码学习。 |
+| C3 | 保留任务中真实存在的问题、试做、观察/比较、人工选择、批量扩展、证据与下一问。 |
+| C4 | 只抽取稳定技术核；重复次数本身不是 helper 门槛。 |
+| C5 | 观察性检查是正常分析；硬断言只保护 silent scientific corruption。 |
+| C6 | part 文件、人工编辑 handoff、对象重载与有用途的昂贵 cache 是合理科研边界。 |
+| C7 | 输出按用途选择，不强制 bundle；未运行代码不得声称观察结果。 |
+| C8 | 修改既有代码时默认保留邻近结构并使用 minimal diff。 |
 
-`Pass` 表示候选规则能解释主要结构且未发现影响风格泛化的冲突。`Partial` 表示主结构可解释，
-但存在不能升级为通用规则的历史写法或静态风险。
+## R 回顾性回归
 
-## 逐项验证
+| 路径与 SHA-256 | 结果 | 支持契约 | mismatch class 与处理 |
+|---|---|---|---|
+| `02-annotation/scripts/03-HS_BM_auto_annotation-part2.R`<br>`40ab54571b0f1bf9b1f7b2111106f312d9462a4ed966eab5ceb19985f4fc8685` | Pass | C3、C5、C6、C7 | 无。part 边界与人工 annotation choice 是合理分析结构。 |
+| `03-integration/scripts/03-inter-harmony.R`<br>`183f17ab9be2761136ececee8cbb768938d6bcfff6405e59e294c33cd634f863` | Pass | C1、C2、C3、C7 | 无。替代方法继续作为读取同一 baseline 的短独立脚本。 |
+| `04-grn/scripts/04-hypothesis_driven_partIV.R`<br>`844046dd58566085f2db7a641f19ab108a776226bbd4897e040edebec00548e9` | Pass | C1、C3、C6、C7 | 无。科学问题与连续证据块保持可见，不需要 framework。 |
+| `05-from-pathway-to-program/scripts/04-metabolisum_activity.R`<br>`d9ec7080a5651c953ea1b86f9da620e11b550e73031dea04e063ef5e5cee56e6` | Pass | C1、C5、C7 | 无。只保存 figure 的科学输出反证了 table/figure/object bundle。 |
+| `06-lr-pairs/scripts/05-cellchat-stage-compare-weight.R`<br>`b0512c7394287489533d0efb7dbd9eb10ab52973a87f346f8566c57b064d85b5` | Pass | C3、C4、C7 | 无。大型平行比较块让统计量和输出保持独立可读。 |
+| `07-trajectory/scripts/05-2-dynamic-genes-Ery.R`<br>`719da9b292f41c81cb4f16500f6ba39c8c5377426c1b8b5a232c9118e978f898` | Partial | C3、C4、C5 | `source_defect`：复制的 trial code 引用了只在后续 helper 内定义的变量。保留 prototype-before-batch，但要求原型自洽；真实漂移出现后抽最小技术核。 |
+| `07-trajectory/scripts/07-2-dynamic-module-Mega.R`<br>`d615c6deab42e9f5f5c99535a0befd4e079a2c219742a17b76bce33b3f60a902` | Partial | C4、C6、C7 | `source_defect` + `nontransferable_artifact`：scientific cache 用途有效，但 stale field 和 machine path 不可学习，也不据此增加 cache system。 |
 
-### 01 — Cell Ranger Bash
+## Bash 回顾性回归
 
-正确预测：
+| 路径与 SHA-256 | 结果 | 支持契约 | mismatch class 与处理 |
+|---|---|---|---|
+| `01-scrna-qc/scripts/02-starsolo.sh`<br>`f329a11691a5d33b229e18923ef60f0baec3724733744e7db876106be376b033` | Partial | C1、C2、C4、C7 | `nontransferable_artifact`：直接重复 sample commands 有用；machine path、environment invocation 和 destructive temporary cleanup 排除。模板增加 quoting 与 strict mode，但没有 dispatcher。 |
 
-- 全局资源参数与样本参数分开；
-- 命令顺序直接可见；
-- 两个样本保留平行重复，没有建立 workflow framework；
-- 每个样本有独立输出目录。
+## Notebook 回顾性回归
 
-不一致：
+| 路径与 SHA-256 | 结果 | 支持契约 | mismatch class 与处理 |
+|---|---|---|---|
+| `03-integration/scripts/06-inter-scanvi.ipynb`<br>`d231fdd1d62a591f2b0f15e2bbea48d879a3d48330b62a3a5499806871d1004a` | Pass | C1、C2、C3、C7 | 无。direct model、latent representation、diagnostics 与 saving 保持同类型 cell sequence；stored outputs 不作当前证据。 |
+| `03-integration/scripts/07-inter-bbknn.ipynb`<br>`75735aa7f65a564a069d4542d5800bad2e841d27ec6e454501b1681ef629b245` | Partial | C2、C3、C4 | `intentional_research_boundary` + `nontransferable_artifact`：较长一次性 plotting helper 可以位于 helper 边界；不连续 execution counts 与 stored outputs 排除。 |
 
-- 脚本没有 `set -euo pipefail`、输入存在性检查或完成提示。
+## Python 证据缺口
 
-处理：
+没有独立 standalone Python corpus holdout。唯一 `.py` artifact 只为窄直接转换和真实 positional contract 提供 learning evidence，不能证明通用 Python 结构。因此 Python 必须用 fresh forward task 验证，且指南明确区分普通 script `print()` 与 Notebook display 语义。
 
-这些安全项继续保留在 Bash 模板中，因为它们是用户在 Phase 2 明确要求的增强；不宣称
-它们是所有来源脚本共有的历史风格。
+## 共享边界结果
 
-### 02 — Annotation part 2
+- exact-type routing 阻止 R sections、Python entrypoints、Bash dispatch 与 Notebook display behavior 跨类型迁移。
+- runtime templates 不包含 generic argument parsing、config system、dispatcher、`run_analysis()` wrapper、completion marker 或 mandatory output bundle。
+- R OUTLINE 只由明确请求 fixture 表达。
+- Notebook templates 使用空 outputs 和 `null` execution counts。
+- 来源缺陷与环境 artifact 被分类，而不是标准化为规则。
 
-正确预测：
+## Fresh forward tests
 
-- 输入、QC、降维、resolution 比较、决策、自动注释和保存按顺序展开；
-- `[检查点]` 与 `[决策点]` 表达分析语义；
-- QC、PC、resolution、score cutoff 在使用附近可见；
-- 外部 annotation API 的输入准备、调用和返回检查清楚；
-- 图、metadata 与对象按用途保存。
+测试 prompt 只包含科研任务并调用安装中的 Skill，不泄漏预期诊断或偏好输出形态。
 
-未形成新规则：具体 QC cutoff、marker、resolution、权重和 score cutoff。
+| 类型 | 任务 | 结果 | 观察 |
+|---|---|---|---|
+| R | 比较三个 PCA 维度、保存证据并延后人工选择 | Pass after corrective iteration | 较宽的初始任务先后暴露了 invented resolution/cutoffs/top-N、未授权 Wilcoxon estimand、虚假 PCA-to-marker 依赖，以及多余 algorithm/sampling settings；这些均促成规则收紧。最后的独立核心复测只读取已有 PCA，用一个直接 Elbow diagnostic 标出 15/25/35，保存证据，并以 `NA_integer_` 保留未决选择；没有额外模型、seed、sampling、CLI 或状态产物。 |
+| Python | 读取固定 Parquet，按 donor/condition 汇总 score 并保存 TSV | Pass | 直接顶层 pandas 分析，显式 `print()` checkpoints，一个 required-column 硬契约，固定项目路径；无 CLI、`main()`、config、wrapper 或 completion state。 |
+| Bash | 对两个已知 sample 运行 Salmon | Pass | 两个可独立修改的显式 command blocks，使用 quoting 与 strict mode；无 loop、dispatcher、config、runner 或 marker。 |
+| Notebook | 比较 latent dimensions、显示诊断并延后选择 | Pass | 有效 raw Notebook JSON；sweep、可比 display、后续未决选择和 gated downstream 相邻。所有 code cells 都是 `execution_count: null` 与空 `outputs`；无 CLI、config、runner 或伪造诊断。 |
 
-### 03 — Harmony integration
+## Static minimal-diff 回归
 
-正确预测：
-
-- 读取未校正对象作为 baseline 上游；
-- `theta` 的分析含义在调用附近解释；
-- 整合后按 project、sample 和 annotation 生成可比较诊断；
-- 保存下游对象；
-- 说明整合规则必须方法中立，不能把 RPCA 固化。
-
-### 04 — GRN hypothesis part IV
-
-正确预测：
-
-- 先明确新通路问题，再选择 gene set 和打分；
-- 依次用相关性、target overlap、hub 和 cell-type variance 形成证据链；
-- 外部 theme 与 variance API 只学习加载和调用边界；
-- 多个 TF 绘图块保留少量重复，科学对象在主线可见；
-- 图表紧邻对应筛选步骤保存。
-
-未形成新规则：通路、TF、overlap threshold、importance cutoff 和绘图样式。
-
-### 05 — Metabolism activity
-
-正确预测：
-
-- setup、load、score、aggregation 和 heatmap 分节；
-- gene-set 文件、score 方法、cell type 排除和颜色选择可定位；
-- 关键矩阵维度在转换后检查。
-
-泛化修订：
-
-初始阶段指南曾倾向同时保存分数矩阵、表格和图；该脚本只保存 heatmap。因此正式规则改为
-“按人工复查和下游复用需要选择输出类型”，不要求凑齐所有产物。
-
-### 06 — CellChat weight comparison
-
-正确预测：
-
-- stage、样本和 pseudocount 在分析前可见；
-- LR-level 与 pathway-level 两段平行流程保持指标差异；
-- 两个短而相似的 Wilcoxon 块没有被强行抽成通用函数；
-- 结果表、条件图和结束摘要与分析步骤对应。
-
-局限：
-
-读取 sample metadata 和合并网络表后缺少显式结构检查。Skill 继续要求风险相称的输入检查，
-但不把某一种 `head()`、`dim()` 或 `table()` 写成固定模板。
-
-### 07 — Mono principal curve
-
-正确预测：
-
-- lineage、reduction、dims、curve flexibility、root 与 terminal 显式；
-- 外部 lineage API 不透明；
-- 调用前检查 lineage 列，调用后用曲线和 pseudotime 图检查；
-- 对象保存支持下一条 lineage 继续写入。
-
-未形成新规则：具体谱系、细胞 barcode、reduction、自由度和 sample size。
-
-### 07 — Ery dynamic genes
-
-正确预测：
-
-- lineage 和模型参数集中且解释；
-- 上游 lineage/pseudotime 列有明确契约检查；
-- `de.test()` 是逐基因重复计算的合理局部函数；
-- 显著与非显著基因绘图保留平行重复；
-- 保存调整后 p 值供后续 module 使用。
-
-静态风险：
-
-全基因扫描前的单基因试算块引用了随后才在局部函数内定义的
-`expressionFamily` 与 `leftcensored`。这更像未清理的探索检查，不能作为正向风格。
-Skill 的“检查必须保护下一步”规则应能提示删除或补全该块，但本轮不修改来源脚本。
-
-### 07 — Mega dynamic modules
-
-正确预测：
-
-- 关键 DREMI、FDR 和 cluster 参数直接可见；
-- `DynamicPlot()` 与 `DREVIGridPlot()` 只封装重复绘图；
-- 核心筛选、聚类、module 重排和保存仍在线性主线；
-- 对昂贵 DREMI 结果建立 cache 有明确复现目的；
-- 外部 API 只按调用边界处理。
-
-静态风险与排除项：
-
-- 脚本中出现机器特定 `.pixi` Python 路径；它不进入 Skill 风格。
-- cache 的参数列表引用了当前脚本中未定义的 `demo.genes`，复现块可能不完整。
-- `if (FALSE)` 复现段是特定脚本的调试/复现选择，不升级为模板。
-
-## 多脚本支持的稳定规则
-
-- 自上而下的线性分析主线。
-- 关键方法参数和科学决定在主线或调用附近可见。
-- 语义决定如何分节；需要 R OUTLINE 导航时使用 title-first section syntax 编码章节。
-- 外部 API 使用准备—调用—检查—保存边界，不推断内部。
-- 高风险转换后使用与下一步相匹配的检查。
-- 输出路径和产物角色显式，输出类型由复查和下游复用需求决定。
-- 局部函数适合逐元素计算、重复技术调用或绘图，不隐藏核心决策。
-- 平行方法、stage 或 lineage 分支可以保留少量重复。
-- 绝对环境路径和历史参数不能泛化。
-
-## 只适用于特定阶段的规则
-
-- QC：按指标展开并比较过滤前后构成。
-- Annotation：明确区分检查、聚类选择和专家注释判断。
-- Integration：先保留 baseline，再解释校正方法和强度。
-- GRN：区分 unsupervised 总览与 hypothesis-driven 聚焦。
-- Program/pathway：显式说明 program 与 gene-set 选择。
-- LR pairs：明确 sender/receiver、stage 和比较指标。
-- Trajectory：显式保留 root、terminal、lineage、pseudotime 与动态模型选择。
-
-## 仍不确定或不稳定的模式
-
-- 是否统一设置工作目录；
-- 是否使用交互式 `View()`；
-- 是否每个脚本都打印完成摘要；
-- 输出目录和路径变量的统一名称；
-- 覆盖已有输出的统一策略；
-- 函数数量或脚本长度上限；
-- 是否把参数集中在文件顶部或放在使用点附近。
-
-这些项目继续作为项目级选择，不设全局硬规则。
-
-相对路径规则不固定某个 working directory：repository 或 runner 仍决定锚点；Skill 只要求
-单一、明确、可迁移，并禁止在新脚本中硬编码机器绝对路径。
-
-## 2026-08-02 增量验证
-
-- 新 R fixture 通过 `parse()`，`languageserver 0.3.18` 返回 3 个干净 section names，层级为
-  `0, 1, 0`；普通提纲 comment 没有被误报为 symbol。
-- 顶部 2 项提纲与 2 个顶层 sections 一一对应。
-- fixture 输入 `inputs/example.tsv` 与输出 `derived/` 共享 repository / runner working
-  directory 锚点，没有机器绝对路径。
-- 独立 forward test 在未获知修复结论的情况下，生成 4 个 `# n. 标题 ----` sections，顶部
-  提纲一一对应，并使用 `inputs/` 与 `derived/` 相对路径；没有增加 helper、config 或环境设置。
-- R、Python、Bash templates 分别通过 parse、AST 与 `bash -n`，机器路径扫描无命中。
-
-## 验证失败或无法泛化的模式
-
-- “每个脚本必须同时保存图、表和对象”无法泛化，已修订。
-- “所有 Bash 范例都有错误退出和输入检查”不成立；模板保留它们是明确的安全增强。
-- 环境路径、工具参数、数据库、阈值、谱系和具体生物学对象均无法泛化。
-- Holdout 中的未定义变量、探索残片和机器路径不能成为风格规则。
-- 不能依据单个重复块规定必须函数化，也不能依据单个长函数规定禁止函数。
-
-## 结论
-
-初始 Skill 的核心规则通过 7 个阶段的 holdout 检查。两处措辞已根据验证收紧：
-
-1. 输出类型由实际复查和下游用途决定。
-2. Bash 安全项标记为明确增强，而不是语料共有事实。
-
-没有把 holdout 的具体方法、参数或环境细节加入规则，也没有修改任何来源脚本。
+`validation/fixtures/existing-minimal-diff.R` 保留邻近的 `## ... ====` section 与已有 `seu` 对象，只加入局部 candidate comparison 和未决决定。它通过 parse，没有归一化成 OUTLINE，也没有添加 application scaffolding。结果：Pass。

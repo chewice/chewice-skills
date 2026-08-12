@@ -1,73 +1,42 @@
-# 脚本说明 ---------------------------------------------------------------
-# 目标：TODO_ANALYSIS_QUESTION
-# 上游输入：TODO_UPSTREAM_INPUT
-# 主要输出：TODO_EXPECTED_OUTPUTS
-# 关键生物学决策：TODO_BIOLOGICAL_DECISIONS
-# 相对路径基准：TODO_REPOSITORY_OR_RUNNER_WORKING_DIRECTORY
+# [问题] 用一句话写当前脚本要回答的问题，以及上游对象来自哪里。
 
-# 1. 加载依赖与指定 API -----------------------------------------------
+# 沿用目标项目的 section 和路径约定；删除不适用块。
+library(TODO_PACKAGE)
 
-# library(TODO_PACKAGE)
-# source("TODO_USER_PROVIDED_API.R")
+input_file <- file.path("inputs", "TODO_INPUT.rds")
+output_dir <- file.path("derived", "TODO_ANALYSIS")
 
-# 2. 定义输入、输出与主要参数 -----------------------------------------
+analysis_object <- readRDS(input_file)
+analysis_object
 
-input_file <- file.path("TODO_RELATIVE_INPUT_DIR", "TODO_INPUT_FILE")
-output_dir <- "TODO_RELATIVE_OUTPUT_DIR"
+# [检查点] 只查看会影响下一步判断的结构、分组或质量信息。
+# dim(analysis_object)
+# table(analysis_object$TODO_GROUP)
 
-# 说明当前数据或研究设计为什么需要这个值；不要照搬历史脚本。
-analysis_parameter <- TODO_PARAMETER_VALUE
+# [可选：具体试做] 仅在随后要批量化且方法仍待理解时，先跑一个代表性对象。
+representative_id <- "TODO_REPRESENTATIVE_ID"
+# representative_result <- TODO_METHOD(analysis_object, representative_id)
+# representative_result
 
-if (!file.exists(input_file)) {
-  stop("Input does not exist: ", input_file)
+# [可选：比较] 仅在任务确实要选择参数或方法时，保留候选结果和诊断。
+candidate_values <- numeric()
+candidate_results <- list()
+
+for (candidate_value in candidate_values) {
+  # candidate_results[[as.character(candidate_value)]] <- TODO_METHOD(
+  #   analysis_object,
+  #   candidate_value = candidate_value
+  # )
 }
-dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
 
-# 3. 读取数据 -----------------------------------------------------------
+# [可选：决策点] 运行并检查候选结果后再填写；没有比较时删除本块。
+selected_value <- NA_real_
 
-input_data <- TODO_READ_INPUT(input_file)
+# [可选：批量扩展] 只有代表性案例被理解后，才提取稳定技术核或循环。
+# analysis_result <- TODO_DOWNSTREAM(analysis_object, selected_value)
 
-# 4. 检查数据结构与样本构成 -------------------------------------------
+# [可选：保存证据] 只保存当前复查或下游真正需要的产物。
+# dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
+# saveRDS(analysis_result, file.path(output_dir, "TODO_RESULT.rds"))
 
-print(dim(input_data))
-print(head(input_data))
-# TODO: 检查当前步骤真正依赖的列、样本、分组、缺失值或对象结构。
-
-# 5. 必要的数据准备 -----------------------------------------------------
-
-analysis_data <- input_data
-# TODO: 只保留当前分析必需的过滤、转换或分组。
-
-# 6. 核心分析 -----------------------------------------------------------
-
-# 保持方法、关键参数和生物学选择在主线中可见。
-analysis_result <- TODO_RUN_ANALYSIS(
-  analysis_data,
-  parameter = analysis_parameter
-)
-
-# 7. 关键中间结果检查 ---------------------------------------------------
-
-print(summary(analysis_result))
-# TODO: 添加能够支持下一步判断的表格、统计摘要或诊断图。
-
-# 8. 结果整理与可视化 ---------------------------------------------------
-
-result_table <- TODO_TIDY_RESULT(analysis_result)
-result_plot <- TODO_PLOT_RESULT(result_table)
-
-# 9. 保存输出 -----------------------------------------------------------
-
-table_file <- file.path(output_dir, "TODO_RESULT_TABLE.csv")
-figure_file <- file.path(output_dir, "TODO_DIAGNOSTIC_FIGURE.png")
-object_file <- file.path(output_dir, "TODO_ANALYSIS_OBJECT.rds")
-
-write.csv(result_table, table_file, row.names = FALSE)
-ggplot2::ggsave(figure_file, result_plot, width = TODO_WIDTH, height = TODO_HEIGHT, dpi = 300)
-saveRDS(analysis_result, object_file)
-
-# 10. 完成摘要 ----------------------------------------------------------
-
-message("Analysis completed.")
-message("Rows in result table: ", nrow(result_table))
-message("Outputs: ", output_dir)
+# [可选：待判断] 只有分析叙事需要时，运行后记录观察、局限或下一问。

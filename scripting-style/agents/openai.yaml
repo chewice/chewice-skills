@@ -1,4 +1,4 @@
 interface:
   display_name: "Scripting Style"
-  short_description: "Write or improve linear bioinformatics scripts"
-  default_prompt: "Use $scripting-style to write a direct bioinformatics script or improve the skill from new script examples through its two-phase interface."
+  short_description: "Write direct, exploratory scientific analysis code"
+  default_prompt: "Use $scripting-style to write or improve direct scientific analysis code without application scaffolding."

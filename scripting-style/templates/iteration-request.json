@@ -6,12 +6,11 @@
   "new_examples": [
     {
       "path": "/absolute/path/to/new-example.R",
-      "stage_hint": "TODO_STAGE_OR_UNKNOWN",
+      "stage_hint": "optional-context-only",
       "role_hint": "candidate"
     },
     {
-      "path": "/absolute/path/to/new-example.sh",
-      "stage_hint": "TODO_STAGE_OR_UNKNOWN",
+      "path": "/absolute/path/to/new-example.ipynb",
       "role_hint": "candidate"
     }
   ],
@@ -27,7 +26,8 @@
     "accepted_decisions": []
   },
   "_instructions": [
-    "Phase 1 must keep approval.confirmed false.",
-    "After explicit confirmation, copy this request, set phase to phase2, set approval.confirmed true, fill accepted_decisions and phase1_review_dir."
+    "Phase 1 keeps approval.confirmed false and may only write its isolated review.",
+    "After explicit confirmation, copy the request, set phase to phase2, set approval.confirmed true, and fill accepted_decisions and phase1_review_dir.",
+    "stage_hint is optional context and never selects a stage guide."
   ]
 }

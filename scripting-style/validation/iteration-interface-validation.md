@@ -2,93 +2,50 @@
 
 ## 范围
 
-- 验证日期：2026-07-30
-- 路径边界回归：2026-08-02
-- 接口：自然语言入口、JSON request contract、只读预检脚本
-- 脚本：`scripts/validate-iteration-request.py`
-- 目标：验证 Phase 1/2 阶段门、范例发现、排除规则和无写入属性
+- 验证日期：2026-08-13
+- contract：`schema_version: "1.0"`
+- 支持来源扩展名：`.R`、`.py`、`.sh`、`.ipynb`
+- 确定性测试：`python3 scripts/test-validate-iteration-request.py`
+- validator：`scripts/validate-iteration-request.py`
 
-## 验证结果
+该接口继续作为开发专用的 Phase 1 / Phase 2 gate，不参与日常科研脚本路由。
 
-| 场景 | 预期 | 结果 |
+## 自动回归结果
+
+| 场景 | 预期行为 | 结果 |
 |---|---|---|
-| 单个 R 脚本进入 Phase 1 | 生成一个 manifest 项；只允许 iteration review 写入 | Pass |
-| 整个项目目录进入 Phase 1 | 只发现 `scripts/` 下 3 个脚本 | Pass |
-| 项目根目录含 `setup-vscode.sh` | 不进入范例 manifest | Pass |
-| 显式输入 `setup-vscode.sh` | 拒绝请求 | Pass |
-| 已确认的 Phase 2 request | contract 完整，但 validator 不授予写权限 | Pass |
-| 未确认的 Phase 2 request | 拒绝请求 | Pass |
-| 请求模板 | 标准 JSON 可解析 | Pass |
-| 预检脚本 | Python 语法有效，无第三方依赖 | Pass |
-| `/home/data/...` 中的合法脚本 | 不把机器祖先目录 `data` 误判为来源内部目录 | Pass |
-| 来源 repository 内部 `data/` 与 `R/` | 显式文件输入被拒绝，目录扫描不发现 | Pass |
+| 既有 schema 1.0 R request | 接受并标记 language `R` | Pass |
+| schema 2.0 request | 拒绝 | Pass |
+| 显式 Notebook | 接受并标记 language `Notebook` | Pass |
+| 旧 `stage_hint` | 作为语境原样保留，永不用于选择指南 | Pass |
+| 混合 fixture root | 只发现 `scripts/` 下的 R、Python、Bash、Notebook | Pass |
+| 显式 01–07 项目目录列表 | 发现 51 R、1 Python、3 Bash、4 Notebook，共 59 个 | Pass |
+| fixture `data/` 与 `R/` 输入 | 在 repository boundary 内明确拒绝 | Pass |
+| repository 外机器祖先名为 `data` | 不误判为项目内部排除目录 | Pass |
+| 后缀为 `.ipynb` 的 malformed 文件 | byte-level preflight 接受，留给语义审查 | Pass |
+| Phase 1 使用 `approval.confirmed: true` | 拒绝 | Pass |
+| Phase 2 的 accepted decisions 为空 | 拒绝 | Pass |
+| 结构完整的 Phase 2 | 接受结构，但 authority 仍为 false，仍要求当前确认 | Pass |
+| validator 调用前后 Skill fingerprint | 完全不变 | Pass |
 
-## 阶段门
+## 发现边界
 
-### Phase 1
+目录输入中存在 `scripts/` 时，validator 只搜索这些目录；否则把输入当作纯范例目录。它排除所有 hidden directories，以及显式的 `.git`、`.pixi`、`__pycache__`、`data`、`R`、`resources`、`softwares`、`参考文献`，并跳过 `setup-vscode.sh`。
 
-有效请求必须满足：
+repository-relative exclusion 不检查机器祖先目录名。无法检测 repository boundary 时，显式文件视为用户授权输入；目录扫描仍按名称排除子目录。
 
-- `phase` 为 `phase1`；
-- `approval.confirmed` 严格为 `false`；
-- `target_skill` 包含 `SKILL.md`；
-- 至少发现一个 `.R`、`.py` 或 `.sh`；
-- manifest 标记来源范例只读、Skill 规则不可写；
-- 只允许后续工作流写入本次 `iterations/<iteration_id>/phase1/`；
-- manifest 始终标记 `validator_grants_write_authority: false`。
+validator 读取 Notebook bytes 以计算 size 与 SHA-256，但有意不验证 Notebook JSON、cell execution 或 stored outputs；这些是 Phase 1 语义审查职责。单独的模板校验会解析 JSON，并要求新 Notebook code cells 使用空 outputs 与 `null` execution counts。
 
-### Phase 2
+## Hint 与确认语义
 
-有效 contract 必须满足：
+`stage_hint` 和 `role_hint` 是为 schema 1.0 兼容保留的 opaque reviewer context。阶段指南已不存在，因此它们不能路由。agent 直接从原请求读取 `notes`；validator 不把这些字段解释成科学事实。
 
-- `phase` 为 `phase2`；
-- `approval.confirmed` 严格为 `true`；
-- `accepted_decisions` 非空；
-- `phase1_review_dir` 存在；
-- manifest 标记仍要求当前对话中的用户确认；
-- validator 本身不授予文件写权限。
+`phase2_request_complete: true` 只表示 JSON shape、review-directory 存在性、confirmation boolean 与 nonempty decisions 通过确定性检查。它不验证 decisions 是否对应 Phase 1，也不授予写权限。因此 manifest 始终保留：
 
-因此 request 文件不能绕过会话中的人工确认。
+- `validator_grants_write_authority: false`；
+- Phase 2 的 `requires_current_conversation_confirmation: true`；
+- `skill_rule_write_allowed: false`。
 
-## 范例发现
+## 无写入属性
 
-目录输入按以下规则验证：
-
-1. 如果发现 `scripts/`，只扫描这些目录。
-2. 没有 `scripts/` 时，才把输入目录视为纯脚本集合。
-3. 跳过 `.git`、`.pixi`、`data`、`R`、`resources`、`softwares`、
-   `参考文献`、cache 和隐藏目录。
-4. 跳过 `setup-vscode.sh`。
-5. 只输出路径、语言、行数、文件大小、SHA-256 和用户提示，不输出源代码。
-
-使用 `01-scrna-qc` 项目根目录测试时，准确发现：
-
-- `scripts/01-cellranger.sh`
-- `scripts/02-starsolo.sh`
-- `scripts/03-calculate_metrics.R`
-
-根目录脚手架没有进入 manifest。
-
-2026-08-02 回归进一步把 excluded-directory 检查限定在最近 repository root 内部。
-合法来源即使位于机器级 `/home/data/...` 路径也能通过；fixture repository 内部的
-`data/ignored.R` 与 `R/ignored.R` 仍被拒绝，目录输入只发现 `scripts/example.R`。
-
-## 无写入验证
-
-预检脚本自身：
-
-- 只读取 request、目标 `SKILL.md`、新范例和显式 README；
-- 只向 stdout 输出 JSON；
-- 不创建 `iterations/`；
-- 不复制或修改范例；
-- 不修改目标 Skill；
-- 不生成 cache。
-
-Phase 1/2 的报告和 Skill 修改只能由 Codex 按
-`references/iteration-interface.md` 的语义工作流执行。
-
-## 结论
-
-迭代接口可以接收单个脚本或项目目录，在 Phase 1 建立干净的新范例 manifest，并阻止
-未经确认的 Phase 2。接口保持轻量：一个 JSON contract、一个单入口标准库脚本和一份
-渐进披露参考，没有引入服务、数据库、公共函数库或工作流平台。
+validator 读取 request、目标 `SKILL.md`、允许的 examples 与显式 README，再向 stdout 输出 JSON。回归测试在正负请求前后 fingerprint 所有持久 Skill 文件。它不创建 iteration report、source copy、cache、completion marker 或 Skill modification。

@@ -1,3 +1,7 @@
+# Historical bootstrap prompt
+
+> Development evidence only. This document records the original corpus intake and is superseded by `SKILL.md`, the four file-type guides, and the type-first example index. Do not load it for routine script or Notebook work.
+
 # 任务：从生物信息学分析脚本中构建 Codex 写作风格 Skill
 
 ## 1. 任务背景

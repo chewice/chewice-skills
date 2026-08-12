@@ -2,63 +2,52 @@
 
 ## Scope
 
-本仓库用于开发可复制或安装的 `scripting-style` Codex Skill。该 Skill 指导 Codex
-编写线性、直接、少封装的 R、Python 和 Bash 生物信息学分析脚本，不负责项目脚手架、
-环境求解、公共函数库或统一分析平台。仓库也提供两阶段迭代接口，用新范例改善 Skill。
+本目录开发 `scripting-style` Codex Skill。它指导项目内部 `.R`、`.py`、`.sh` 和 `.ipynb` 科研分析代码的表达方式；生物信息学与单细胞脚本是主要证据来源，但 Skill 不限定具体学科或方法。
 
 ## Language
 
-项目说明默认使用中文。稳定的 engineering terms、文件名、API 名称和
-machine-readable contract 保持英文。
+项目说明默认使用中文。稳定的 engineering terms、文件名、API 名称和 machine-readable contract 保持英文。
+
+## Governing Principle
+
+**Write the analysis, not an application around the analysis.**
+
+- 保留问题、具体试做、观察比较、人工判断、批量扩展、证据保存以及解释或下一问。
+- 让科研判断与对象变换留在主线；成熟的 package 或已提供项目 API 可以承担窄算法边界。
+- CLI、config、runner、state management 和 pipeline 不是默认产物。
+- 简洁不得缩减用户要求的科学分析范围。
 
 ## Reasoning
 
 - 遵循第一性原理。
 - You may use superpowers, but do not write any spec or plan.
-- 写脚本前可以在对话中给出简短工作提要，但不得为此创建独立 spec、plan 文件。
-- 区分数据事实、方法假设和生物学判断；模板与历史参数不得替代当前任务推理。
+- 区分数据事实、方法假设、人工判断和待验证事项。
+- 不用历史参数、模板或来源结论替代当前任务推理。
 
-## Scripting Style
+## Type Boundary
 
-- 优先自上而下的线性分析主线。
-- 减少函数封装、class、配置层、跨文件 wrapper 和工程化代码。
-- 一次性且短小的核心分析步骤优先内联，允许为局部可读性保留少量重复。
-- 只有在显著减少真实重复、隔离窄技术细节或表达逐元素计算时，才建立小型局部函数。
-- 不得把 QC 阈值、注释选择、整合方法、root/terminal、lineage、cutoff 或基因集等
-  核心生物学与统计决策隐藏进函数。
-- 项目内脚本默认是 executable analysis record，不是 CLI / 流水线应用。
-- 减少不必要分支与防御瀑布；关键契约 Fail Fast；校验通过后通常消隐。
-- 以 cognitive complexity 为目标：可见数据流、具体命名、科学注释、局部分析块。
+- `.R`、`.py`、`.sh`、`.ipynb` 分别只从同类型指南、邻近代码和范例学习具体写法。
+- 不把 R section、Python CLI、Bash runner 或 Notebook cell 结构跨类型迁移。
+- 修改既有文件时，邻近同类型风格与 minimal diff 优先于模板。
 
-## Boundaries
+## Source Boundary
 
-- 不修改 `<SOURCE_ROOT>` 中的来源范例。
-- 不打开或推断来源项目顶层 `R/` 的实现；只按已知契约看待 API。
-- 不分析或自动设计 Pixi、Conda、容器及编辑器环境。
-- 不把来源脚本中的绝对路径、环境细节或历史参数设置为通用默认值。
-- 不创建公共函数库、R package、复杂代码分析平台或统一 pipeline。
-- 不把项目内分析脚本默认写成 CLI / 流水线应用；不因将来可能复用而泛化项目常量。
-- 不从 completion markers 发现样本集；不默认落盘 `input_contract` /
-  `validation_pass` / `run_summary` 等运维产物。
-- 不主动引入 speculative 防御式分支、logging/checkpoint/retry/workflow 等工程框架。
-- 不因追求简洁而省略用户明确要求的分析块；增加分析时增加 analytical blocks，
-  不升级成 framework。
-- 修改用户指定的既有脚本时默认 minimal-diff；未经明确要求不作全局 refactor。
+- `<SOURCE_ROOT>` 中的范例只读；不提交来源代码、机器绝对路径、真实参数或生物学结论。
+- 不打开或推断来源项目顶层 `R/` API 实现，只依据用户给出的调用契约。
+- 不分析或自动设计 Pixi、Conda、容器和编辑器环境。
+- 不把来源中的包安装、环境清理、危险删除、历史输出或 notebook stale state 泛化成规则。
 
 ## Iteration Gate
 
-- 新范例默认只读，不复制完整源代码到 Skill。
-- Phase 1 只在 `iterations/<iteration_id>/phase1/` 生成差异审查，不得修改 Skill
-  的规则、索引、模板或其他功能文件，并在汇报后停止。
-- Phase 2 必须同时具备 Phase 1 报告、用户当前对话中的明确确认和非空 accepted decisions。
-- Validation holdout 在初始变化完成前保持隔离。
-- 全局规则不得由单个新脚本产生；冲突证据优先收窄规则，而不是增加抽象层。
-- Phase 2 必须同时检查新 holdout 与原有 holdout，避免修复一个范例却破坏既有风格。
+- Phase 1 只写 `iterations/<iteration_id>/phase1/` 的隔离审查并停止，不修改功能文件。
+- Phase 2 必须同时具备 Phase 1 证据、当前对话明确确认和非空 accepted decisions。
+- Holdout 在初始改动完成前保持隔离；Phase 2 同时运行新 holdout 与既有回归。
+- `schema_version: "1.0"` 保持兼容；`stage_hint` 只作可选语境，不驱动阶段指南。
+- validator 始终只读，不能授予 Skill 写权限。
 
 ## Completion
 
-- 运行 Skill 结构校验。
-- 检查 YAML、模板语法和文档内部链接。
-- 使用确认的 validation holdout 做轻量风格验证。
-- 迭代时校验 request contract、Phase 1/2 gate 和旧规则回归。
-- 确认未修改来源项目，且没有生成真实数据、credentials 或缓存。
+- 校验 frontmatter、YAML、JSON、内部链接、模板语法和 validator 兼容性。
+- 用隔离前向任务检查四种类型与既有脚本 minimal-diff。
+- 复核来源哈希，确认没有修改来源或环境配置。
+- 未经用户确认不 commit、不 push。

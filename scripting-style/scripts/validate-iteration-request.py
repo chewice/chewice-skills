@@ -15,7 +15,12 @@ def relevant_path_parts(path: Path):
     for parent in (path, *path.parents):
         if (parent / ".git").exists():
             return path.relative_to(parent).parts
-    return path.parts[-2:]
+    # Without a repository boundary, ancestor names such as /home/data are
+    # machine layout rather than evidence that an explicitly supplied file is
+    # inside the source project's excluded data/ directory. Directory scans
+    # still prune excluded children by name below.
+    return (path.name,)
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(
@@ -83,7 +88,12 @@ def main() -> None:
     if not isinstance(example_entries, list) or not example_entries:
         raise SystemExit("new_examples must be a non-empty list.")
 
-    allowed_suffixes = {".R": "R", ".py": "Python", ".sh": "Bash"}
+    allowed_suffixes = {
+        ".R": "R",
+        ".py": "Python",
+        ".sh": "Bash",
+        ".ipynb": "Notebook",
+    }
     excluded_dirs = {
         ".git",
         ".pixi",
@@ -157,7 +167,7 @@ def main() -> None:
             if candidate.suffix not in allowed_suffixes:
                 raise SystemExit(
                     f"Unsupported example extension: {candidate}. "
-                    "Allowed: .R, .py, .sh"
+                    "Allowed: .R, .py, .sh, .ipynb"
                 )
             content = candidate.read_bytes()
             line_count = content.count(b"\n")
@@ -174,7 +184,7 @@ def main() -> None:
             }
 
     if not discovered:
-        raise SystemExit("No .R, .py or .sh examples were discovered.")
+        raise SystemExit("No .R, .py, .sh or .ipynb examples were discovered.")
 
     context_readmes = request.get("context_readmes", [])
     if not isinstance(context_readmes, list):

@@ -1,145 +1,92 @@
 ---
 name: scripting-style
-description: 为新的 R、Python 或 Bash 生物信息学分析脚本设计并实现线性、直接、少封装的写法，同时保留研究问题、输入输出、关键参数、生物学决策、中间检查和结果保存；也提供两阶段迭代接口，用新脚本范例审查并改善本 Skill。用户要求编写、续写、重构或审查单细胞/单核转录组脚本，强调减少函数封装、避免过度工程化、沿用既有分析叙事，或要求输入新范例、更新风格规则、迭代 scripting-style 时使用。不用于设计 Pixi 环境、公共函数库、R package 或统一 pipeline 框架。
+description: 为项目内部科研分析编写、续写、重构或审查直接而探索性的 `.R`、`.py`、`.sh` 和 `.ipynb` 代码；按目标文件类型读取同类型指南与范例，保留问题、具体试做、观察比较、人工判断、批量扩展和科学输出。用户强调少封装、避免应用式脚手架、沿用既有分析叙事或要求用新范例迭代 scripting-style 时使用。不用于设计环境、公共函数库、R package、通用 CLI、runner 或统一 pipeline。
 ---
 
 # Scripting Style
 
-从研究问题和可观察输入出发，生成顺序可读、决策可见、能被中间结果验证的分析脚本。
+> **Write the analysis, not an application around the analysis.**
 
-## 读取必要参考
+默认产物是项目内部的科研分析记录。读者应能看见问题如何被具体尝试、检查、比较、判断并继续推进，而不必先理解一套运行框架。
 
-每次使用时：
+## 日常入口
 
-1. 读取 [全局脚本风格](references/global-script-style.md)。
-2. 读取 [参数组织](references/parameter-organization.md)、
-   [局部函数](references/local-helper-functions.md)和
-   [输出约定](references/output-conventions.md)。
-3. 若任务调用用户或项目提供的 API，再读取
-   [API 使用边界](references/api-usage-boundary.md)。
-4. 判断任务属于哪个阶段，只读取对应的
-   [阶段指南](references/stages/)。
-5. 从 [范例索引](examples/example-index.yaml) 选择最接近的 1–2 个正向范例；
-   只学习其结构，不复制历史路径、参数或生物学结论。
+1. 确认目标文件类型，只完整读取对应的一份指南：
+   - `.R`：[R analysis](references/r-analysis.md)
+   - `.py`：[Python analysis](references/python-analysis.md)
+   - `.sh`：[Bash analysis](references/bash-analysis.md)
+   - `.ipynb`：[Notebook analysis](references/notebook-analysis.md)
+2. 修改既有代码时，先读目标文件及其邻近的**同类型**脚本。保持当前 section、对象命名、路径锚点和分析顺序，默认做 minimal diff；只有用户明确要求重构时才扩大改动。
+3. 新建代码时，若用户提供了 source root，或索引中的相对路径可从当前工作区明确解析，可从 [type-first example index](examples/example-index.yaml) 选择最多一个同类型 primary，必要时再选一个同类型 complement。只学习结构；不得复制来源中的路径、参数、环境痕迹或科学结论。不要猜测 `<SOURCE_ROOT>` 或搜索用户机器来定位范例；来源不可用时直接依照类型指南，且不声称已读取范例。
+4. 任务调用用户或项目提供的 API 时，再读取 [API usage boundary](references/api-usage-boundary.md)。
+5. 只有仍存在会改变分析含义的选择时，才在对话中按需简述问题、输入、预期产物、候选决定和待确认项；不要固定填写工作提要，也不要为此创建 spec 或 plan。
 
-## 迭代 Skill
+不得用另一种文件类型的范例推导具体写法。四种类型只共享本页的原则和边界；R section、Python CLI、Bash 调度或 Notebook cell 习惯均不可跨类型套用。
 
-当用户提供新脚本范例并要求改善 `scripting-style` 时，切换到迭代模式：
+## 保留分析怎样发生
 
-1. 完整读取 [Skill 迭代接口](references/iteration-interface.md)。
-2. 使用自然语言请求或 [迭代请求模板](templates/iteration-request.json) 接收输入。
-3. 可运行 `scripts/validate-iteration-request.py` 做只读路径与 manifest 预检。
-4. Phase 1 只比较新证据和当前规则；可写入独立 iteration review，但不得修改
-   `SKILL.md`、references、examples、templates 或其他功能文件，汇报后停止。
-5. 只有用户明确确认 candidates、exclusions、holdouts 和 rule changes 后，才进入 Phase 2。
-6. Phase 2 只实施获确认的最小变化，并同时执行新 holdout 与旧 holdout 回归验证。
+按当前问题保留下列探索链中实际需要的环节，不为凑模板制造空步骤：
 
-不得把两阶段压成一次自动写入，也不得把迭代报告变成 spec、plan 或复杂治理平台。
+`问题 -> 具体试做 -> 检查或比较 -> 人工判断 -> 批量扩展 -> 保存证据 -> 解释、局限或下一问`
 
-## 先给出简短工作提要
+- 让科学对象和数据变换按真实执行顺序自上而下出现。
+- 在会影响下一步判断的位置观察结果：结构摘要、对象打印、候选表或诊断图都可以是分析本身。
+- 方法尚未在当前数据上站稳时，先把一个代表性案例内联跑通。看见输出并修正后，才把稳定的逐元素技术核提成局部函数或循环。
+- 候选参数或方法可以并列尝试。把比较证据留在脚本中，再将人工选择写回调用附近；不要为一次决定创建 selector、config 或自动决策器。
+- 任务没有给出、项目也没有明确约定的科学参数，不得用惯例值、来源值或 package default 悄悄补齐。若它阻止代码成立，先从当前数据设计比较，或在调用附近留下明确的待定值；只有会实质改变任务且无法安全留待判断时才询问用户。
+- 不要为了让代码显得完整、可复现或专业而显式展开用户未要求的 package defaults、algorithm switches、random seed、plot sampling size、颜色或导出分辨率。它们只有在任务、邻近项目约定或当前比较确实需要时才出现。
+- 模糊的产物名称不等于方法授权。若生成该产物还需要确定 estimand、comparison unit、statistical test、group definition 或模型，必须把缺失决定留在主线；不要为了交付一份“完整可运行”脚本自行选标准方法。
+- 不伪造步骤依赖。若用户设想的后续分析并不实际使用上一步选择，应在代码或交付说明中指出概念缺口，并保留正确 handoff，而不是把无关对象接起来。
+- 允许脚本在人工编辑的中间表处暂停，分成 part，重载上一步对象，或缓存有明确科研用途的昂贵结果。这些是研究边界，不是任务状态系统。
+- 实际运行后可以记录观察到的结论、局限和下一问。未运行或未检查时明确写成“待判断”，不得编造结果。
 
-在写脚本前，用简短对话说明以下内容。保持轻量，不创建独立 spec 或 plan 文件：
+## 克制应用式结构
 
-```text
-任务阶段：
-分析问题：
-输入：
-输出：
-本次提供的 API：
-参考范例：
-线性主线：
-关键参数及选择依据：
-需要显式保留的生物学决策：
-确有必要的局部函数：
-预计生成的文件：
-是否改既有脚本（minimal-diff）：
-```
+- CLI、通用配置、runner、dispatcher、registry、状态追踪、retry、completion marker 和统一 pipeline 只在用户明确要求，或当前文件确实有跨输入复用契约时出现。
+- 项目内的样本、比较、阈值、相对路径和候选参数可以直接写在分析附近；不要仅因它们可能变化就建立参数平台。
+- 不以“重复两次”作为函数门槛。样本、方法、实验变体或 lineage 的大段平行代码，只要能让参数、顺序和输出独立可读，就可继续保留。
+- 只有真实维护漂移开始妨碍科学理解，或逐元素技术核已经稳定时，才抽取最小共同部分。核心判断仍留在主线。
+- 观察性检查是默认；只有顺序错位、维度不合、标识符不唯一等失败会静默污染科学结论的硬契约，才用简洁断言立即停止。
+- 核心持久对象使用明确名称；紧凑语义块里的 `p`、`fn`、`data_plot` 等局部名字可以保留。
+- 不强制生成表格、图和对象三件套，不强制打印 operational completion summary，也不默认写 `run_summary`、`validation_pass` 或状态文件。每个输出都应有当前科研、复查、下游或复现用途。
 
-信息不足时，先检查当前项目、现有脚本和用户提供的 API。只有会实质改变分析含义且
-无法从上下文判断时，才向用户询问。
+简洁只约束表达方式，不缩减用户要求的科学分析。复杂问题应展开成可见的 analytical blocks，而不是升级成软件架构。
 
-## 编写线性主线
+## 项目与 API 边界
 
-按任务实际需要组织以下顺序，不为凑齐模板制造空步骤：
+- 把用户或项目提供的 API 当作不透明能力：只依据已知契约准备输入、调用、观察返回并保存所需结果。
+- 不打开、复制、猜测或重写未获授权的 API 实现。
+- 不自动设计 Pixi、Conda、容器、编辑器配置、公共函数库或 package。
+- 使用项目已有的路径锚点；新代码不引入机器特定绝对路径。
+- 来源范例始终只读，只修改用户指定的目标。
 
-1. 说明脚本目标、上游输入和主要产物。
-2. 加载最小依赖与明确提供的 API。
-3. 定义输入、输出和本次关键参数。
-4. 读取数据并检查结构、样本或分组。
-5. 完成必要的数据准备。
-6. 执行核心分析，使生物学和统计决策留在主线中。
-7. 在高风险转换或决定后立即检查中间结果。
-8. 整理结果并生成必要图表。
-9. 保存当前任务需要的表格、图形和可复用对象。
-10. 输出简短完成摘要。
+## 模板
 
-遵循第一性原理：区分数据事实、方法假设和生物学判断；根据当前问题选择方法和参数，
-不要让模板、历史脚本或惯例替代推理。
+模板仅在新建文件且项目没有更近的同类型先例时使用：
 
-## 克制抽象与投机复杂度
+- [linear-analysis.R](templates/linear-analysis.R)
+- [linear-analysis.py](templates/linear-analysis.py)
+- [external-analysis.sh](templates/external-analysis.sh)
+- [linear-analysis.ipynb](templates/linear-analysis.ipynb)
 
-- 默认内联一次性、短小、与核心推理直接相关的步骤。
-- 只在显著减少真实重复、隔离窄技术细节或表达逐元素计算时定义局部函数。
-- 保持函数短、输入输出显式，并放在首次使用前附近。
-- 不把 QC 阈值选择、细胞类型判断、整合策略、root/terminal、lineage、cutoff、
-  基因集选择等核心决定隐藏进函数。
-- 允许少量重复来保持不同样本、阶段或 lineage 分支独立可读。
-- 不自动引入 class、配置层、跨文件 wrapper、插件系统、公共函数库或统一 pipeline。
-- 重复已经造成实际漂移时，才提取最小共同技术步骤；不要提前为假想复用工程化。
-- 项目内脚本默认是 executable analysis record，不是 CLI / 流水线应用；不自动加
-  `commandArgs`、泛型 flag、completion 发现或 pipeline-status 词汇。
-- 项目内 sample / library ID、相对路径、阈值等分析常量可显式写在脚本中，优于为此
-  引入 CLI；样本集来自研究设计或 analysis manifest，不从 completion marker 反推。
-- 关键契约用简洁断言 Fail Fast，校验通过后通常消隐，不默认落盘 `input_contract` /
-  `validation_pass` / `run_summary`；减少运维分支，保留科学分支。
-- 减少不必要的 `if/else`、嵌套和 speculative fallback；不为假想异常建立防御瀑布。
-- 简洁只约束写法，不缩减用户明确要求的科学分析范围；增加分析时并列增加
-  analytical blocks，不要把分析复杂度升级成架构复杂度。
-- 修改既有脚本时默认 minimal-diff：保 section、命名与对象组织，原位增逻辑，
-  未经要求不全局 refactor。
+删除无关块并替换占位内容。模板不是必填章节清单，更不能替代当前分析判断。
 
-## 尊重 API 与项目边界
+## Skill 迭代入口
 
-- 把用户或项目提供的 API 当作不透明边界。
-- 只确认加载位置、调用契约、调用前准备、调用后检查和输出。
-- 不打开、复制、猜测或重新实现未获授权的 API 内部。
-- 不自动设计 Pixi、Conda、容器或编辑环境。
-- 新脚本中的项目内部路径默认使用单一、明确锚点下的相对路径；不硬编码机器特定绝对路径。
-- 项目内已知分析常量优先写在脚本中；仅当输入在项目外部、无法合理相对化，或项目已有
-  CLI / manifest / runner 契约时，才用该契约注入，不为路径增加配置平台。
-- 不修改来源范例；只在用户指定的目标文件中工作。
+只有用户要求用新范例审查或改进 `scripting-style` 时，才完整读取 [iteration interface](references/iteration-interface.md)。日常写脚本不加载迭代流程。
 
-## 使用模板
+迭代保持两阶段：Phase 1 只读比较并停止等待确认；Phase 2 仅实施当前对话已确认的 decisions、exclusions、holdouts 和 rule changes，同时验证新旧 holdout。`scripts/validate-iteration-request.py` 只做只读预检，不能授予写权限。
 
-- 新 R 分析脚本可从 [linear-analysis.R](templates/linear-analysis.R) 的结构开始。
-- 窄 Python 转换任务可参考 [analysis-helper.py](templates/analysis-helper.py)。
-- Bash 编排可参考 [stage-runner.sh](templates/stage-runner.sh)。
-- 只有函数门槛成立时，才查看
-  [local-helper-snippets.md](templates/local-helper-snippets.md)。
+## 交付前自检
 
-模板仅提供结构。删除不适用章节，替换全部占位内容，不保留虚构方法或参数。
+- 从目标文件向下阅读，问题、输入、变换、观察、判断和产物是否可追踪？
+- 是否保留了真实探索证据，而没有只留下一个看似确定的最终调用？
+- 是否出现没有当前契约支持的 CLI、config、runner、`main()`、`run_analysis()` 或状态管理？
+- helper 是否在代表性案例被理解后才抽取，并且没有隐藏科学决定？
+- 硬断言是否只保护可能静默污染结论的契约？
+- 输出是否各有用途，未运行的结果是否明确留作待判断？
+- 是否把任务未提供的 cutoff、resolution、top-N 或模型参数伪装成了合理默认值？
+- 是否为了让代码跑到底而自行选择了未获授权的 comparison、test 或 group definition，或假装后续步骤依赖前一步？
+- 修改既有代码时，差异是否局部且保持邻近同类型叙事？
 
-## 完成前自检
-
-- 能否从上到下说明脚本如何回答分析问题，并看见完整数据流？
-- 依赖与短输入定义之后，是否较快进入有科学意义的计算，而非被 argparse / discovery /
-  执行基建淹没？
-- 输入、输出、上游依赖和运行假设是否明确？项目内常量是否被不必要地做成 CLI？
-- 样本集是否来自研究设计或 analysis manifest，而非 completion marker 反推？
-- 关键参数是否有当前任务的依据，而非照搬历史值？核心决定是否仍在主线可见？
-- 每个局部函数 / wrapper 是否通过了必要性门槛？删掉后是否仍清楚且只多几行？
-- 是否存在为假想场景写的运维分支、过度 defensive programming，或本可用
-  `stopifnot` / 等价断言表达的冗长检查？校验是否被产物化成 `input_contract` /
-  `validation_pass` / `run_summary`？
-- 是否存在无必要的 configuration layer、中间对象版本链、空洞变量名或 pipeline-status
-  词汇（`COMPLETE` / `PASS` / `run state`）？
-- 用户要求的分析块是否都实现了，而没有被“追求简洁”省略，也没有升级成 framework？
-- 若改既有脚本，是否保持了原有 section / 命名 / 对象组织，且未做未经要求的全局
-  refactor？
-- API 是否只按已知契约调用？路径锚点是否明确，项目内部是否使用可迁移相对路径？
-- 当前任务需要的图、表和对象是否命名清楚、足以支持下游与解释，且未默认写盘运维
-  marker / manifest？
-- R 脚本需要 OUTLINE 时，section 是否采用 `# 1. 标题 ----` 并得到干净 symbol name？
-
-若答案不理想，优先简化结构、恢复决策可见性，再交付脚本。删除不会降低 scientific
-correctness、reproducibility 或 analytical transparency 的层时，优先删除。
+若不理想，优先恢复可见的分析链并删除无科研作用的外围结构。

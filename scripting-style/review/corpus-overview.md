@@ -1,72 +1,32 @@
 # 语料概览
 
-## 审查状态
+## 审查范围
 
-- 阶段：Phase 1，只读语料审查
-- 状态：等待人工确认
-- 语料根目录：`<SOURCE_ROOT>`
-- 审查输出：`<SKILL_ROOT>/review`
-- 目的：从真实生物信息学脚本中提炼“线性、直接、少封装，但保留科学判断可见性”的候选风格；本文件不是最终 Skill 规则。
+只读来源语料包含七个项目 `scripts/` 目录下的 59 个分析 artifact：
 
-## 实际纳入范围
+| 文件类型 | 数量 | 证据用途 |
+|---|---:|---|
+| R script | 51 | 线性对象变换、观察、人工决定、平行分支与 prototype-to-batch 的广泛证据 |
+| Python script | 1 | 带真实 positional contract 的窄项目转换证据 |
+| Bash script | 3 | 可见外部工具命令与显式 sample/stage blocks |
+| Notebook | 4 | model-analysis cells、candidate sweeps、diagnostics 与后续人工选择的同类型证据 |
 
-仅纳入以下 7 个项目根目录中的 `scripts/**/*.R`、`scripts/**/*.py`、
-`scripts/**/*.sh`，以及各项目根目录的 `README.md`：
+审查进入时，对 59 个 artifact 的逐文件 hash 排序后再计算 SHA-256，结果为 `3ef2cdc9524bc3fd97ab29e4a73535f490cdb4a7a8ec7f061a5b764521e874e5`。
 
-| 阶段 | 项目 | R | Python | Bash | 脚本总数 | 脚本行数 | README 行数 |
-|---|---|---:|---:|---:|---:|---:|---:|
-| 01 | `01-scrna-qc` | 1 | 0 | 2 | 3 | 298 | 108 |
-| 02 | `02-annotation` | 5 | 0 | 0 | 5 | 847 | 18 |
-| 03 | `03-integration` | 4 | 0 | 0 | 4 | 228 | 8 |
-| 04 | `04-grn` | 10 | 1 | 1 | 12 | 2,107 | 104 |
-| 05 | `05-from-pathway-to-program` | 4 | 0 | 0 | 4 | 349 | 11 |
-| 06 | `06-lr-pairs` | 8 | 0 | 0 | 8 | 1,011 | 61 |
-| 07 | `07-trajectory` | 19 | 0 | 0 | 19 | 2,308 | 39 |
-| 合计 | 7 个项目 | 51 | 1 | 3 | 55 | 7,148 | 249 |
+## 最高发现
 
-README 仅用于确认项目目标、脚本顺序、输入输出和脚本角色，不作为写作风格样本。
+最稳定的重复顺序是：
 
-## 明确排除的内容
+`问题 -> 具体试做 -> 检查或比较 -> 人工判断 -> 批量扩展 -> 保存证据 -> 解释或下一问`
 
-本轮没有把以下内容作为读取、分析或索引对象：
+这支持 `Write the analysis, not an application around the analysis.`。更精致或更抽象的代码不自动构成更好的风格证据。
 
-- `.git/`、`.gitignore`、`.gitattributes`
-- `pixi.toml`、`pixi.lock`、`.pixi/`
-- `setup-vscode.sh`
-- `data/`、`参考文献/`、`resources/`、`softwares/`
-- 其他项目脚手架文件
-- 所有项目顶层 `R/`
+## 读取边界
 
-脚本中的 `source("../R/...")` 调用只记录其加载位置、调用前的数据准备和调用后的检查或输出；未推断 API 内部实现。允许语料中出现的 Pixi 路径或环境命令被视为环境特例，不进入风格归纳。
+- 只审查允许的分析 artifact 与提供语境的 README。
+- 顶层项目 `R/` 实现、环境、data、resources 和 software directories 均排除。
+- Notebook 只提供 source-cell 顺序与决定逻辑；stored outputs、execution counts、magics、widgets 和环境痕迹不作为已验证证据。
+- 已提交记录中的来源路径全部相对于 `<SOURCE_ROOT>`。
+- 机器路径、package installation、destructive temporary cleanup、历史参数、生物学结论和未公开 API internals 都不进入规则。
 
-## 语料结构
-
-语料不是 55 个相互独立的范例，而是 7 条连续工作流：
-
-1. 原始计数与单细胞 QC。
-2. 聚类诊断、分辨率选择与细胞类型注释。
-3. 批次效应检查、整合与结果导出。
-4. metacell、pySCENIC、regulon 活性与假设驱动 GRN 分析。
-5. cNMF program 解释、通路和代谢活性分析。
-6. CellChat 数据准备、样本分析、阶段比较与配体受体聚焦。
-7. 轨迹降维、lineage 构建、动态基因、模块和调控因子分析。
-
-文件名前缀通常承担执行顺序契约；后续脚本读取前序对象、表格或矩阵。候选风格因而需要保留“当前脚本在整条链中的位置”，但不能把某个项目的具体文件名、路径或阈值泛化成模板。
-
-## 静态观察摘要
-
-- 55 个脚本中，51 个为 R，R 是主要分析语言；Bash 负责外部工具编排，Python 仅承担窄范围格式转换。
-- 20 个脚本定义了局部函数。函数主要用于重复的技术操作、逐基因计算、重采样或绘图保存；也存在把核心算法整体包进函数的反例，因此只能归纳为“减少不必要封装”，不能归纳为“禁止函数”。
-- 22 个脚本调用顶层 `R/` 中的外部 API；其共同可见结构是准备输入、调用 API、检查返回、保存结果。
-- 静态检出 46 个脚本生成图形、30 个生成表格、33 个保存对象。图、表和可复用对象经常同时存在。
-- 多数 R 脚本在开头固定工作目录并创建输出目录，但路径变量命名并不统一。
-- 参数与生物学决定通常直接出现在调用附近，例如 QC 阈值、PC 数、聚类分辨率、整合参数、root/terminal、lineage、基因集和筛选阈值。
-
-以上数字由静态清点得出，不等价于实际执行覆盖率。
-
-## 证据边界
-
-- 本轮没有执行任何来源脚本，因此无法验证包版本、运行时状态、数据依赖或输出正确性。
-- 修改时间、重复编号和命名相似性不足以证明脚本是 legacy；相关项只标记为待确认。
-- 项目间存在明显风格差异，特别是章节标题、参数集中程度、交互式检查和函数使用。因此 Phase 1 只输出候选模式与冲突，不把多数用法直接升级为规则。
-- 选出的 validation holdout 不参与初始规则提炼，留待 Phase 2 检查规则是否能解释未参与学习的脚本。
+完整 artifact 清单见 [artifact-inventory.csv](artifact-inventory.csv)，日常使用的 canonical 角色见 [type-first example index](../examples/example-index.yaml)。

@@ -1,56 +1,31 @@
 # 范例选择说明
 
-## 如何选择
+## 先按文件类型选择
 
-先确定分析阶段和语言，再从 `example-index.yaml` 选择：
+选择范例前先确定目标 artifact：
 
-1. 一个与当前任务类型最接近的 `primary`；
-2. 只有当需要补充语言、绘图、输出或局部函数模式时，再选一个 `secondary`；
-3. 不把 `validation-holdout`、`counterexample` 或
-   `special-status-unclassified` 当作规则来源。
+- `.R` 只读取 R 范例；
+- `.py` 只读取 Python 范例；
+- `.sh` 只读取 Bash 范例；
+- `.ipynb` 只读取 Notebook 范例。
 
-不要同时加载大量范例。范例只提供脚本结构和分析叙事，当前数据与用户 API 才决定方法、
-参数和生物学选择。
+随后才在同类型内匹配最接近的任务。最多使用一个 `primary`；只有确实补足缺口时，再使用一个 `complement`。不得用另一文件类型推导 section syntax、entrypoint、control flow、output display 或其他具体代码形态。
 
-## Primary 的意义
+便携 Skill 中的 `<SOURCE_ROOT>` 被有意保留为未解析占位，避免发布个人机器路径。只有用户明确提供 root，或当前工作区存在无歧义的项目根时才解析；不得在任务范围外搜索用户机器。来源不可用时，直接使用对应类型指南，并且不得声称已检查索引中的源码。
 
-Primary 覆盖以下稳定证据：
+## 角色
 
-- 自上而下的分析主线；
-- 输入、输出和上游关系可定位；
-- 关键参数与科学决策可见；
-- 中间检查能支持下一步；
-- 图、表和对象与分析步骤相邻；
-- 局部函数只处理窄技术任务。
+- `primary`：某个同类型分析模式的强证据。
+- `complement`：补充 handoff、直接外部命令、交互选择或 API call 等较窄边界。
+- `validation_holdout`：在一次新生成或新迭代中，初始变化完成前保持隔离，不作为该轮学习范例。
+- `counterexample`：帮助识别 API / tool 边界，但不能驱动默认分析形态。
 
-Primary 不是“推荐算法”，也不是“可直接复制脚本”。
+当前索引的历史 corpus holdout 已在 2026-08-13 全语料审查中被查看，因此本次记录将它们诚实归类为 retrospective same-type regression，而不是 blind holdout。未来迭代仍应重新冻结新的 prospective holdout。
 
-## Secondary 的意义
+索引推荐的是书写结构，不是算法。除非当前任务独立提供，否则来源路径、参数、样本、生物学标签、模型选择、stored output 和环境细节均不可迁移。
 
-Secondary 用于补齐 Primary 不覆盖的边界：
+## 证据边界
 
-- Bash 外部工具编排；
-- Python 窄格式转换；
-- baseline 与单独导出；
-- 重复绘图或逐元素计算的小函数；
-- 同一工作流的其他 part 或下游解释。
+R corpus 最广，可以支持完整的探索到批量链。standalone Python 只有一个来源文件，因此只支持窄直接转换和已有 positional contract，不能建立通用 Python CLI 风格。Notebook 是 cell-by-cell model analysis 与参数选择的一等同类型证据，但 stale execution state 与环境痕迹被排除。Bash 来源支持可见命令顺序和显式 sample blocks；安全增强是有意增加的 safeguard，不是语料共有习惯。
 
-## 反例与特殊状态
-
-`04-grn/scripts/02-regulon_activity_score.R` 是 API-like 反例。它帮助区分可复用 API
-实现与一次性分析脚本，不能据此增加函数、wrapper 或接口层。
-
-`04-hypothesis_driven_partII.R` 和 `06-screen_TFs_for_given_target.R` 被用户确认有
-README 未记录的特殊地位。具体角色未说明前保持未分类，不宣称 legacy，也不用于规则提炼。
-
-## Validation holdout
-
-Holdout 在初始规则完成前隔离，用于检验：
-
-- 是否把某个工具或方法错误固化；
-- 是否正确预测分节、顺序、参数和 API 位置；
-- 是否保持中间检查与输出；
-- 是否在平行分支中过度抽象；
-- 是否能解释未见脚本而不复制其具体值。
-
-验证结果见 `validation/style-validation.md`。
+holdout 结果见 [style validation](../validation/style-validation.md)；用新证据修改索引时见 [iteration interface](../references/iteration-interface.md)。
