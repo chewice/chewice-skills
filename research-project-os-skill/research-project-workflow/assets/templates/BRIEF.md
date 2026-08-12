@@ -1,34 +1,68 @@
 # Q-XXX Brief
 
-Status: 拟定
+Q-ID: Q-XXX
 Created:
 Updated:
-Human review status: pending
+Design review: pending
+Reviewed at:
+Review rationale:
+Closure decision: open
+Closed at:
+Closure rationale:
 
-## 1. Human Question
+## 1. Research Question and Decision
 
-## 2. Problem Interpretation
+Research question:
 
-## 3. Context and Scope
-### Context
-### In Scope
-### Out of Scope
+Decision this question informs:
 
-## 4. Evidence Basis
-### Project Evidence
-### Literature and Official Guidance
-### Reference Code
+Scope and boundary:
 
-## 5. Evidence Synthesis
+## 2. Hypotheses and Falsifiers
 
-## 6. Proposed Resolution
+| Hypothesis | Alternative explanation | Falsifier or observation that changes the judgement |
+|---|---|---|
 
-## 7. Inputs, Outputs and Dependencies
+## 3. Estimand and Inference Unit
 
-## 8. Validation and Acceptance Criteria
+Population:
 
-## 9. Open Questions and Risks
+Exposure or intervention:
 
-## 10. Human Review
+Comparator:
 
-## 11. Closure Summary
+Outcome and time:
+
+Observation and inference unit:
+
+## 4. Study Design and Evidence Eligibility
+
+Analysis mode and design:
+
+Eligible evidence:
+
+Ineligible evidence:
+
+Controls, confounders and missingness:
+
+## 5. Analysis and Uncertainty
+
+Analysis strategy:
+
+Assumptions and checks:
+
+Effect and uncertainty:
+
+## 6. Claim-Evidence Matrix
+
+| Claim | Decisive evidence | Current evidence | Assessment |
+|---|---|---|---|
+| C-XXX: qualified claim | | | pending |
+
+## 7. Acceptance, Stopping and Risks
+
+Acceptance criteria:
+
+Stopping criteria:
+
+Risks and unresolved decisions:

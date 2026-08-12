@@ -11,6 +11,7 @@ test = "python -m unittest discover -s tests -p test_*.py"
 smoke = "python tests/smoke_test.py"
 validate-skill = "python tests/validate_skill.py"
 scaffold-project = "python research-project-workflow/scripts/scaffold_project.py"
+record-project = "python research-project-workflow/scripts/record_project.py"
 validate-project = "python research-project-workflow/scripts/validate_project.py"
 generate-report = "python report-generation/scripts/generate_report.py"
 

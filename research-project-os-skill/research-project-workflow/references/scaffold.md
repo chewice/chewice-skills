@@ -1,31 +1,37 @@
-# Scaffold
+# Scaffold 与 Adopt
 
 ## 读取范围
 
-只读取目标目录浅层结构、已有 `AGENTS.md`、已有根级 `pixi.toml` 与 `pixi.lock`。不得扫描 `docs/template/` 或研究结果。
+读取目标根目录浅层结构及已有 `AGENTS.md`、`QUESTIONS.md`、`CURRENT_HANDOFF.md`、`README.md`。若存在 Pixi 文件，只识别并保留；不在本流程中设计或改写环境。
 
-## 初始化与接管
+## 最小控制层
 
-使用根 workspace 执行：
+Scaffold/adopt 只创建缺失的根控制文件：
+
+- `AGENTS.md`
+- `QUESTIONS.md`
+- `CURRENT_HANDOFF.md`
+- `README.md`
+- `.gitignore`
+
+业务目录按首次真实需求创建：new-question 创建对应 `docs/questions/<Q-ID>/`；new-artifact 创建对应 `explore/<Q-ID>/<A-ID>/`；局部上下文只在多子项目确有需要时创建。不要预建 references、template、methods、runbooks、pipeline、results、reports、logs、configs 或 tests。
+
+Scaffold 不生成 `pixi.toml`、`pixi.lock` 或 `.pixi/`。需要创建、迁移、审查或诊断 Pixi 环境时调用 `pixi-environment-builder` Skill，并保持项目只有根级 Pixi workspace。
+
+## 命令与 mutation
 
 ```bash
 pixi run scaffold-project --project /path/to/project
 pixi run scaffold-project --project /path/to/project --apply
 ```
 
-默认输出计划，不写入。空目录与已有项目使用同一非破坏性流程：创建缺失的稳定父目录和根控制文件，保留所有已有路径。仅在 Human 明确要求且提供 `--overwrite` 时覆盖普通模板；任何情况下均不得覆盖已有 `AGENTS.md`、`QUESTIONS.md`、`CURRENT_HANDOFF.md`、`README.md`、`pixi.toml` 或 `.gitignore`。
+默认只输出计划。用户已明确要求初始化或接管时，计划中的项目内、非覆盖、可恢复创建可直接用 `--apply`，不再请求重复确认。保留所有既有路径与文件；路径冲突或任何覆盖需求均停止。Scaffold 不创建 Q-ID/A-ID、不修改研究产物、不执行 Git 或外部写入。
 
-## 稳定结构
+应用后运行只读 Validator。`structure_consistent: true` 只表示控制层结构一致，不表示研究设计或科学结论有效。
 
-创建 `AGENTS.md`、`QUESTIONS.md`、`CURRENT_HANDOFF.md`、`README.md`、根级 Pixi 与 `.gitignore`，以及 `docs/questions/`、`docs/references/{papers,official,datasets}/`、`docs/template/`、`docs/methods/`、`docs/runbooks/`、`explore/`、`pipeline/`、`results/`、`reports/`、`logs/`、`configs/`、`tests/`。
+## 文件放置原则
 
-只创建父目录，不创建 Q-ID、A-ID、结果或报告实例。不得生成 Question、Pipeline 实现、Git commit，或修改已有研究产物。
-
-## 文件放置
-
-- Question 依据放入 `docs/questions/<Q-ID>/BRIEF.md`。
-- Human 明确提供的参考代码只放入 `docs/template/`，且仅在显式 `@` 时读取。
-- 跨 Question 已复用的方法放入 `docs/methods/`；恢复和人工操作流程放入 `docs/runbooks/`。
-- Explore 临时产物留在 Artifact；审核后稳定配置进入 `configs/`，机器可读结果进入 `results/`。
-
-应用后运行 `pixi run validate-project --project /path/to/project`。验证失败时不得宣称脚手架完成。
+- 事前设计：`docs/questions/<Q-ID>/BRIEF.md`。
+- 事后证据：`explore/<Q-ID>/<A-ID>/RESULT.md` 及该 Artifact 明确引用的 code、config、output 或 receipt。
+- 已审核实现是否进入 `pipeline/` 是独立的 implementation reuse 决定；不得把 Explore 路径直接当作稳定 runtime。
+- Human 主动提供的参考材料只在明确引用时读取；具体分析脚本由 `scripting-style` Skill 约束。

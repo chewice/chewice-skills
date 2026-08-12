@@ -7,7 +7,7 @@
 
 ## Reasoning
 
-- 遵循第一性原理
+- 遵循第一性原理、奥卡姆剃刀原理
 
 ## Superpowers
 
@@ -15,9 +15,9 @@
 
 ## Research workflow
 
-- 先读取 `CURRENT_HANDOFF.md`，再按 Read Map 加载当前 Question、BRIEF 或 Artifact。
-- `QUESTIONS.md` 只保存问题索引；问题依据写入 `BRIEF.md`，Explore 结果写入 `RESULT.md`。
-- Question、Artifact 与 Workstream 状态相互独立；最终状态和审核决定归 Human 所有。
-- 所有 mutation 先预览，未经明确确认不得覆盖、commit、push 或写入外部服务。
-- 不自动扫描、注册、更新或验证 `docs/template/`；仅在 Human 明确 `@` 后读取指定内容。
-- 项目只允许根级 Pixi workspace；不得创建嵌套 `pixi.toml`、`pixi.lock` 或 `.pixi/`。
+- 以 `Question → Study Design → Evidence → Inference → Qualified Claim → Next decisive test` 组织科研分析。
+- 根 `CURRENT_HANDOFF.md` 是 project router；只读取 Context Map 声明的局部 Handoff，不递归发现其他上下文。
+- `QUESTIONS.md` 只保存索引；BRIEF 是事前设计的事实源，RESULT 是事后证据与推断的事实源，Handoff 只引用而不复制。
+- 保留 null、negative、contradictory 与 inconclusive evidence；technical validation、scientific support、Human approval 和 implementation reuse 不相互替代。
+- 用户已明确请求的项目内、非覆盖、可恢复写入无需二次确认；mutating script 仍默认 dry-run，覆盖、删除、Git mutation 和外部写入必须获得明确授权。
+- 具体分析脚本使用 `scripting-style` Skill；Pixi 环境创建、迁移、审查或诊断使用 `pixi-environment-builder` Skill，项目只允许根级 Pixi workspace。

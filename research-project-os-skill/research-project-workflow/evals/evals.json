@@ -3,27 +3,63 @@
   "evals": [
     {
       "id": 1,
-      "prompt": "非破坏地接管这个已有研究仓库，并建立可恢复交接。",
+      "prompt": "非破坏地接管这个已有研究仓库，先建立最小的可恢复科研控制层。",
       "should_trigger": true,
-      "expected_output": "预览脚手架计划，保留已有路径，并创建最小控制文件。"
+      "expected_output": "以 dry-run 预览 lazy scaffold，只创建缺失的根控制文件并保留全部既有内容；不预建业务目录或固定 Pixi 环境。"
     },
     {
       "id": 2,
-      "prompt": "为这个问题创建 BRIEF 并开始一个 Explore。",
+      "prompt": "把‘这个处理可能改善表型’整理成一个能真正指导分析、也可能被证伪的研究问题。",
       "should_trigger": true,
-      "expected_output": "先确认 Human ownership，再按 Question 和 Artifact 合同推进。"
+      "expected_output": "建立事前 BRIEF，明确 decision、hypotheses、falsifiers、estimand、inference unit、eligible evidence、uncertainty、claim-evidence matrix 与 stopping criteria。"
     },
     {
       "id": 3,
-      "prompt": "总结工作",
+      "prompt": "流程跑通了、文件也都生成了，直接把这个 Artifact 标成支持假设并进入 pipeline。",
       "should_trigger": true,
-      "expected_output": "核对当前事实，统一时间戳更新索引、BRIEF、RESULT 和 Handoff，并运行 Validator。"
+      "expected_output": "指出 technical validation 不等于 scientific support，分别记录 observed evidence、scientific/robustness validation、Human review 与 implementation reuse，不自动批准。"
     },
     {
       "id": 4,
-      "prompt": "把审核结果生成正式 HTML 报告。",
+      "prompt": "这次没有显著差异，而且和 A-001 的方向相反。更新结果并告诉我下一步最关键的检验。",
+      "should_trigger": true,
+      "expected_output": "保留 null/contradictory evidence 及 provenance，给出有边界的 inconclusive 或 contradictory inference，并提出能区分 competing explanations 的 next decisive test。"
+    },
+    {
+      "id": 5,
+      "prompt": "这个发现来自 exploratory analysis。请为同一问题登记一个独立 confirmatory Artifact，不要覆盖原结果。",
+      "should_trigger": true,
+      "expected_output": "在同一 Q-ID 下递增创建新的 A-ID，保留原 Artifact，明确 confirmatory mode、事前设计偏离与独立 evidence receipt。"
+    },
+    {
+      "id": 6,
+      "prompt": "项目现在有 cohort-a、cohort-b 两个子项目，请建立按需的上下文交接，让下次只恢复当前 cohort，又能看到跨 cohort 依赖。",
+      "should_trigger": true,
+      "expected_output": "以根 CURRENT_HANDOFF 作为 router，增加声明式 Context Map 和必要的局部 Handoff；只引用 BRIEF/RESULT，不复制事实或递归发现上下文。"
+    },
+    {
+      "id": 7,
+      "prompt": "总结工作",
+      "should_trigger": true,
+      "expected_output": "核对 Active context 的 BRIEF、RESULT 与 receipts，只更新变化的事实源和 Handoff 路由，并报告 structure_consistent 与 next decisive action。"
+    },
+    {
+      "id": 8,
+      "prompt": "把已经审核的证据生成正式 HTML 报告。",
       "should_trigger": false,
-      "expected_output": "转交 report-generation。"
+      "expected_output": "转交 report-generation；本 Skill 只维护问题、设计、证据、推断和上下文合同。"
+    },
+    {
+      "id": 9,
+      "prompt": "帮我把这个 Seurat 分析脚本改得更线性，少做函数封装。",
+      "should_trigger": false,
+      "expected_output": "转交 scripting-style；不把具体分析脚本风格纳入研究生命周期合同。"
+    },
+    {
+      "id": 10,
+      "prompt": "给这个项目创建一个包含 CUDA 和 PyTorch 的 Pixi 环境。",
+      "should_trigger": false,
+      "expected_output": "转交 pixi-environment-builder；本 Skill 不生成或设计固定 Pixi 环境。"
     }
   ]
 }

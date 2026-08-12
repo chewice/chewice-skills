@@ -2,33 +2,81 @@
 
 Question: Q-XXX
 Artifact: A-XXX
-Status: 草稿
+Analysis mode: exploratory
+Status: draft
 Created:
 Updated:
 
-## 1. Objective
+## 1. Question and Claims
 
-## 2. Inputs
+Research question:
 
-## 3. Method and Commands
+Claims assessed: C-XXX
 
-## 4. Outputs
+## 2. Provenance Receipt
 
-## 5. Technical Validation
+Data source and version:
 
-## 6. Results
+Code revision:
 
-## 7. Limitations
+Environment or lock:
 
-## 8. Human Review
+Command and seed:
+
+Run time:
+
+## 3. Method and Deviations
+
+Method executed:
+
+Deviations from BRIEF:
+
+## 4. Observed Evidence
+
+### E-XXX
+
+Claim: C-XXX
+Relation: pending
+Source:
+Output:
+Observation:
+Effect and uncertainty:
+
+## 5. Validation
+
+### Technical Validation
+
+### Scientific and Robustness Validation
+
+## 6. Inference
+
+Assessment: pending
+Qualified claim:
+Uncertainty:
+
+Alternative explanations and causal boundary:
+
+## 7. Limitations and Applicability
+
+Limitations:
+
+Applicability boundary:
+
+## 8. Next Decisive Test
+
+Test:
+
+Decision it distinguishes:
+
+## 9. Human Review
 
 Decision: pending
 Reviewed at:
-Reason:
+Review rationale:
 
-## 9. Promotion
+## 10. Implementation Reuse
 
-Pipeline target:
-Promotion commit:
-Promoted at:
-Promoted files:
+Reuse decision: not-assessed
+Target:
+Recorded at:
+Files:

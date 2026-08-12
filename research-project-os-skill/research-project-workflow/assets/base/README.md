@@ -1,22 +1,24 @@
 # {{PROJECT_NAME}}
 
-本项目采用轻量研究工作流组织 Question、Explore、Pipeline、结果与报告。
+本项目采用问题驱动的科研分析架构：
 
-## 控制文件
+`Question → Study Design → Evidence → Inference → Qualified Claim → Next decisive test`
 
-- `AGENTS.md`：长期有效规则。
-- `QUESTIONS.md`：Question 索引。
-- `CURRENT_HANDOFF.md`：唯一默认状态入口。
-- `docs/questions/<Q-ID>/BRIEF.md`：问题工作依据。
-- `explore/<Q-ID>/<A-ID>/RESULT.md`：Explore 结果与 Human review。
+## 事实源
 
-## 目录
+- `QUESTIONS.md`：Question 的机械索引。
+- `docs/questions/<Q-ID>/BRIEF.md`：事前研究问题与 Study Design。
+- `explore/<Q-ID>/<A-ID>/RESULT.md`：事后 Evidence、Inference 与 Human review。
+- `AGENTS.md`：跨 Question 长期有效规则。
 
-- `docs/references/`：文献、官方资料与数据资源说明。
-- `docs/template/`：Human 主动提供且仅在显式引用时读取的参考代码。
-- `docs/methods/`、`docs/runbooks/`：复用方法与操作流程。
-- `explore/`、`pipeline/`：探索与正式分析流程。
-- `results/`、`reports/`：机器可读事实与面向 Human 的交付。
-- `logs/`、`configs/`、`tests/`：日志、稳定配置和测试。
+BRIEF 不保存事后结果，RESULT 不改写事前设计。null、negative、contradictory 与 inconclusive evidence 和支持性 evidence 同样保留。technical validation、scientific support、Human approval 与 implementation reuse 分别记录。
 
-所有写入默认先预览；Human 审核决定不得由自动化替代。
+## 分层上下文
+
+根 `CURRENT_HANDOFF.md` 是 project router。单项目只使用 `root` context；大型项目在子项目确需独立恢复时，才按 Context Map 声明的 Scope 创建局部 `CURRENT_HANDOFF.md`。Handoff 只保存 active IDs、checkpoint、blocker、next decisive action 和 Required Reads，不复制 BRIEF/RESULT。
+
+## 按需结构
+
+Scaffold 只建立根控制层。Question、Artifact、局部 context、pipeline、results、reports、logs、configs 与参考资料目录在首次真实需要时创建。具体分析脚本由 `scripting-style` Skill 管理；Pixi 环境由 `pixi-environment-builder` Skill 管理。
+
+所有 mutating script 默认 dry-run 并拒绝覆盖。用户明确请求的项目内、非覆盖、可恢复写入无需重复确认；覆盖、删除、Git mutation 或外部写入仍需明确授权。

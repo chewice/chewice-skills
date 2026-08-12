@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Preview or create the minimal research project scaffold."""
+"""Preview or create the minimal research-project control layer."""
 
 from __future__ import annotations
 
@@ -7,61 +7,29 @@ import argparse
 from datetime import datetime
 import json
 from pathlib import Path
-import re
 import sys
 from typing import Any
 
 
 SKILL_ROOT = Path(__file__).resolve().parents[1]
 ASSET_ROOT = SKILL_ROOT / "assets/base"
-PROTECTED_FILES = {
-    ".gitignore",
-    "AGENTS.md",
-    "CURRENT_HANDOFF.md",
-    "QUESTIONS.md",
-    "README.md",
-    "pixi.toml",
-}
-DIRECTORIES = (
-    "docs/questions",
-    "docs/references/papers",
-    "docs/references/official",
-    "docs/references/datasets",
-    "docs/template",
-    "docs/methods",
-    "docs/runbooks",
-    "explore",
-    "pipeline",
-    "results",
-    "reports",
-    "logs",
-    "configs",
-    "tests",
-)
 TARGETS = {
     "AGENTS.md": "AGENTS.md",
     "QUESTIONS.md": "QUESTIONS.md",
     "CURRENT_HANDOFF.md": "CURRENT_HANDOFF.md",
     "README.md": "README.md",
-    "pixi.toml": "pixi.toml.tmpl",
     ".gitignore": "gitignore",
 }
-
-
-def project_slug(name: str) -> str:
-    value = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
-    return value or "research-project"
 
 
 def render_asset(source: str, root: Path, timestamp: str) -> str:
     return (
         source.replace("{{PROJECT_NAME}}", root.name or "Research Project")
-        .replace("{{PROJECT_SLUG}}", project_slug(root.name))
         .replace("{{TIMESTAMP}}", timestamp)
     )
 
 
-def build_plan(root: Path, *, overwrite: bool = False) -> dict[str, Any]:
+def build_plan(root: Path) -> dict[str, Any]:
     root = root.expanduser().resolve()
     timestamp = datetime.now().astimezone().replace(microsecond=0).isoformat()
     files: list[dict[str, str]] = []
@@ -78,15 +46,12 @@ def build_plan(root: Path, *, overwrite: bool = False) -> dict[str, Any]:
             action = "conflict"
         elif target.read_text(encoding="utf-8") == content:
             action = "unchanged"
-        elif overwrite and target_name not in PROTECTED_FILES:
-            action = "overwrite"
         else:
             action = "preserve"
         files.append({"path": target_name, "action": action, "content": content})
     return {
         "project": str(root),
         "timestamp": timestamp,
-        "directories": list(DIRECTORIES),
         "files": files,
     }
 
@@ -99,14 +64,12 @@ def apply_plan(plan: dict[str, Any]) -> dict[str, Any]:
     if conflicts:
         raise ValueError("Refusing conflicting scaffold paths: " + ", ".join(conflicts))
     root.mkdir(parents=True, exist_ok=True)
-    for relative in plan["directories"]:
-        (root / relative).mkdir(parents=True, exist_ok=True)
     written: list[str] = []
     for item in plan["files"]:
-        if item["action"] not in {"create", "overwrite"}:
+        if item["action"] != "create":
             continue
         target = root / item["path"]
-        if item["action"] == "create" and target.exists():
+        if target.exists():
             raise ValueError(f"Target appeared after planning: {target}")
         target.write_text(item["content"], encoding="utf-8")
         written.append(item["path"])
@@ -127,7 +90,6 @@ def parse_args(arguments: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--project", type=Path, default=Path("."))
     parser.add_argument("--apply", action="store_true")
-    parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--json", action="store_true")
     return parser.parse_args(arguments)
 
@@ -135,7 +97,7 @@ def parse_args(arguments: list[str] | None = None) -> argparse.Namespace:
 def main(arguments: list[str] | None = None) -> int:
     args = parse_args(arguments)
     try:
-        plan = build_plan(args.project, overwrite=args.overwrite)
+        plan = build_plan(args.project)
         applied = apply_plan(plan) if args.apply else None
         result = {
             "mode": "apply" if args.apply else "dry-run",
@@ -148,8 +110,6 @@ def main(arguments: list[str] | None = None) -> int:
             print(f"{result['mode']}: {plan['project']}")
             for item in result["plan"]["files"]:
                 print(f"{item['action']}: {item['path']}")
-            for directory in plan["directories"]:
-                print(f"ensure-directory: {directory}/")
         return 0
     except (OSError, ValueError) as error:
         print(str(error), file=sys.stderr)
