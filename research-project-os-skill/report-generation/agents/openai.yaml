@@ -1,4 +1,4 @@
 interface:
   display_name: "报告生成"
-  short_description: "从已审核研究内容生成 HTML 报告"
-  default_prompt: "使用 $report-generation 从 Human 已审核的 BRIEF、RESULT 和 results 生成并验证 reports/<Q-ID>/report.html。"
+  short_description: "综合 claim-evidence chain 的科研报告"
+  default_prompt: "使用 $report-generation 从已审核 BRIEF、RESULT 与 outputs 综合问题驱动报告，保留冲突、不确定性、结论边界和 source anchors。"

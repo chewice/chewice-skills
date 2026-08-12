@@ -3,15 +3,15 @@
   "evals": [
     {
       "id": 1,
-      "prompt": "把 Q-001 审核通过的 A-002 生成中文 HTML 报告。",
+      "prompt": "综合 Q-001 已审核 evidence，生成包含 qualified claim 和下一步检验的中文 HTML 报告。",
       "should_trigger": true,
-      "expected_output": "验证审核门槛，先 dry-run，再输出 reports/Q-001/report.html。"
+      "expected_output": "验证纳入门槛，综合 claim-evidence chain，先 dry-run，再输出带 source_map 的 reports/Q-001/report.html。"
     },
     {
       "id": 2,
       "prompt": "给这个正式报告再导出 PDF。",
       "should_trigger": true,
-      "expected_output": "检查 PDF renderer；当前未配置时明确停止。"
+      "expected_output": "当前能力明确 unavailable，且不创建伪 PDF。"
     },
     {
       "id": 3,
@@ -21,9 +21,9 @@
     },
     {
       "id": 4,
-      "prompt": "批准这个分析结果并修改 Question 状态。",
+      "prompt": "把 technical validation 通过直接写成科学结论并修改 Question 状态。",
       "should_trigger": false,
-      "expected_output": "报告 Skill 不拥有研究审核与状态变更。"
+      "expected_output": "报告 Skill 不拥有审核与状态变更，且 technical validation 不等于 scientific support。"
     }
   ]
 }
