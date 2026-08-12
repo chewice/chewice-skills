@@ -31,6 +31,25 @@ INSTALLER = load_module("install_skill", ROOT / "scripts/install_skill.py")
 
 
 class SkillContractTests(unittest.TestCase):
+    def test_repository_agents_protected_contract(self) -> None:
+        content = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+        language = (
+            "## Language\n\n"
+            "项目说明默认使用中文。稳定的 engineering terms、machine-readable contract 和\n"
+            "文件名保持英文。"
+        )
+        environment = (
+            "## Environment\n\n"
+            "- 使用 Pixi 管理 dependencies 和 tasks。\n"
+            "- 仓库只允许根级 Pixi workspace；不得跟踪 `.pixi/`。\n"
+            "- 不得手动编辑 `pixi.lock`。\n"
+            "- pixi环境构建调用 `pixi-environment-builder` skill。"
+        )
+        principles = "## 总原则\n\n- 遵循第一性原理、奥卡姆剃刀原理"
+        self.assertIn(language, content)
+        self.assertIn(environment, content)
+        self.assertIn(principles, content)
+
     def test_exactly_two_installable_skills(self) -> None:
         discovered = {
             path.parent.name
@@ -71,6 +90,28 @@ class SkillContractTests(unittest.TestCase):
         for name in SKILLS:
             for relative in ("pixi.toml", "pixi.lock", ".pixi"):
                 self.assertFalse((ROOT / name / relative).exists())
+        self.assertFalse(
+            (ROOT / "research-project-workflow/assets/base/pixi.toml.tmpl").exists()
+        )
+
+    def test_generated_agents_research_invariants_are_exact(self) -> None:
+        content = (
+            ROOT / "research-project-workflow/assets/base/AGENTS.md"
+        ).read_text(encoding="utf-8")
+        language = (
+            "## Language\n\n"
+            "- 面向 human 的说明默认使用中文。 \n"
+            "- 专业术语、code、paths、commands、IDs 和 machine-readable values "
+            "等agent方便识别的内容保持英文。"
+        )
+        reasoning = "## Reasoning\n\n- 遵循第一性原理、奥卡姆剃刀原理"
+        superpowers = (
+            "## Superpowers\n\n"
+            "- You may use superpowers, but do not write any spec or plan."
+        )
+        self.assertIn(language, content)
+        self.assertIn(reasoning, content)
+        self.assertIn(superpowers, content)
 
     def test_removed_brand_and_cli_are_absent_from_deliverables(self) -> None:
         forbidden = (
@@ -100,6 +141,7 @@ class SkillContractTests(unittest.TestCase):
             capture_output=True,
             text=True,
         ).stdout
+        self.assertNotIn("--overwrite", help_text)
         for command in (
             "archive-" + "promote",
             "pipeline-" + "create",
@@ -112,6 +154,7 @@ class SkillContractTests(unittest.TestCase):
         self.assertEqual(manifest["workspace"]["version"], "1.0.0")
         for task in (
             "scaffold-project",
+            "record-project",
             "validate-project",
             "generate-report",
             "lint",
@@ -132,6 +175,12 @@ class SkillContractTests(unittest.TestCase):
                 {item["should_trigger"] for item in values["evals"]},
                 {True, False},
             )
+
+    def test_openai_metadata_matches_skill_names(self) -> None:
+        for name in SKILLS:
+            content = (ROOT / name / "agents/openai.yaml").read_text(encoding="utf-8")
+            self.assertIn(f"${name}", content)
+            self.assertIn("default_prompt:", content)
 
     def test_installer_validates_current_workspace(self) -> None:
         INSTALLER.validate_workspace(ROOT)

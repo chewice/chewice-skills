@@ -6,6 +6,10 @@
 Codex Skills。可安装 Skill 位于同名目录；development tests 和 architecture notes
 位于仓库根目录。
 
+## 总原则
+
+- 遵循第一性原理、奥卡姆剃刀原理
+
 ## Language
 
 项目说明默认使用中文。稳定的 engineering terms、machine-readable contract 和
@@ -17,14 +21,13 @@ Codex Skills。可安装 Skill 位于同名目录；development tests 和 archit
 - 不得自动运行 `git add`、`git commit`、`git push` 或写入 Notion。
 - 将 scaffold/adopt 视为 non-destructive：保留现有项目路径和文件。
 - 除非显式提供 `--overwrite`，否则拒绝覆盖。
-- profiles 保持通用，不嵌入 MDD pilot project 的假设。
 
 ## Environment
 
 - 使用 Pixi 管理 dependencies 和 tasks。
 - 仓库只允许根级 Pixi workspace；不得跟踪 `.pixi/`。
 - 不得手动编辑 `pixi.lock`。
-- Python dependencies 保持最小，并从 Conda 获取。
+- pixi环境构建调用 `pixi-environment-builder` skill。
 
 ## Completion
 
