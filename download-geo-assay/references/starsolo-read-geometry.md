@@ -1,6 +1,6 @@
 # STARsolo read geometry 判定
 
-仅用于有 10x/droplet scRNA 证据的 `workflow=sra` 样本。ATAC-seq、ChIP-seq、miRNA-seq、bulk RNA-seq 不要套用本节。
+仅用于有 10x/droplet scRNA 或 snRNA 证据、并且当前选用 STARsolo 作为 single-cell counting 实现时。bulk RNA-seq、ATAC-seq、ChIP-seq、miRNA-seq 不要套用本节。转换总览见 `references/conversion.md`。
 
 ## 必须判定角色，不得假设
 

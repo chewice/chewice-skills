@@ -34,8 +34,8 @@ pixi run --locked python "$SKILL_DIR/scripts/download_geo_supplement.py" \
 - Affymetrix：`GSM*.CEL` 或 `GSM*.CEL.gz`
 - 若 supplementary 是 zip/tar，下载后只解出 `*.CEL`、`*.CEL.gz`、`*.idat`、`*.idat.gz`；归档本身留在同一 GSM 目录作为证据。不要解出表达矩阵。
 
-同时保存 `annotation/platform_annotation/probe_to_gene_mapping.tsv`。注释版本必须来自 GEO platform 或厂商文件。
+同时可保存 GEO 或厂商提供的 `annotation/platform_annotation/probe_to_gene_mapping.tsv`。这是文件管理，不是本 Skill 做 probe 重注释。注释版本必须来自 GEO platform 或厂商文件。
 
 ## Mode B
 
-芯片 Mode B 的 `final_product` 只能是 `intensity` 或 `processed`。不要发明 RMA/Seurat/Scanpy 流程。用户未指定转换工具、版本和输出路径前，不得下载，更不得删除 temporary raw files。转换后把工具、版本、输入、输出写入 `reports/conversion_provenance.tsv`，再走 `audit_storage_policy.py` 与 `apply_storage_policy.py`。
+芯片 Mode B 的 `final_product` 只能是 `intensity` 或 `processed`。本 Skill 不负责 normalization、RMA 或下游分析。用户未指定转换工具、版本和输出路径前，不得下载，更不得删除 temporary raw files。转换后把工具、版本、输入、输出写入 `reports/conversion_provenance.tsv`，再走 `audit_storage_policy.py` 与 `apply_storage_policy.py`。

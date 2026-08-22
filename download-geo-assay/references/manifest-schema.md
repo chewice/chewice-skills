@@ -37,9 +37,10 @@ GEO/GSE123456/
 │       └── work/
 │           └── SRR000001/
 ├── processed/
-│   └── GSM000001/
-│       ├── matrix_10x/
-│       └── velocity/
+│   ├── GSM000001/
+│   │   ├── matrix_10x/
+│   │   └── velocity/          # sc/snRNA optional
+│   └── gene_count_matrix.tsv  # bulk RNA-seq
 ├── annotation/
 │   └── platform_annotation/
 │       └── probe_to_gene_mapping.tsv
@@ -55,7 +56,7 @@ GEO/GSE123456/
 │   ├── preflight_audit.tsv
 │   ├── ngdc_coverage.tsv
 │   ├── download_integrity_audit.tsv
-│   ├── final_output_audit.tsv
+│   ├── processed_output_audit.tsv
 │   ├── conversion_provenance.tsv
 │   ├── storage_deletion_log.tsv
 │   ├── storage_policy_audit.tsv
@@ -84,11 +85,11 @@ GEO/GSE123456/
 | 平台注释 | `annotation/platform_annotation/` | probe_to_gene_mapping 等 |
 | QC | `qc/` | 芯片或测序 QC 中间文件 |
 | 临时工作区 | `temporary/GSM*/work/<run>/` | staging、`.part`、SRA 转换和断点 |
-| 10x 矩阵 | `processed/GSM*/matrix_10x/` | raw/filtered feature-barcode matrix |
-| RNA velocity | `processed/GSM*/velocity/` | spliced、unspliced、ambiguous 与 loom |
-| 统一报告 | `reports/report.html` | 唯一面向用户的中文 HTML |
-| 机器证据 | `reports/*.tsv` | preflight、coverage、download、final、storage audit |
-| STARsolo 汇总 | `reports/starsolo_summary.tsv` | 每个 GSM 一行的 cell calling、mapping、saturation 与计数指标 |
+| 10x 矩阵 | `processed/GSM*/matrix_10x/` | sc/snRNA 的 raw/filtered feature-barcode matrix |
+| bulk counts | `processed/gene_count_matrix.tsv` | STAR GeneCounts 合并的 gene × sample 矩阵 |
+| RNA velocity（可选） | `processed/GSM*/velocity/` | 仅 sc/snRNA 且用户要求时 |
+| 统一报告 | `reports/report.html` | 获取、转换与存储状态 |
+| 机器证据 | `reports/*.tsv` | preflight、coverage、download、processed、storage audit |
 | QC 数据 | `reports/fastqc/`、`reports/multiqc_data/` | 供统一报告读取的机器数据 |
 | 日志与状态 | `reports/logs/`、`reports/status/` | 原始日志和完成 marker |
 
@@ -96,7 +97,7 @@ HTML 中显示上述项目相对路径。从 `reports/report.html` 链接文件�
 
 ## 报告展示层
 
-`reports/report.html` 是唯一面向用户的报告。它由 `scripts/build_report.py` 原子生成，使用 UTF-8 和内联 CSS/JS，不依赖 CDN。完整 MultiQC HTML 以内嵌 iframe 保存到该文件；成功内嵌后删除临时 MultiQC HTML，但保留 JSON/TSV 等机器数据。
+`reports/report.html` 是唯一面向用户的报告。它由 `scripts/build_report.py` 原子生成，使用 UTF-8 和内联 CSS/JS，不依赖 CDN。报告只展示数据获取、转换和存储状态，不内嵌 FastQC/MultiQC 或 STARsolo 分析汇总。
 
 以下文件继续使用 TSV/JSON/log 等机器可读格式，因为下载、恢复和审计脚本依赖它们：
 
@@ -116,11 +117,12 @@ HTML 中显示上述项目相对路径。从 `reports/report.html` 链接文件�
 
 ## `storage_policy.tsv`
 
-整个 GSE 一行，在大规模传输前由用户确认后写入：
+每个 assay / modality 一行，在大规模传输前由用户确认后写入：
 
 ```text
 gse
 assay_type
+modality
 raw_file_type
 retain_raw_files
 storage_mode
@@ -132,6 +134,7 @@ deletion_time
 | 列 | 允许值 |
 |---|---|
 | `assay_type` | `RNA-seq`、`ATAC-seq`、`ChIP-seq`、`miRNA-seq`、`sequencing`、`microarray`、`methylation`；未判定前可空或 `pending` |
+| `modality` | `bulk_rnaseq`、`scRNAseq`、`snRNAseq`、`atac`、`chip`、`mirna`、`sequencing`、`microarray`、`methylation` |
 | `raw_file_type` | `FASTQ`、`SRA`、`CEL`、`IDAT`；未判定前可空或 `pending` |
 | `retain_raw_files` | `true` 或 `false`，不得留空，不得默认；兼容旧列 `retain_raw_fastq` |
 | `storage_mode` | `retain` 或 `delete_after_validation`，必须与 `retain_raw_files` 一致 |
@@ -139,7 +142,9 @@ deletion_time
 | `deletion_status` | `not_applicable`、`pending`、`deleted`、`blocked` |
 | `deletion_time` | 删除完成时的 ISO-8601，否则留空 |
 
-Mode A 的 `deletion_status` 必须是 `not_applicable`。Mode B 初始为 `pending`，仅在转换产物验证通过并由 `apply_storage_policy.py` 删除 temporary raw files 后变为 `deleted`。
+Mode A 的 `deletion_status` 必须是 `not_applicable`。Mode B 初始为 `pending`，仅在转换产物验证通过并由 `apply_storage_policy.py` 删除该 assay 的 temporary raw files 后变为 `deleted`。旧的单行 GSE 级文件仍然可读。
+
+`metadata/acquisition_config.tsv` 的 `max_temporary_bytes` 记录用户确认的临时存储配额。
 
 ## `conversion_provenance.tsv`
 
@@ -267,7 +272,7 @@ fallback_reason
 - `AUTHOR_SUBMITTED_BAM`
 - `GEO_PROCESSED`
 
-允许的测序 `final_product`：`fastq`、`sra`、`matrix_velocity`。芯片 Mode A 可为 `CEL` 或 `IDAT`；芯片 Mode B 为 `intensity` 或 `processed`。`source_manifest.tsv` 只用于 `workflow=sra`。
+允许的测序 `final_product`：`fastq`、`sra`、`gene_count_matrix`、`matrix_10x`、`matrix_velocity`。芯片 Mode A 可为 `CEL` 或 `IDAT`；芯片 Mode B 为 `intensity` 或 `processed`。`source_manifest.tsv` 只用于 `workflow=sra`。
 
 `selected_urls`、`selected_bytes`、`selected_md5` 和 `read_roles` 使用分号分隔数组。角色为 `SRA`、`R1`、`R2`、`I1`、`I2`、`BAM` 或 `OTHER`。每个非 NGDC 选择都必须填写 `fallback_reason`。
 
