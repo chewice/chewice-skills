@@ -13,8 +13,9 @@ MANIFEST="$ROOT/metadata/source_manifest.tsv"
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 VALIDATOR="$SCRIPT_DIR/validate_fastq_pair.py"
 STATE_HELPER="$SCRIPT_DIR/transfer_state.py"
+LAYOUT_HELPER="$SCRIPT_DIR/project_layout.py"
 [[ -s "$MANIFEST" ]] || { echo "Missing $MANIFEST" >&2; exit 2; }
-[[ -s "$VALIDATOR" && -s "$STATE_HELPER" ]] || {
+[[ -s "$VALIDATOR" && -s "$STATE_HELPER" && -s "$LAYOUT_HELPER" ]] || {
     echo "Missing download helper scripts" >&2
     exit 2
 }
@@ -60,10 +61,15 @@ ROLES_TEXT=${ROW[12]}
 FINAL_PRODUCT=${ROW[13]}
 
 [[ "$SRR" == "$RUN" ]] || { echo "Run parser mismatch" >&2; exit 2; }
-SAMPLE_DIR="$ROOT/$GSM"
-FASTQ_DIR="$SAMPLE_DIR/fastq"
-SRA_DIR="$SAMPLE_DIR/sra"
-WORK_DIR="$SAMPLE_DIR/work/$SRR"
+eval "$(python "$LAYOUT_HELPER" --root "$ROOT" --gsm "$GSM" --srr "$SRR" --print-dirs)"
+[[ -n "${FASTQ_DIR:-}" && -n "${WORK_DIR:-}" && -n "${RETAIN_RAW:-}" ]] || {
+    echo "Failed to resolve project layout for $SRR" >&2
+    exit 2
+}
+if [[ "$RETAIN_RAW" != true && "$FINAL_PRODUCT" != matrix_velocity ]]; then
+    echo "Mode B requires final_product=matrix_velocity" >&2
+    exit 2
+fi
 STAGING_DIR="$WORK_DIR/staging"
 DOWNLOAD_DIR="$STAGING_DIR/download"
 CONVERT_DIR="$STAGING_DIR/fasterq"
@@ -71,13 +77,17 @@ SCRATCH="$WORK_DIR/fasterq_tmp"
 QUARANTINE_DIR="$WORK_DIR/quarantine"
 LOG_DIR="$ROOT/reports/logs"
 STATUS_DIR="$ROOT/reports/status"
-DOWNLOAD_MANIFEST="$SAMPLE_DIR/download_manifest.tsv"
 COMPLETE_MARKER="$STATUS_DIR/${SRR}.complete"
 TRANSFER_STATE="$STATUS_DIR/${SRR}.transfer.json"
 PUBLISH_JOURNAL="$WORK_DIR/publish.json"
 VALIDATION_REPORT="$WORK_DIR/fastq_validation.json"
-mkdir -p "$FASTQ_DIR" "$SRA_DIR" "$DOWNLOAD_DIR" "$CONVERT_DIR" \
-    "$SCRATCH" "$QUARANTINE_DIR" "$LOG_DIR" "$STATUS_DIR"
+mkdir -p "$DOWNLOAD_DIR" "$CONVERT_DIR" "$SCRATCH" "$QUARANTINE_DIR" \
+    "$LOG_DIR" "$STATUS_DIR" "$(dirname "$DOWNLOAD_MANIFEST")"
+if [[ "$FINAL_PRODUCT" == sra ]]; then
+    mkdir -p "$SRA_DIR"
+else
+    mkdir -p "$FASTQ_DIR"
+fi
 exec > >(tee -a "$LOG_DIR/${GSM}_${SRR}.log") 2>&1
 
 exec 8>"$WORK_DIR/run.lock"
@@ -363,7 +373,11 @@ prefetch_staged() {
 compress_staged() {
     local input=$1 output=$2
     local temp="${output}.tmp"
-    pigz -p "$COMPRESS_THREADS" -c "$input" > "$temp"
+    if command -v pigz >/dev/null 2>&1; then
+        pigz -p "$COMPRESS_THREADS" -c "$input" > "$temp"
+    else
+        gzip -c "$input" > "$temp"
+    fi
     gzip -t "$temp"
     mv "$temp" "$output"
 }
@@ -448,7 +462,7 @@ PY
 }
 
 complete_run() {
-    exec 7>"$SAMPLE_DIR/download_manifest.lock"
+    exec 7>"$MANIFEST_LOCK"
     flock 7
     write_download_manifest
     flock -u 7

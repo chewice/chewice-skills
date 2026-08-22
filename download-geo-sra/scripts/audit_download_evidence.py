@@ -15,6 +15,18 @@ import zlib
 from collections import Counter
 from pathlib import Path
 
+HERE = Path(__file__).resolve().parent
+if str(HERE) not in sys.path:
+    sys.path.insert(0, str(HERE))
+
+from project_layout import (
+    deletion_completed,
+    iter_download_manifests,
+    published_fastq_files,
+    published_sra_dir,
+    read_storage_policy,
+)
+
 
 def refresh_report(root: Path) -> None:
     reporter = Path(__file__).with_name("build_report.py")
@@ -186,7 +198,7 @@ def main() -> int:
     report_rows: list[dict[str, str]] = []
     observed: dict[str, dict[str, str]] = {}
 
-    for path in root.glob("GSM*/download_manifest.tsv"):
+    for path in iter_download_manifests(root):
         for row in read_tsv(path):
             run = row["srr"]
             if run in observed:
@@ -237,19 +249,35 @@ def main() -> int:
                     f"R2={evidence.get('observed_r2')} expected={expected_spots}"
                 )
 
-        sample = root / gsm
+        policy = read_storage_policy(root, required=False)
+        retain = True if policy is None else policy["retain_raw_fastq"] == "true"
+        deleted = deletion_completed(root)
         product = source["final_product"]
         mandatory_files: list[Path] = []
         if product == "fastq":
-            mandatory_files.append(sample / "fastq" / f"{run}_R1.fastq.gz")
-            if source.get("library_layout", "").upper() == "PAIRED":
-                mandatory_files.append(sample / "fastq" / f"{run}_R2.fastq.gz")
+            mandatory_files.extend(
+                published_fastq_files(
+                    root, gsm, run, source.get("library_layout", ""), retain=True
+                )
+            )
         elif product == "sra":
-            mandatory_files.append(sample / "sra" / f"{run}.sra")
+            mandatory_files.append(published_sra_dir(root, gsm) / f"{run}.sra")
         elif product == "matrix_velocity":
             final_report = root / "reports/final_output_audit.tsv"
-            if not final_report.is_file():
+            if retain and not final_report.is_file():
                 row_errors.append("matrix_velocity cleanup lacks final-output audit")
+            elif deleted and not final_report.is_file():
+                row_errors.append("matrix_velocity cleanup lacks final-output audit")
+            if not deleted:
+                mandatory_files.extend(
+                    published_fastq_files(
+                        root,
+                        gsm,
+                        run,
+                        source.get("library_layout", ""),
+                        retain=retain,
+                    )
+                )
 
         recorded_names = split(evidence.get("retained_files", ""))
         recorded_sizes = split(evidence.get("retained_bytes", ""))
@@ -273,6 +301,8 @@ def main() -> int:
                     row_errors.append("retained files omit a mandatory terminal file")
 
         for index, path in enumerate(files):
+            if deleted and "temporary" in path.parts and not path.is_file():
+                continue
             if not path.is_file() or path.stat().st_size == 0:
                 row_errors.append(f"missing/empty terminal file {path}")
                 continue

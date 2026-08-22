@@ -6,7 +6,8 @@
 publishing -> complete`。`reports/status/<run>.transfer.json` 是跨进程状态，
 `reports/status/<run>.complete` 仅在最终 manifest 原子写入后生成。
 
-- 下载与转换只写 `GSM*/work/<run>/staging/`。
+- 下载与转换只写 `temporary/GSM*/work/<run>/staging/`。
+- Mode A 最终 FASTQ/SRA 属于 `raw/GSM*/`；Mode B 转换前 FASTQ 属于 `temporary/GSM*/fastq/`。
 - 最终目录中的文件必须属于已校验的发布事务。
 - 同一 run 由 `flock` 串行化。
 - R1、R2 和适用的 I1/I2 作为一个 run 事务校验；任一文件失败都不得发布。
@@ -23,7 +24,7 @@ aria2 partial 仅在以下三项同时存在且一致时续传：
 
 source fingerprint 覆盖 source、URL、expected bytes、provider MD5、read role 和最终
 产品。可获得时还比较 ETag、Last-Modified 和远端 Content-Length。任一稳定标识变化，
-将旧断点移到 `GSM*/work/<run>/quarantine/`，从零开始；不得拼接不同远端对象。
+将旧断点移到 `temporary/GSM*/work/<run>/quarantine/`，从零开始；不得拼接不同远端对象。
 
 aria2 每次调用只尝试一次。外层默认最多三次同类错误，并将次数写入 transfer JSON；
 因此 tmux 或 watchdog 重启不会重置预算。默认退避由
@@ -61,5 +62,6 @@ aria2 每次调用只尝试一次。外层默认最多三次同类错误，并�
 ## 清理关卡
 
 仅当每个预期 run 均有 PASS download manifest、匹配的 complete marker、直接终端
-文件审计且没有活动事务时清理。执行 `audit_download_evidence.py --deep` 后，才删除
-`.part`、`.aria2`、resume metadata、SRA 或 FASTQ 源文件。
+文件审计且没有活动事务时清理。执行 `audit_download_evidence.py --deep` 与
+`audit_storage_policy.py` 后，才删除 `.part`、`.aria2`、resume metadata 或 work。
+FASTQ 删除只允许 `apply_storage_policy.py` 在 Mode B 且 matrix 验证通过后执行。

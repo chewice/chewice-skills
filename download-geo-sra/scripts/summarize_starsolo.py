@@ -55,6 +55,8 @@ def discover(root: Path) -> list[Path]:
     candidates = {
         *root.glob("reports/starsolo/**/GeneFull_Summary.csv"),
         *root.glob("reports/starsolo/**/Summary.csv"),
+        *root.glob("processed/*/starsolo/**/GeneFull_Summary.csv"),
+        *root.glob("processed/*/starsolo/**/Summary.csv"),
         *root.glob("GSM*/starsolo/**/GeneFull_Summary.csv"),
         *root.glob("GSM*/starsolo/**/Summary.csv"),
     }

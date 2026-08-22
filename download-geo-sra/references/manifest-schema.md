@@ -13,14 +13,24 @@ GEO/GSE123456/
 │   ├── srr_gsm_mapping.tsv
 │   ├── expected_runs.tsv
 │   ├── ena_runs.tsv
-│   └── source_manifest.tsv
-├── GSM000001/
-│   ├── fastq/
-│   ├── sra/
-│   ├── work/
-│   ├── matrix_10x/
-│   ├── velocity/
-│   └── download_manifest.tsv
+│   ├── source_manifest.tsv
+│   ├── acquisition_config.tsv
+│   ├── storage_policy.tsv
+│   └── download_manifests/
+│       └── GSM000001.tsv
+├── raw/
+│   └── GSM000001/
+│       ├── fastq/
+│       └── sra/
+├── temporary/
+│   └── GSM000001/
+│       ├── fastq/
+│       └── work/
+│           └── SRR000001/
+├── processed/
+│   └── GSM000001/
+│       ├── matrix_10x/
+│       └── velocity/
 ├── reports/
 │   ├── logs/
 │   ├── status/
@@ -33,6 +43,9 @@ GEO/GSE123456/
 │   ├── ngdc_coverage.tsv
 │   ├── download_integrity_audit.tsv
 │   ├── final_output_audit.tsv
+│   ├── conversion_provenance.tsv
+│   ├── storage_deletion_log.tsv
+│   ├── storage_policy_audit.tsv
 │   └── tool_versions.tsv
 ├── scripts/
 ├── pixi.toml
@@ -48,15 +61,16 @@ GEO/GSE123456/
 | 层级 | 相对路径 | 内容 |
 |---|---|---|
 | GSE 项目 | `.` | 单个数据集的完整获取和处理项目 |
-| 元数据 | `metadata/` | study、sample、run、ENA 与 source manifest |
-| GSM sample | `GSM*/` | 每个 GSM 的独立目录 |
-| run FASTQ | `GSM*/fastq/` | 按 SRR 分开的 R1/R2/I1/I2 |
-| SRA | `GSM*/sra/` | 需要保留时的归档文件 |
-| 临时转换 | `GSM*/work/` | `.part`、SRA 转换和中间文件 |
-| 10x 矩阵 | `GSM*/matrix_10x/` | raw/filtered feature-barcode matrix |
-| RNA velocity | `GSM*/velocity/` | spliced、unspliced、ambiguous 与 loom |
+| 元数据 | `metadata/` | study、sample、run、ENA、source 与 storage policy |
+| 下载证据 | `metadata/download_manifests/<GSM>.tsv` | 每个 GSM 的已校验下载记录 |
+| Mode A FASTQ | `raw/GSM*/fastq/` | 长期保存的 R1/R2/I1/I2 |
+| Mode A SRA | `raw/GSM*/sra/` | 需要保留时的归档文件 |
+| Mode B FASTQ | `temporary/GSM*/fastq/` | 仅供转换的临时 FASTQ，验证后删除 |
+| 临时工作区 | `temporary/GSM*/work/<run>/` | staging、`.part`、SRA 转换和断点 |
+| 10x 矩阵 | `processed/GSM*/matrix_10x/` | raw/filtered feature-barcode matrix |
+| RNA velocity | `processed/GSM*/velocity/` | spliced、unspliced、ambiguous 与 loom |
 | 统一报告 | `reports/report.html` | 唯一面向用户的中文 HTML |
-| 机器证据 | `reports/*.tsv` | preflight、coverage、download、final audit |
+| 机器证据 | `reports/*.tsv` | preflight、coverage、download、final、storage audit |
 | STARsolo 汇总 | `reports/starsolo_summary.tsv` | 每个 GSM 一行的 cell calling、mapping、saturation 与计数指标 |
 | QC 数据 | `reports/fastqc/`、`reports/multiqc_data/` | 供统一报告读取的机器数据 |
 | 日志与状态 | `reports/logs/`、`reports/status/` | 原始日志和完成 marker |
@@ -70,14 +84,49 @@ HTML 中显示上述项目相对路径。从 `reports/report.html` 链接文件�
 以下文件继续使用 TSV/JSON/log 等机器可读格式，因为下载、恢复和审计脚本依赖它们：
 
 - `metadata/*.tsv`
-- `GSM*/download_manifest.tsv`
+- `metadata/download_manifests/*.tsv`
 - `reports/*_audit.tsv`
 - `reports/ngdc_coverage.tsv`
 - `reports/starsolo_summary.tsv`
+- `reports/conversion_provenance.tsv`
+- `reports/storage_deletion_log.tsv`
 - `reports/logs/*`
 - `reports/status/*`
 
+旧项目中的 `GSM*/fastq/`、`GSM*/matrix_10x/` 和 `GSM*/download_manifest.tsv` 可被审计脚本只读回退识别；新项目不得创建这些路径。
+
 旧项目中的 `reports/dataset_overview.md`、`reports/preflight_summary.md` 和 `reports/ngdc_mirror_audit.md` 可被纳入统一报告，但生成器不得自动删除它们。
+
+## `storage_policy.tsv`
+
+整个 GSE 一行，在大规模传输前由用户确认后写入：
+
+```text
+gse
+retain_raw_fastq
+storage_mode
+validation_status
+deletion_status
+deletion_time
+```
+
+| 列 | 允许值 |
+|---|---|
+| `retain_raw_fastq` | `true` 或 `false`，不得留空，不得默认 |
+| `storage_mode` | `retain` 或 `delete_after_validation`，必须与 `retain_raw_fastq` 一致 |
+| `validation_status` | `pending`、`conversion_pending`、`validated`、`failed`、`not_applicable` |
+| `deletion_status` | `not_applicable`、`pending`、`deleted`、`blocked` |
+| `deletion_time` | 删除完成时的 ISO-8601，否则留空 |
+
+Mode A 的 `deletion_status` 必须是 `not_applicable`。Mode B 初始为 `pending`，仅在 matrix 验证通过并由 `apply_storage_policy.py` 删除 temporary FASTQ 后变为 `deleted`。
+
+## `conversion_provenance.tsv`
+
+每个完成转换的 GSM 一行：`gse`、`gsm`、`tool`、`tool_version`、`input_fastq`、`output_matrix`、`validated_at`。路径使用项目相对路径，分号分隔多个 FASTQ。
+
+## `storage_deletion_log.tsv`
+
+每个被删除的 FASTQ 一行：`gse`、`gsm`、`srr`、`path`、`bytes`、`md5`、`validation_report`、`deleted_at`。`path` 为项目相对路径。没有该日志不得将 `deletion_status` 设为 `deleted`。
 
 ## `expected_runs.tsv`
 
@@ -239,9 +288,9 @@ notes
 
 不要将任意 GEO characteristics 扁平化为会丢失信息的列。将其保存到 `sample_characteristics.tsv`，字段为 `gse`、`gsm`、`key`、`value` 和 `source_order`。
 
-## 每个 GSM 的 `download_manifest.tsv`
+## 每个 GSM 的 `metadata/download_manifests/<GSM>.tsv`
 
-仅当 run 达到通过校验的终态后追加一行：
+仅当 run 达到通过校验的终态后追加一行。Mode B 删除 FASTQ 后此文件仍保留，作为下载证据。
 
 ```text
 gse

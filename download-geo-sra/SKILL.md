@@ -1,19 +1,19 @@
 ---
 name: download-geo-sra-safely
-description: 安全检查、规划、下载、续传、校验和记录 GEO/GSE/GSM、SRA/SRR/SRX/PRJNA、ENA 及 CNCB-NGDC GSA/INSDC 公共测序数据。当 Codex 需要下载或核验 GSE/SRA 数据、恢复中断传输、区分作者提交文件与数据库生成的 FASTQ/SRA/BAM、检查 R1/R2/I1/I2 或多 run/lane 结构、按 GSM 建立独立目录，或从公共原始 reads 生成 STARsolo/RNA velocity 输入时使用。有效且可用的 NGDC 镜像 run 优先于 ENA 或 NCBI；长任务使用 pixi 和 detached tmux；生成单文件中文 HTML 报告并保留可审计的机器证据。
+description: 安全检查、规划、下载、续传、校验和记录 GEO/GSE/GSM、SRA/SRR/SRX/PRJNA、ENA 及 CNCB-NGDC GSA/INSDC 公共测序数据，并按用户确认的存储策略管理 FASTQ/SRA 生命周期。当 Codex 需要下载或核验 GSE/SRA 数据、确认是否长期保存原始测序文件、恢复中断传输、区分作者提交文件与数据库生成的 FASTQ/SRA/BAM、检查 R1/R2/I1/I2 或多 run/lane 结构、按 GSM 建立 raw/temporary/processed 目录，或从公共原始 reads 生成 STARsolo/RNA velocity 输入时使用。有效且可用的 NGDC 镜像 run 优先于 ENA 或 NCBI；长任务使用 pixi 和 detached tmux；生成单文件中文 HTML 报告并保留可审计的机器证据。
 ---
 
 # 安全下载 GEO/SRA
 
 ## 执行约定
 
-将元数据发现、传输、转换和分析视为相互独立的关卡。accession 集合和最终数据产品未明确前，不得开始大规模传输。默认最终产品为可直接分析的 FASTQ。除非用户明确要求，否则不要下载 GEO logcounts 或标准化表达矩阵。
+将元数据发现、存储策略确认、传输、转换和分析视为相互独立的关卡。accession 集合、存储策略和最终数据产品未明确前，不得开始大规模传输。默认最终产品为可直接分析的 FASTQ。除非用户明确要求，否则不要下载 GEO logcounts 或标准化表达矩阵。不要引入 Seurat object、Scanpy object、RData 或 Python pickle。
 
 使用 pixi 管理环境，并在 `pixi.lock` 中锁定解析后的工具版本。长时间下载和处理必须在 detached tmux 会话中运行。默认每 1800 秒监测一次，并按 sample/run、阶段、错误、字节数和剩余空间报告进度。
 
 每个 GSE 只生成一份面向用户的报告：`reports/report.html`。将 TSV、JSON、log 和 status marker 作为机器证据保留，不把它们视为额外的人类报告。报告标题、摘要、状态和解释使用简体中文；accession、chemistry、provenance、read structure 等专业术语可保留英文。
 
-在报告和目录说明中使用相对于 GSE 根目录的路径，例如 `metadata/sample_metadata.tsv`、`GSM*/fastq/`、`reports/logs/`。不得写入项目绝对路径。每个报告章节都要列出其机器数据来源的相对路径。
+在报告和目录说明中使用相对于 GSE 根目录的路径，例如 `metadata/sample_metadata.tsv`、`raw/GSM*/fastq/`、`temporary/GSM*/fastq/`、`processed/GSM*/matrix_10x/`、`reports/logs/`。不得写入项目绝对路径。每个报告章节都要列出其机器数据来源的相对路径。
 
 使用内置命令前先设置 helper 路径：
 
@@ -21,7 +21,7 @@ description: 安全检查、规划、下载、续传、校验和记录 GEO/GSE/G
 SKILL_DIR="${CODEX_HOME:-$HOME/.codex}/skills/download-geo-sra-safely"
 ```
 
-使用 `scripts/scaffold_project.py` 创建数据集目录结构。创建元数据表之前，先阅读 `references/manifest-schema.md`。
+使用 `scripts/scaffold_project.py` 创建数据集目录结构；`--retain-raw-fastq` 必填，无默认值。创建元数据表之前，先阅读 `references/manifest-schema.md`。存储策略细节阅读 `references/storage-policy.md`。
 
 ## 1. 介绍并解析数据集
 
@@ -35,6 +35,30 @@ SKILL_DIR="${CODEX_HOME:-$HOME/.codex}/skills/download-geo-sra-safely"
 6. 将研究介绍保存到 `metadata/study_metadata.tsv`，标准化 sample 元数据保存到 `metadata/sample_metadata.tsv`，多值 characteristics 保存到 `metadata/sample_characteristics.tsv`，完整预期 run 集合保存到 `metadata/expected_runs.tsv`；再刷新 `reports/report.html`。
 
 当 GEO、ENA 和 SRA 对预期 run 集合的记录不一致时，不得静默继续。将差异写入预检报告并暂停，直至解决。
+
+## 1b. 强制确认存储策略
+
+大规模传输开始前必须主动询问：
+
+> 是否需要长期保存下载后的原始测序文件（FASTQ/SRA）？
+
+选项只有：
+
+- A. 保存 FASTQ 原始文件（`retain_raw_fastq=true`）
+- B. 不保存 FASTQ，仅保留转换后的分析结果（`retain_raw_fastq=false`）
+
+不允许默认选择。记录用户选择：
+
+```bash
+pixi run --locked python "$SKILL_DIR/scripts/record_storage_policy.py" \
+  --root . --gse <GSE> --retain-raw-fastq true|false
+```
+
+Mode A：FASTQ 发布到 `raw/GSM*/fastq/`，不允许自动删除。`final_product` 可以是 `fastq`、`sra` 或 `matrix_velocity`。
+
+Mode B：必须 `final_product=matrix_velocity`。未确认转换产品前不得下载。FASTQ 只进入 `temporary/GSM*/fastq/`，转换并验证成功后由 `scripts/apply_storage_policy.py` 删除。禁止下载完成后立即删除。
+
+缺少 `metadata/storage_policy.tsv` 时不得运行 `download_run.sh`。
 
 ## 2. 判定 provenance 并优先使用 NGDC
 
@@ -74,20 +98,22 @@ pixi run --locked python "$SKILL_DIR/scripts/audit_manifest.py" \
 
 ## 3. 原子化下载与校验
 
-每个 GSM 使用独立目录，每个 run/lane 保持文件分离。下载阶段不要合并 run。
+每个 GSM 使用独立子目录，位于 `raw/`、`temporary/` 或 `processed/` 之下。每个 run/lane 保持文件分离。下载阶段不要合并 run。
 
 对 source manifest 的每一行运行 `scripts/download_run.sh <project-root> <SRR>`。在 detached tmux 中启动 sample 循环。下载器必须：
 
-- 使用 run 级锁；所有未提交文件仅写入 `GSM*/work/<run>/staging/`；
+- 读取 `metadata/storage_policy.tsv` 决定发布目录；
+- 使用 run 级锁；所有未提交文件仅写入 `temporary/GSM*/work/<run>/staging/`；
 - 仅当 `.part`、aria2 piece map、resume metadata 和当前 source fingerprint 一致时续传；
 - 发布方提供预期字节数时必须核对；
 - ENA 文件必须核对提供方 MD5；
 - FASTQ 运行 `gzip -t`，SRA 运行 `vdb-validate`；
 - 在 R1/R2/I1/I2 整组校验通过后使用发布 journal 提交；
+- Mode A 发布到 `raw/GSM*/fastq/` 或 `raw/GSM*/sra/`；Mode B 发布到 `temporary/GSM*/fastq/`，不得写入 `raw/`；
 - 最终产品为 FASTQ 时对 SRA 运行 `fasterq-dump --split-files`；
 - 在 staging 中原子压缩和校验转换后的 FASTQ；
 - 已知 CB/UMI geometry 时校验配对记录数、expected spots 和 barcode read 最短长度；
-- 向 `GSM*/download_manifest.tsv` 追加可审计记录；
+- 向 `metadata/download_manifests/<GSM>.tsv` 追加可审计记录；
 - 将累计 attempt/resume、逐文件 checksum 和 integrity method 写入机器证据；
 - 仅保留具有有效 piece map 和匹配 resume metadata 的 partial。
 
@@ -102,7 +128,7 @@ pixi run --locked python "$SKILL_DIR/scripts/build_report.py" \
   --root <GSE-dir>
 ```
 
-默认输出为 `<GSE-dir>/reports/report.html`。报告必须整合 study/sample metadata、预检、NGDC coverage、source routing、provenance、下载与转换完整性、FastQC/MultiQC、STARsolo/velocity、工具版本和清理状态。
+默认输出为 `<GSE-dir>/reports/report.html`。报告必须整合 study/sample metadata、存储策略、预检、NGDC coverage、source routing、provenance、下载与转换完整性、FastQC/MultiQC、STARsolo/velocity、工具版本和清理状态。
 
 MultiQC 使用项目内临时 HTML 时，运行：
 
@@ -126,33 +152,36 @@ pixi run --locked python "$SKILL_DIR/scripts/build_report.py" \
 
 ## 6. 可选 STARsolo 与 velocity 分支
 
-仅当用户要求矩阵、重新比对或 RNA velocity 时进入此分支。阅读 `references/starsolo-read-geometry.md`。
+仅当用户要求矩阵、重新比对、RNA velocity，或选择 Mode B 时进入此分支。阅读 `references/starsolo-read-geometry.md`。
 
 - 明确记录参考物种和版本。
 - 使用同一个锁定 STAR 版本建立并运行 STAR index。
 - 保留原实验的 chemistry、CB/UMI geometry 和 whitelist；不得把所有数据集统一“升级”为一种 chemistry。
 - 指定 STARsolo 输入顺序前，核实 barcode/cDNA 的实际角色。
+- Mode A 从 `raw/GSM*/fastq/` 读取；Mode B 从 `temporary/GSM*/fastq/` 读取。
 - 按 GSM 分组已校验的 run，同时保留 run provenance。
+- 输出写到 `processed/GSM*/matrix_10x/` 与 `processed/GSM*/velocity/`。
 - velocity 分析中，将 `Gene`、`GeneFull` 和 `Velocyto` 作为独立 STAR 参数传入，并校验 raw/filtered 10x 矩阵以及 spliced、unspliced、ambiguous 和 loom 输出。
 - 每个 sample 保留 STARsolo `GeneFull_Summary.csv`。全部 sample 完成后运行 `scripts/summarize_starsolo.py --root <GSE-dir>`，生成一行一个 GSM 的 `reports/starsolo_summary.tsv`。
 - 汇总至少展示 Estimated Number of Cells、valid barcode、sequencing saturation、genome/GeneFull mapping、fraction reads in cells、reads/UMI/gene per cell。明确区分 `EmptyDrops_CR` 实际回收细胞数和 `nExpectedCells` 算法先验。
+- 将工具、版本、输入 FASTQ 和输出 matrix 写入 `reports/conversion_provenance.tsv`。
 - 重新运行 `scripts/build_report.py`，在统一 HTML 中展示分数据集统计、跨样本分布和逐 GSM 指标；不得用 MultiQC 的 STAR alignment 表替代 STARsolo Summary。
 
 清理前运行 `scripts/audit_final_outputs.py --root <GSE-dir>`。
 
 ## 7. 清理与交付
 
-先运行 `scripts/audit_download_evidence.py --root <GSE-dir>`。
+先运行 `scripts/audit_download_evidence.py --root <GSE-dir>`。若发生转换，再运行 `scripts/audit_final_outputs.py`。然后运行 `scripts/audit_storage_policy.py --root <GSE-dir>`。
 
-- 最终产品为 FASTQ：保留 FASTQ，删除 SRA、`.part`、`.aria2` 和 work。
-- 最终产品为 SRA：保留通过校验的 SRA。
-- 最终产品为 matrix/velocity：仅当 download-evidence 和 final-output 审计均通过后，才删除 SRA、FASTQ 和 work。
+- Mode A：保留 `raw/` 中的 FASTQ 或 SRA；可删除 `.part`、`.aria2` 和 `temporary/*/work`。不得调用删除 FASTQ 的脚本。
+- Mode B：仅当 download-evidence、final-output 和 storage-policy 审计均通过后，运行 `scripts/apply_storage_policy.py --root <GSE-dir>`。该脚本是删除 FASTQ 的唯一入口。
 - 不得清理未完成或未经审计的 sample。
 - 清理后再次生成 `reports/report.html`，并确认其中不存在项目绝对路径。
 
 报告：
 
 - 预期与实际 GSM、SRR 数量；
+- 存储策略、validation_status 与 deletion_status；
 - NGDC available/missing/invalid 和 fallback 数量；
 - 作者提交产品与数据库生成产品的分类；
 - 多 run/lane 与 read role 检查结果；

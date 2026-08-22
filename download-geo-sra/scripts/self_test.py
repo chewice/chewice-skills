@@ -12,6 +12,7 @@ import http.server
 import json
 import os
 import re
+import shutil
 import socket
 import subprocess
 import sys
@@ -75,6 +76,66 @@ def write_fastq(path: Path, count: int, length: int = 28) -> None:
             )
 
 
+def write_policy(project: Path, gse: str, retain: bool = True) -> None:
+    (project / "metadata").mkdir(parents=True, exist_ok=True)
+    run(
+        sys.executable,
+        str(HERE / "record_storage_policy.py"),
+        "--root",
+        str(project),
+        "--gse",
+        gse,
+        "--retain-raw-fastq",
+        "true" if retain else "false",
+    )
+
+
+def child_env(**updates: str) -> dict[str, str]:
+    environment = os.environ.copy()
+    bindir = str(Path(sys.executable).resolve().parent)
+    environment["PATH"] = os.pathsep.join(
+        [bindir, environment.get("PATH", "")]
+    )
+    environment.update(updates)
+    return environment
+
+
+def write_aria2_stub(directory: Path) -> Path:
+    stub = directory / "aria2c"
+    stub.write_text(
+        "#!/usr/bin/env python3\n"
+        "import sys\n"
+        "from pathlib import Path\n"
+        "import urllib.request\n"
+        "args = sys.argv[1:]\n"
+        "directory = '.'\n"
+        "out = None\n"
+        "url = None\n"
+        "index = 0\n"
+        "while index < len(args):\n"
+        "    arg = args[index]\n"
+        "    if arg == '--dir':\n"
+        "        index += 1\n"
+        "        directory = args[index]\n"
+        "    elif arg.startswith('--dir='):\n"
+        "        directory = arg.split('=', 1)[1]\n"
+        "    elif arg == '--out':\n"
+        "        index += 1\n"
+        "        out = args[index]\n"
+        "    elif arg.startswith('--out='):\n"
+        "        out = arg.split('=', 1)[1]\n"
+        "    elif not arg.startswith('-'):\n"
+        "        url = arg\n"
+        "    index += 1\n"
+        "path = Path(directory) / out\n"
+        "path.parent.mkdir(parents=True, exist_ok=True)\n"
+        "with urllib.request.urlopen(url) as response:\n"
+        "    path.write_bytes(response.read())\n"
+    )
+    stub.chmod(0o755)
+    return directory
+
+
 def digest(path: Path) -> str:
     value = hashlib.md5()
     with path.open("rb") as handle:
@@ -98,7 +159,7 @@ def gzip_lines(path: Path, lines: list[str]) -> None:
 
 
 def final_outputs(project: Path, gsm: str) -> None:
-    matrix_dir = project / gsm / "matrix_10x"
+    matrix_dir = project / "processed" / gsm / "matrix_10x"
     raw = sparse.csr_matrix(
         np.asarray([[1, 0, 2], [0, 3, 0], [4, 0, 5]], dtype=np.int32)
     )
@@ -115,7 +176,7 @@ def final_outputs(project: Path, gsm: str) -> None:
         gzip_lines(directory / "features.tsv.gz", features)
         gzip_lines(directory / "barcodes.tsv.gz", barcodes)
 
-    velocity = project / gsm / "velocity"
+    velocity = project / "processed" / gsm / "velocity"
     for layer in ("spliced", "unspliced", "ambiguous"):
         gzip_matrix(velocity / f"{layer}.mtx.gz", raw)
     gzip_lines(velocity / "features.tsv.gz", features)
@@ -310,7 +371,8 @@ def unified_report_test(base: Path, project: Path) -> None:
     starsolo_rows = read_tsv(project / "reports/starsolo_summary.tsv")
     assert len(starsolo_rows) == 1
     assert starsolo_rows[0]["estimated_number_of_cells"] == "2345"
-    assert "GSM*/fastq/" in text
+    assert "raw/GSM*/fastq/" in text
+    assert "存储策略与原始数据生命周期" in text
     assert "../metadata/sample_metadata.tsv" in text
     assert str(project) not in text
     assert "<script>alert('xss')</script>" not in text
@@ -407,22 +469,24 @@ def downloader_smoke_test(base: Path) -> None:
     }
     manifest = project / "metadata/source_manifest.tsv"
     write_tsv(manifest, fields, [row])
-    environment = os.environ.copy()
-    environment.update(
-        {
-            "GEO_SRA_MAX_ATTEMPTS": "1",
-            "GEO_SRA_CONNECTIONS": "1",
-            "GEO_SRA_RUN_FASTQC": "0",
-            "http_proxy": "",
-            "https_proxy": "",
-            "all_proxy": "",
-            "HTTP_PROXY": "",
-            "HTTPS_PROXY": "",
-            "ALL_PROXY": "",
-        }
+    write_policy(project, "GSE200000", retain=True)
+    stubs = base / "aria2_stub"
+    stubs.mkdir()
+    write_aria2_stub(stubs)
+    environment = child_env(
+        PATH=f"{stubs}:{Path(sys.executable).resolve().parent}:{os.environ.get('PATH', '')}",
+        GEO_SRA_MAX_ATTEMPTS="1",
+        GEO_SRA_CONNECTIONS="1",
+        GEO_SRA_RUN_FASTQC="0",
+        http_proxy="",
+        https_proxy="",
+        all_proxy="",
+        HTTP_PROXY="",
+        HTTPS_PROXY="",
+        ALL_PROXY="",
     )
     try:
-        lock = project / "GSM200001/work/SRR20000001/run.lock"
+        lock = project / "temporary/GSM200001/work/SRR20000001/run.lock"
         lock.parent.mkdir(parents=True, exist_ok=True)
         with lock.open("w") as lock_handle:
             fcntl.flock(lock_handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -457,10 +521,10 @@ def downloader_smoke_test(base: Path) -> None:
             f"stdout:\n{failed.stdout}\nstderr:\n{failed.stderr}"
         )
         assert not (
-            project / "GSM200001/fastq/SRR20000001_R1.fastq.gz"
+            project / "raw/GSM200001/fastq/SRR20000001_R1.fastq.gz"
         ).exists()
         assert not (
-            project / "GSM200001/fastq/SRR20000001_R2.fastq.gz"
+            project / "raw/GSM200001/fastq/SRR20000001_R2.fastq.gz"
         ).exists()
         transfer_state = json.loads(
             (project / "reports/status/SRR20000001.transfer.json").read_text()
@@ -478,7 +542,7 @@ def downloader_smoke_test(base: Path) -> None:
             env=environment,
         )
         assert (
-            project / "GSM200001/fastq/SRR20000001_R1.fastq.gz"
+            project / "raw/GSM200001/fastq/SRR20000001_R1.fastq.gz"
         ).is_file()
         run(
             sys.executable,
@@ -487,7 +551,13 @@ def downloader_smoke_test(base: Path) -> None:
             str(project),
             "--deep",
         )
-        retained_r1 = project / "GSM200001/fastq/SRR20000001_R1.fastq.gz"
+        run(
+            sys.executable,
+            str(HERE / "audit_storage_policy.py"),
+            "--root",
+            str(project),
+        )
+        retained_r1 = project / "raw/GSM200001/fastq/SRR20000001_R1.fastq.gz"
         original = retained_r1.read_bytes()
         retained_r1.write_bytes(original[:-1] + bytes([original[-1] ^ 0xFF]))
         tampered = subprocess.run(
@@ -604,14 +674,12 @@ def prefetch_resume_test(base: Path) -> None:
             }
         ],
     )
-    environment = os.environ.copy()
-    environment.update(
-        {
-            "PATH": f"{stubs}:{environment['PATH']}",
-            "GEO_SRA_MAX_ATTEMPTS": "2",
-            "GEO_SRA_RETRY_DELAYS": "0,0",
-            "GEO_SRA_RUN_FASTQC": "0",
-        }
+    write_policy(project, "GSE400000", retain=True)
+    environment = child_env(
+        PATH=f"{stubs}:{Path(sys.executable).resolve().parent}:{os.environ.get('PATH', '')}",
+        GEO_SRA_MAX_ATTEMPTS="2",
+        GEO_SRA_RETRY_DELAYS="0,0",
+        GEO_SRA_RUN_FASTQC="0",
     )
     run(
         "bash",
@@ -620,8 +688,8 @@ def prefetch_resume_test(base: Path) -> None:
         "SRR40000001",
         env=environment,
     )
-    assert (project / "GSM400001/fastq/SRR40000001_R1.fastq.gz").is_file()
-    assert not (project / "GSM400001/sra/SRR40000001.sra").exists()
+    assert (project / "raw/GSM400001/fastq/SRR40000001_R1.fastq.gz").is_file()
+    assert not (project / "raw/GSM400001/sra/SRR40000001.sra").exists()
     state = json.loads(
         (project / "reports/status/SRR40000001.transfer.json").read_text()
     )
@@ -649,6 +717,7 @@ def watchdog_terminal_test(base: Path) -> None:
         text=True,
         capture_output=True,
         check=False,
+        env=child_env(),
     )
     assert result.returncode == 1
     assert "terminal transfer failure" in result.stdout
@@ -812,14 +881,12 @@ def interrupted_resume_test(base: Path) -> None:
         "fallback_reason": "ngdc_missing",
     }
     write_tsv(project / "metadata/source_manifest.tsv", fields, [row])
-    environment = os.environ.copy()
-    environment.update(
-        {
-            "GEO_SRA_MAX_ATTEMPTS": "1",
-            "GEO_SRA_RETRY_DELAYS": "0",
-            "GEO_SRA_CONNECTIONS": "1",
-            "GEO_SRA_RUN_FASTQC": "0",
-        }
+    write_policy(project, "GSE300000", retain=True)
+    environment = child_env(
+        GEO_SRA_MAX_ATTEMPTS="1",
+        GEO_SRA_RETRY_DELAYS="0",
+        GEO_SRA_CONNECTIONS="1",
+        GEO_SRA_RUN_FASTQC="0",
     )
     try:
         failed = subprocess.run(
@@ -835,8 +902,8 @@ def interrupted_resume_test(base: Path) -> None:
             check=False,
         )
         assert failed.returncode != 0
-        assert not (project / "GSM300001/fastq/SRR30000001_R1.fastq.gz").exists()
-        work = project / "GSM300001/work/SRR30000001/staging/download"
+        assert not (project / "raw/GSM300001/fastq/SRR30000001_R1.fastq.gz").exists()
+        work = project / "temporary/GSM300001/work/SRR30000001/staging/download"
         assert (work / "SRR30000001_R1.fastq.gz.part").is_file()
         assert (work / "SRR30000001_R1.fastq.gz.part.aria2").is_file()
         assert (work / "SRR30000001_R1.fastq.gz.part.resume.json").is_file()
@@ -864,13 +931,237 @@ def interrupted_resume_test(base: Path) -> None:
         server.server_close()
 
 
+def storage_lifecycle_test(base: Path) -> None:
+    missing = subprocess.run(
+        [
+            sys.executable,
+            str(HERE / "scaffold_project.py"),
+            "--gse",
+            "GSE111111",
+            "--output-root",
+            str(base / "scaffold_missing"),
+            "--final-product",
+            "fastq",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert missing.returncode != 0
+    mode_b_fastq = subprocess.run(
+        [
+            sys.executable,
+            str(HERE / "scaffold_project.py"),
+            "--gse",
+            "GSE111112",
+            "--output-root",
+            str(base / "scaffold_mode_b"),
+            "--final-product",
+            "fastq",
+            "--retain-raw-fastq",
+            "false",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert mode_b_fastq.returncode != 0
+
+    no_policy = base / "no_policy_project"
+    (no_policy / "metadata").mkdir(parents=True)
+    (no_policy / "metadata/source_manifest.tsv").write_text(
+        "gse\tgsm\tsrr\tlibrary_layout\texpected_spots\tcb_length\tumi_length\t"
+        "selected_source\tselected_provenance\tselected_urls\tselected_bytes\t"
+        "selected_md5\tread_roles\tfinal_product\tfallback_reason\n"
+        "GSE600000\tGSM600001\tSRR60000001\tPAIRED\t2\t16\t12\tena_fastq\t"
+        "ARCHIVE_GENERATED_FASTQ\thttp://127.0.0.1/a\t1\t" + "a" * 32
+        + "\tR1\tfastq\tngdc_missing\n"
+    )
+    missing_download = subprocess.run(
+        [
+            "bash",
+            str(HERE / "download_run.sh"),
+            str(no_policy),
+            "SRR60000001",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert missing_download.returncode != 0
+    missing_audit = subprocess.run(
+        [
+            sys.executable,
+            str(HERE / "audit_storage_policy.py"),
+            "--root",
+            str(no_policy),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert missing_audit.returncode != 0
+
+    mode_a = base / "mode_a_policy"
+    (mode_a / "metadata").mkdir(parents=True)
+    write_policy(mode_a, "GSE700000", retain=True)
+    gsm = "GSM700001"
+    srr = "SRR70000001"
+    r1 = mode_a / "raw" / gsm / "fastq" / f"{srr}_R1.fastq.gz"
+    r2 = mode_a / "raw" / gsm / "fastq" / f"{srr}_R2.fastq.gz"
+    write_fastq(r1, 2)
+    write_fastq(r2, 2, 91)
+    write_tsv(
+        mode_a / "metadata/source_manifest.tsv",
+        ["gse", "gsm", "srr"],
+        [{"gse": "GSE700000", "gsm": gsm, "srr": srr}],
+    )
+    refused = subprocess.run(
+        [
+            sys.executable,
+            str(HERE / "apply_storage_policy.py"),
+            "--root",
+            str(mode_a),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert refused.returncode != 0
+    assert r1.is_file()
+    run(
+        sys.executable,
+        str(HERE / "audit_storage_policy.py"),
+        "--root",
+        str(mode_a),
+    )
+
+    mode_b = base / "mode_b_policy"
+    (mode_b / "metadata").mkdir(parents=True)
+    write_policy(mode_b, "GSE800000", retain=False)
+    gsm_b = "GSM800001"
+    srr_b = "SRR80000001"
+    tmp_r1 = mode_b / "temporary" / gsm_b / "fastq" / f"{srr_b}_R1.fastq.gz"
+    tmp_r2 = mode_b / "temporary" / gsm_b / "fastq" / f"{srr_b}_R2.fastq.gz"
+    write_fastq(tmp_r1, 2)
+    write_fastq(tmp_r2, 2, 91)
+    write_tsv(
+        mode_b / "metadata/source_manifest.tsv",
+        ["gse", "gsm", "srr", "final_product"],
+        [
+            {
+                "gse": "GSE800000",
+                "gsm": gsm_b,
+                "srr": srr_b,
+                "final_product": "matrix_velocity",
+            }
+        ],
+    )
+    blocked = subprocess.run(
+        [
+            sys.executable,
+            str(HERE / "apply_storage_policy.py"),
+            "--root",
+            str(mode_b),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert blocked.returncode != 0
+    assert tmp_r1.is_file()
+    policy = read_tsv(mode_b / "metadata/storage_policy.tsv")[0]
+    assert policy["deletion_status"] == "blocked"
+    run(
+        sys.executable,
+        str(HERE / "record_storage_policy.py"),
+        "--root",
+        str(mode_b),
+        "--gse",
+        "GSE800000",
+        "--retain-raw-fastq",
+        "false",
+        "--deletion-status",
+        "pending",
+    )
+    run(
+        sys.executable,
+        str(HERE / "audit_storage_policy.py"),
+        "--root",
+        str(mode_b),
+    )
+    final_outputs(mode_b, gsm_b)
+    run(
+        sys.executable,
+        str(HERE / "audit_final_outputs.py"),
+        "--root",
+        str(mode_b),
+        "--skip-full-gzip",
+    )
+    matrix = (
+        mode_b
+        / "processed"
+        / gsm_b
+        / "matrix_10x/raw_feature_bc_matrix/matrix.mtx.gz"
+    )
+    write_tsv(
+        mode_b / "reports/conversion_provenance.tsv",
+        [
+            "gse",
+            "gsm",
+            "tool",
+            "tool_version",
+            "input_fastq",
+            "output_matrix",
+            "validated_at",
+        ],
+        [
+            {
+                "gse": "GSE800000",
+                "gsm": gsm_b,
+                "tool": "STAR",
+                "tool_version": "2.7.11b",
+                "input_fastq": (
+                    f"temporary/{gsm_b}/fastq/{srr_b}_R1.fastq.gz;"
+                    f"temporary/{gsm_b}/fastq/{srr_b}_R2.fastq.gz"
+                ),
+                "output_matrix": matrix.relative_to(mode_b).as_posix(),
+                "validated_at": "2026-01-01T00:00:00+00:00",
+            }
+        ],
+    )
+    run(
+        sys.executable,
+        str(HERE / "apply_storage_policy.py"),
+        "--root",
+        str(mode_b),
+    )
+    assert not tmp_r1.exists()
+    assert not (mode_b / "raw" / gsm_b / "fastq").exists()
+    assert matrix.is_file()
+    deleted = read_tsv(mode_b / "metadata/storage_policy.tsv")[0]
+    assert deleted["deletion_status"] == "deleted"
+    assert deleted["validation_status"] == "validated"
+    assert deleted["deletion_time"]
+    log_rows = read_tsv(mode_b / "reports/storage_deletion_log.tsv")
+    assert len(log_rows) >= 2
+    run(
+        sys.executable,
+        str(HERE / "audit_storage_policy.py"),
+        "--root",
+        str(mode_b),
+    )
+
+
 def main() -> None:
     with tempfile.TemporaryDirectory(prefix="geo-sra-skill-test-") as temporary:
         base = Path(temporary)
         transfer_state_test(base)
-        interrupted_resume_test(base)
+        if shutil.which("aria2c"):
+            interrupted_resume_test(base)
         prefetch_resume_test(base)
         watchdog_terminal_test(base)
+        storage_lifecycle_test(base)
         run(
             sys.executable,
             str(HERE / "scaffold_project.py"),
@@ -880,12 +1171,17 @@ def main() -> None:
             str(base),
             "--final-product",
             "fastq",
+            "--retain-raw-fastq",
+            "true",
         )
         project = base / "GEO/GSE123456"
         assert (project / "pixi.toml").is_file()
         assert (project / "scripts/run_all.sh").is_file()
         assert (project / "reports/report.html").is_file()
-        assert not (project / "reports/dataset_overview.md").exists()
+        assert (project / "metadata/storage_policy.tsv").is_file()
+        assert (project / "raw").is_dir()
+        assert (project / "temporary").is_dir()
+        assert (project / "processed").is_dir()
         run("bash", "-n", str(project / "scripts/run_all.sh"))
         with (project / "pixi.toml").open("rb") as handle:
             pixi_manifest = tomllib.load(handle)
@@ -1157,8 +1453,8 @@ def main() -> None:
         by_gsm: dict[str, list[dict[str, str]]] = {}
         for row in source_rows.values():
             gsm, srr = row["gsm"], row["srr"]
-            r1 = project / gsm / "fastq" / f"{srr}_R1.fastq.gz"
-            r2 = project / gsm / "fastq" / f"{srr}_R2.fastq.gz"
+            r1 = project / "raw" / gsm / "fastq" / f"{srr}_R1.fastq.gz"
+            r2 = project / "raw" / gsm / "fastq" / f"{srr}_R2.fastq.gz"
             write_fastq(r1, 2)
             write_fastq(r2, 2, 91)
             by_gsm.setdefault(gsm, []).append(
@@ -1185,9 +1481,13 @@ def main() -> None:
             marker.parent.mkdir(parents=True, exist_ok=True)
             marker.write_text("validation\tPASS\n")
         for gsm, rows in by_gsm.items():
-            write_tsv(project / gsm / "download_manifest.tsv", download_fields, rows)
+            write_tsv(
+                project / "metadata/download_manifests" / f"{gsm}.tsv",
+                download_fields,
+                rows,
+            )
 
-        partial = project / "GSM100001/fastq/bad.fastq.gz.part"
+        partial = project / "raw/GSM100001/fastq/bad.fastq.gz.part"
         partial.write_bytes(b"partial")
         failed = subprocess.run(
             [
@@ -1208,6 +1508,12 @@ def main() -> None:
             "--root",
             str(project),
             "--deep",
+        )
+        run(
+            sys.executable,
+            str(HERE / "audit_storage_policy.py"),
+            "--root",
+            str(project),
         )
 
         for gsm in ("GSM100001", "GSM100002"):

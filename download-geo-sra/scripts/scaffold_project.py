@@ -11,6 +11,12 @@ import subprocess
 import sys
 from pathlib import Path
 
+HERE = Path(__file__).resolve().parent
+if str(HERE) not in sys.path:
+    sys.path.insert(0, str(HERE))
+
+from project_layout import default_policy, write_storage_policy
+
 EXPECTED_HEADER = (
     "gse\tgsm\tsrx\tsrr\trun_alias\tlane\tlibrary_layout\tread_structure\t"
     "expected_spots\tcb_length\tumi_length\tngdc_run_page\tngdc_url\n"
@@ -48,6 +54,12 @@ def main() -> None:
         choices=("fastq", "sra", "matrix_velocity"),
         default="fastq",
     )
+    parser.add_argument(
+        "--retain-raw-fastq",
+        required=True,
+        choices=("true", "false"),
+        help="User-confirmed storage policy; no default",
+    )
     parser.add_argument("--max-project-gib", type=int, default=500)
     parser.add_argument("--monitor-interval", type=int, default=1800)
     args = parser.parse_args()
@@ -57,12 +69,19 @@ def main() -> None:
         raise SystemExit(f"Invalid GSE accession: {args.gse}")
     if args.max_project_gib <= 0 or args.monitor_interval < 60:
         raise SystemExit("Storage cap must be positive and monitor interval >= 60")
+    retain_raw = args.retain_raw_fastq == "true"
+    if not retain_raw and args.final_product != "matrix_velocity":
+        raise SystemExit("Mode B (--retain-raw-fastq false) requires --final-product matrix_velocity")
 
     output_root = args.output_root.resolve()
     geo_root = output_root if output_root.name.upper() == "GEO" else output_root / "GEO"
     project = geo_root / gse
     for directory in (
         project / "metadata",
+        project / "metadata/download_manifests",
+        project / "raw",
+        project / "temporary",
+        project / "processed",
         project / "reports/logs",
         project / "reports/status",
         project / "scripts",
@@ -82,12 +101,15 @@ def main() -> None:
         "key\tvalue\n"
         f"gse\t{gse}\n"
         f"final_product\t{args.final_product}\n"
+        f"retain_raw_fastq\t{args.retain_raw_fastq}\n"
         f"max_project_bytes\t{args.max_project_gib * 1024**3}\n"
         f"monitor_interval_seconds\t{args.monitor_interval}\n"
         "max_same_error_attempts\t3\n"
         "retry_delays_seconds\t0;30;120\n"
         "provider_priority\tngdc_gsa;ngdc_insdc;ena_submitted;ena_fastq;ncbi_sra\n",
     )
+    if not (project / "metadata/storage_policy.tsv").exists():
+        write_storage_policy(project, default_policy(gse, retain_raw))
     write_new(
         project / "pixi.toml",
         "[workspace]\n"
@@ -143,6 +165,7 @@ def main() -> None:
         '  refresh_report\n'
         "fi\n"
         'python "$ROOT/scripts/audit_download_evidence.py" --root "$ROOT"\n'
+        'python "$ROOT/scripts/audit_storage_policy.py" --root "$ROOT"\n'
         'if [[ -s "$MULTIQC_HTML" ]]; then\n'
         '  python "$REPORTER" --root "$ROOT" --multiqc-html "$MULTIQC_HTML" '
         '--consume-multiqc\n'

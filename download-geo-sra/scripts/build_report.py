@@ -12,10 +12,17 @@ import json
 import os
 import re
 import statistics
+import sys
 from collections import Counter
 from collections.abc import Iterable
 from datetime import datetime
 from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+if str(HERE) not in sys.path:
+    sys.path.insert(0, str(HERE))
+
+from project_layout import iter_download_manifests
 
 STATUS_ZH = {
     "PASS": "通过",
@@ -122,6 +129,16 @@ LABELS = {
     "median_reads_per_cell": "Median reads/cell",
     "median_umi_per_cell": "Median UMI/cell",
     "median_genefull_per_cell": "Median GeneFull/cell",
+    "deletion_time": "删除时间",
+    "storage_mode": "存储模式",
+    "retain_raw_fastq": "保留 FASTQ",
+    "validation_status": "验证状态",
+    "deletion_status": "删除状态",
+    "tool": "工具",
+    "tool_version": "工具版本",
+    "input_fastq": "输入 FASTQ",
+    "output_matrix": "输出 matrix",
+    "deleted_at": "删除时间",
     "samples": "样本数",
     "total_cells": "细胞总数",
     "median_cells": "细胞数中位数",
@@ -534,13 +551,17 @@ def build(args: argparse.Namespace) -> tuple[str, Path | None]:
         "final": root / "reports/final_output_audit.tsv",
         "tools": root / "reports/tool_versions.tsv",
         "starsolo": root / "reports/starsolo_summary.tsv",
+        "storage": root / "metadata/storage_policy.tsv",
+        "storage_audit": root / "reports/storage_policy_audit.tsv",
+        "deletion_log": root / "reports/storage_deletion_log.tsv",
+        "conversion": root / "reports/conversion_provenance.tsv",
     }
     data = {name: read_tsv(path) for name, path in paths.items()}
     legacy = legacy_tables(root)
     for name in ("expected", "sources", "preflight", "downloads"):
         if not data[name]:
             data[name] = legacy[name]
-    download_manifests = sorted(root.glob("GSM*/download_manifest.tsv"))
+    download_manifests = iter_download_manifests(root)
     raw_download_rows = [
         row for manifest in download_manifests for row in read_tsv(manifest)
     ]
@@ -611,6 +632,7 @@ def build(args: argparse.Namespace) -> tuple[str, Path | None]:
     nav_items = [
         ("overview", "研究概览"),
         ("directories", "目录与层级"),
+        ("storage", "存储策略"),
         ("samples", "样本"),
         ("runs", "run 与 read"),
         ("preflight", "预检"),
@@ -655,13 +677,14 @@ def build(args: argparse.Namespace) -> tuple[str, Path | None]:
 
     directory_rows = [
         {"level": "项目", "path": ".", "content": "单个 GSE 的项目根目录"},
-        {"level": "元数据", "path": "metadata/", "content": "研究、样本、run 与来源 manifest"},
-        {"level": "样本", "path": "GSM*/", "content": "每个 GSM 的独立数据目录"},
-        {"level": "run 数据", "path": "GSM*/fastq/", "content": "按 SRR 分开的 R1/R2/I1/I2 FASTQ"},
-        {"level": "归档", "path": "GSM*/sra/", "content": "需要保留时的 SRA 文件"},
-        {"level": "临时空间", "path": "GSM*/work/", "content": "转换与断点恢复工作目录"},
-        {"level": "表达矩阵", "path": "GSM*/matrix_10x/", "content": "raw/filtered 10x 矩阵"},
-        {"level": "RNA velocity", "path": "GSM*/velocity/", "content": "spliced/unspliced/ambiguous 与 loom"},
+        {"level": "元数据", "path": "metadata/", "content": "研究、样本、run、来源与存储策略"},
+        {"level": "下载证据", "path": "metadata/download_manifests/", "content": "每个 GSM 的已校验下载记录"},
+        {"level": "Mode A 原始数据", "path": "raw/GSM*/fastq/", "content": "长期保存的 R1/R2/I1/I2 FASTQ"},
+        {"level": "归档", "path": "raw/GSM*/sra/", "content": "需要保留时的 SRA 文件"},
+        {"level": "Mode B 临时 FASTQ", "path": "temporary/GSM*/fastq/", "content": "仅供转换、验证后删除的 FASTQ"},
+        {"level": "临时工作区", "path": "temporary/GSM*/work/", "content": "staging 与断点恢复"},
+        {"level": "表达矩阵", "path": "processed/GSM*/matrix_10x/", "content": "raw/filtered 10x 矩阵"},
+        {"level": "RNA velocity", "path": "processed/GSM*/velocity/", "content": "spliced/unspliced/ambiguous 与 loom"},
         {"level": "统一报告", "path": "reports/report.html", "content": "唯一的人类可读报告"},
         {"level": "机器报告", "path": "reports/*.tsv", "content": "供程序读取的审计证据"},
         {"level": "日志", "path": "reports/logs/", "content": "下载与分析原始日志"},
@@ -676,6 +699,62 @@ def build(args: argparse.Namespace) -> tuple[str, Path | None]:
             output,
             [root, root / "metadata", root / "reports"],
             "directories",
+        )
+    )
+    storage_body = (
+        table(
+            data["storage"],
+            [
+                "gse",
+                "retain_raw_fastq",
+                "storage_mode",
+                "validation_status",
+                "deletion_status",
+                "deletion_time",
+            ],
+            root,
+            "尚未记录存储策略。大规模下载前必须确认是否长期保存 FASTQ。",
+        )
+        + table(
+            data["storage_audit"],
+            ["gse", "gsm", "check", "status", "message"],
+            root,
+            "尚未运行 storage policy audit。",
+        )
+        + table(
+            data["conversion"],
+            [
+                "gse",
+                "gsm",
+                "tool",
+                "tool_version",
+                "input_fastq",
+                "output_matrix",
+                "validated_at",
+            ],
+            root,
+            "尚未记录 conversion provenance。",
+        )
+        + table(
+            data["deletion_log"],
+            ["gse", "gsm", "srr", "path", "bytes", "md5", "validation_report", "deleted_at"],
+            root,
+            "无 FASTQ 删除记录。",
+        )
+    )
+    sections.append(
+        section(
+            "存储策略与原始数据生命周期",
+            storage_body,
+            root,
+            output,
+            [
+                paths["storage"],
+                paths["storage_audit"],
+                paths["conversion"],
+                paths["deletion_log"],
+            ],
+            "storage",
         )
     )
 
@@ -899,7 +978,7 @@ def build(args: argparse.Namespace) -> tuple[str, Path | None]:
             ),
             root,
             output,
-            [paths["final"], root / "matrix_10x", root / "velocity"],
+            [paths["final"], root / "processed", root / "matrix_10x", root / "velocity"],
             "outputs",
         )
     )

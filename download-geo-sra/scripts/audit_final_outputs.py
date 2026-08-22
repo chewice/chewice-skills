@@ -10,6 +10,12 @@ import subprocess
 import sys
 from pathlib import Path
 
+HERE = Path(__file__).resolve().parent
+if str(HERE) not in sys.path:
+    sys.path.insert(0, str(HERE))
+
+from project_layout import locate_outputs
+
 import h5py
 from scipy.io import mminfo
 
@@ -51,17 +57,7 @@ def shape(path: Path) -> tuple[int, int, int]:
 
 
 def locate(root: Path, gse: str, gsm: str):
-    new_matrix = root / gsm / "matrix_10x"
-    new_velocity = root / gsm / "velocity"
-    if new_matrix.is_dir():
-        matrix = new_matrix
-        velocity = new_velocity
-        loom = new_velocity / f"{gsm}.loom"
-    else:
-        matrix = root / "matrix_10x" / gse / gsm
-        velocity = root / "velocity" / gse / gsm
-        loom = root / "velocity" / gse / f"{gsm}.loom"
-    return matrix, velocity, loom
+    return locate_outputs(root, gse, gsm)
 
 
 def main() -> int:
