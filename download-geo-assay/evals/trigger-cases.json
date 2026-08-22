@@ -28,6 +28,13 @@
     "expected_reason": "GEO/ENA 官方元数据发现属于本 Skill 下载前关卡。"
   },
   {
+    "id": "nontrigger-deseq2-enrichment",
+    "kind": "trigger",
+    "prompt": "FASTQ 已经有了，帮我跑 DESeq2 和 clusterProfiler GO/KEGG。",
+    "should_trigger": false,
+    "expected_reason": "差异表达和富集属于下游分析，不是本 Skill 的转换边界。"
+  },
+  {
     "id": "nontrigger-seurat-analysis",
     "kind": "trigger",
     "prompt": "用 Seurat 对已经有的 10x 矩阵做聚类和注释。",

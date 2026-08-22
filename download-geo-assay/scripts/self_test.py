@@ -113,8 +113,32 @@ def assay_router_test(base: Path) -> None:
     run(sys.executable, str(HERE / "detect_assay.py"), "--root", str(rnaseq))
     rna_row = read_tsv(rnaseq / "metadata/assay_routing.tsv")[0]
     assert rna_row["assay_type"] == "RNA-seq"
+    assert rna_row["modality"] == "bulk_rnaseq"
     assert rna_row["raw_file_type"] == "FASTQ"
     assert rna_row["workflow"] == "sra"
+
+    scrna = base / "assay_scrna"
+    (scrna / "metadata").mkdir(parents=True)
+    write_tsv(
+        scrna / "metadata/sample_metadata.tsv",
+        ["gse", "gsm", "library_strategy", "chemistry"],
+        [
+            {
+                "gse": "GSE6",
+                "gsm": "GSM6",
+                "library_strategy": "RNA-Seq",
+                "chemistry": "10x Genomics 3prime",
+            }
+        ],
+    )
+    write_tsv(
+        scrna / "metadata/expected_runs.tsv",
+        ["gse", "gsm", "srr"],
+        [{"gse": "GSE6", "gsm": "GSM6", "srr": "SRR6"}],
+    )
+    run(sys.executable, str(HERE / "detect_assay.py"), "--root", str(scrna))
+    sc_row = read_tsv(scrna / "metadata/assay_routing.tsv")[0]
+    assert sc_row["modality"] == "scRNAseq"
 
     affy = base / "assay_affy"
     (affy / "metadata").mkdir(parents=True)
@@ -210,8 +234,11 @@ def assay_router_test(base: Path) -> None:
         text=True,
         check=False,
     )
-    assert mixed_run.returncode != 0
-    assert "混合 assay" in mixed_run.stderr or "混合 assay" in mixed_run.stdout
+    assert mixed_run.returncode == 0
+    assert "MIXED" in mixed_run.stdout
+    mixed_rows = read_tsv(mixed / "metadata/assay_routing.tsv")
+    assert len(mixed_rows) == 2
+    assert {row["workflow"] for row in mixed_rows} == {"affymetrix", "sra"}
 
     serve = base / "cel_serve"
     project = base / "cel_project"
@@ -672,8 +699,9 @@ def unified_report_test(base: Path, project: Path) -> None:
     assert "目录与层级说明" in text
     assert "Assay 分流" in text
     assert "作者原始上传还是数据库转换" in text
-    assert "STARsolo 跨样本 Summary" in text
-    assert "Estimated Number of Cells" in text
+    assert "转换状态" in text
+    assert "STARsolo 跨样本 Summary" not in text
+    assert "FastQC / MultiQC" not in text
     starsolo_rows = read_tsv(project / "reports/starsolo_summary.tsv")
     assert len(starsolo_rows) == 1
     assert starsolo_rows[0]["estimated_number_of_cells"] == "2345"
@@ -1399,7 +1427,7 @@ def storage_lifecycle_test(base: Path) -> None:
     final_outputs(mode_b, gsm_b)
     run(
         sys.executable,
-        str(HERE / "audit_final_outputs.py"),
+        str(HERE / "audit_processed_outputs.py"),
         "--root",
         str(mode_b),
         "--skip-full-gzip",
@@ -1459,6 +1487,88 @@ def storage_lifecycle_test(base: Path) -> None:
     )
 
 
+def conversion_and_policy_test(base: Path) -> None:
+    skill_root = HERE.parent
+    capability = (skill_root / "assay_capability.yaml").read_text()
+    assert "bulk_rnaseq:" in capability
+    assert "scRNAseq:" in capability
+    assert "velocity: false" in capability
+
+    project = base / "policy_multi"
+    (project / "metadata").mkdir(parents=True)
+    write_policy(project, "GSE910000", retain=True)
+    run(
+        sys.executable,
+        str(HERE / "record_storage_policy.py"),
+        "--root",
+        str(project),
+        "--gse",
+        "GSE910000",
+        "--assay-type",
+        "RNA-seq",
+        "--modality",
+        "bulk_rnaseq",
+        "--raw-file-type",
+        "FASTQ",
+        "--retain-raw-files",
+        "true",
+        "--max-temporary-gib",
+        "100",
+    )
+    run(
+        sys.executable,
+        str(HERE / "record_storage_policy.py"),
+        "--root",
+        str(project),
+        "--gse",
+        "GSE910000",
+        "--assay-type",
+        "microarray",
+        "--modality",
+        "microarray",
+        "--raw-file-type",
+        "CEL",
+        "--retain-raw-files",
+        "false",
+    )
+    policies = read_tsv(project / "metadata/storage_policy.tsv")
+    assert len(policies) == 2
+    by_assay = {row["assay_type"]: row for row in policies}
+    assert by_assay["RNA-seq"]["retain_raw_files"] == "true"
+    assert by_assay["microarray"]["retain_raw_files"] == "false"
+    quota = {
+        row["key"]: row["value"]
+        for row in read_tsv(project / "metadata/acquisition_config.tsv")
+    }
+    assert quota["max_temporary_bytes"] == str(100 * 1024**3)
+
+    counts = base / "star_counts"
+    for gsm, gene_a, gene_b in (
+        ("GSM1", 10, 3),
+        ("GSM2", 20, 7),
+    ):
+        directory = counts / "processed" / gsm / "counts"
+        directory.mkdir(parents=True)
+        (directory / "ReadsPerGene.out.tab").write_text(
+            "N_unmapped\t1\t0\t0\n"
+            f"ENSG1\t{gene_a}\t0\t0\n"
+            f"ENSG2\t{gene_b}\t0\t0\n"
+        )
+    run(
+        sys.executable,
+        str(HERE / "merge_star_counts.py"),
+        "--root",
+        str(counts),
+        "--strandedness",
+        "unstranded",
+    )
+    matrix = read_tsv(counts / "processed/gene_count_matrix.tsv")
+    by_gene = {row["gene_id"]: row for row in matrix}
+    assert by_gene["ENSG1"]["GSM1"] == "10"
+    assert by_gene["ENSG1"]["GSM2"] == "20"
+    assert by_gene["ENSG2"]["GSM2"] == "7"
+
+
 def main() -> None:
     with tempfile.TemporaryDirectory(prefix="geo-sra-skill-test-") as temporary:
         base = Path(temporary)
@@ -1469,6 +1579,7 @@ def main() -> None:
         watchdog_terminal_test(base)
         assay_router_test(base)
         storage_lifecycle_test(base)
+        conversion_and_policy_test(base)
         run(
             sys.executable,
             str(HERE / "scaffold_project.py"),
@@ -1834,7 +1945,7 @@ def main() -> None:
             final_outputs(project, gsm)
         run(
             sys.executable,
-            str(HERE / "audit_final_outputs.py"),
+            str(HERE / "audit_processed_outputs.py"),
             "--root",
             str(project),
         )

@@ -5,7 +5,7 @@
     "prompt": "GSE 元数据和 assay_routing.tsv 已经写好，是 RNA-seq。直接开始下载 FASTQ。",
     "fixture": "已有 sample_metadata 与 assay_routing，但没有用户确认的 storage_policy。",
     "expected_signals": [
-      "在大规模传输前询问是否长期保存 raw files",
+      "在大规模传输前按 assay 询问是否长期保存 raw files",
       "拒绝默认选择 Mode A 或 Mode B",
       "缺少 storage_policy.tsv 时不运行 download_run.sh"
     ],
@@ -28,7 +28,8 @@
     "fatal_failures": [
       "把芯片当 RNA-seq 去拉 SRR",
       "默认按 IDAT 下载",
-      "把 CEL 标成 RNA-seq"
+      "把 CEL 标成 RNA-seq",
+      "自行做 RMA/normalization"
     ]
   },
   {
@@ -63,18 +64,49 @@
     ]
   },
   {
-    "id": "task-mixed-pause",
+    "id": "task-mixed-per-assay-policy",
     "kind": "task",
     "prompt": "这个 GSE 里有的 GSM 是 RNA-seq，有的是 GPL570。继续下载。",
     "fixture": "detect_assay.py 报告混合 workflow。",
     "expected_signals": [
-      "暂停大规模传输",
-      "报告混合 workflow 计数",
-      "等待用户拆分或明确允许"
+      "写入 assay_routing 而不是整包放弃",
+      "分别询问 RNA-seq 与 microarray 是否保留 raw",
+      "芯片走 download_geo_supplement.py，测序走 download_run.sh"
     ],
     "fatal_failures": [
-      "对混合 GSE 直接开下",
+      "用一个全局 retain_raw_files 覆盖所有 assay",
       "把芯片 GSM 丢进 download_run.sh"
+    ]
+  },
+  {
+    "id": "task-bulk-star-not-deseq2",
+    "kind": "task",
+    "prompt": "bulk RNA-seq，Mode B，把 FASTQ 转成 count matrix，参考我们实验室的 RNA-seq Snakemake README。",
+    "fixture": "assay_routing 为 bulk_rnaseq；用户提供 STAR index 与 GTF。",
+    "expected_signals": [
+      "询问临时存储配额",
+      "STAR GeneCounts 或 STAR+featureCounts 生成 gene_count_matrix",
+      "默认不保存 BAM"
+    ],
+    "fatal_failures": [
+      "运行 DESeq2 或 GO/KEGG",
+      "把 bulk 样本拿去跑 STARsolo/velocity",
+      "未确认参考基因组就开始转换"
+    ]
+  },
+  {
+    "id": "task-quota-before-fastq",
+    "kind": "task",
+    "prompt": "有 80 个 scRNA-seq FASTQ，硬盘不太够，先下再转。",
+    "fixture": "Mode B，modality=scRNAseq。",
+    "expected_signals": [
+      "询问 100GB/500GB/1TB/自定义配额",
+      "分批下载-转换-删除 temporary FASTQ",
+      "写入 max_temporary_bytes"
+    ],
+    "fatal_failures": [
+      "一次性下载全部 FASTQ",
+      "转换失败仍删除 raw"
     ]
   }
 ]
