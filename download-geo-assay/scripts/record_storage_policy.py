@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Record the user-confirmed raw-data storage policy for a GSE project."""
+"""Record the user-confirmed per-assay raw-data storage policy for a GSE project."""
 
 from __future__ import annotations
 
 import argparse
+import csv
 import sys
 from pathlib import Path
 
@@ -12,10 +13,12 @@ if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 
 from project_layout import (  # noqa: E402
+    MODALITIES,
     STORAGE_POLICY_FIELDS,
     StoragePolicyError,
     default_policy,
-    read_storage_policy,
+    policy_key,
+    read_storage_policies,
     write_storage_policy,
 )
 
@@ -25,6 +28,48 @@ def parse_retain(args: argparse.Namespace) -> bool:
     if retain is None:
         raise SystemExit("必须指定 --retain-raw-files true|false，不允许默认")
     return retain == "true"
+
+
+def update_quota(root: Path, gib: int) -> None:
+    path = root / "metadata/acquisition_config.tsv"
+    rows: list[dict[str, str]] = []
+    if path.is_file():
+        with path.open(newline="") as handle:
+            rows = list(csv.DictReader(handle, delimiter="\t"))
+    updated = False
+    value = str(gib * 1024**3)
+    for row in rows:
+        if row.get("key") == "max_temporary_bytes":
+            row["value"] = value
+            updated = True
+    if not updated:
+        rows.append({"key": "max_temporary_bytes", "value": value})
+    fields = ["key", "value"]
+    temp = path.with_name(path.name + ".tmp")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with temp.open("w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fields, delimiter="\t", lineterminator="\n")
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({field: row.get(field, "") for field in fields})
+    temp.replace(path)
+
+
+def matching_existing(
+    policies: list[dict[str, str]],
+    gse: str,
+    assay_type: str,
+    modality: str,
+) -> dict[str, str] | None:
+    for row in policies:
+        if policy_key(row) == (gse, assay_type, modality):
+            return row
+    for row in policies:
+        if row["gse"] == gse and row["assay_type"] == assay_type and not modality:
+            return row
+    if len(policies) == 1 and policies[0]["gse"] == gse and not policies[0]["assay_type"]:
+        return policies[0]
+    return None
 
 
 def main() -> int:
@@ -48,6 +93,7 @@ def main() -> int:
         "microarray",
         "methylation",
     ))
+    parser.add_argument("--modality", default="", choices=tuple(sorted(MODALITIES)))
     parser.add_argument("--raw-file-type", default="", choices=(
         "",
         "pending",
@@ -70,25 +116,34 @@ def main() -> int:
         "blocked",
     ))
     parser.add_argument("--deletion-time", default="")
+    parser.add_argument("--max-temporary-gib", type=int)
     args = parser.parse_args()
     root = args.root.resolve()
     gse = args.gse.upper()
     retain = parse_retain(args)
+    if args.max_temporary_gib is not None:
+        if args.max_temporary_gib <= 0:
+            raise SystemExit("--max-temporary-gib 必须为正整数")
+        update_quota(root, args.max_temporary_gib)
     try:
-        existing = read_storage_policy(root, required=False)
+        policies = read_storage_policies(root, required=False)
     except StoragePolicyError as exc:
         raise SystemExit(str(exc)) from exc
+    existing = matching_existing(policies, gse, args.assay_type, args.modality)
     assay_type = args.assay_type or (existing["assay_type"] if existing else "")
     raw_file_type = args.raw_file_type or (existing["raw_file_type"] if existing else "")
-    row = default_policy(gse, retain, assay_type=assay_type, raw_file_type=raw_file_type)
+    modality = args.modality or (existing["modality"] if existing else "")
+    row = default_policy(
+        gse,
+        retain,
+        assay_type=assay_type,
+        raw_file_type=raw_file_type,
+        modality=modality,
+    )
     if existing and existing["gse"] == gse:
         row["validation_status"] = existing["validation_status"]
         row["deletion_status"] = existing["deletion_status"]
         row["deletion_time"] = existing["deletion_time"]
-        if not args.assay_type:
-            row["assay_type"] = existing["assay_type"]
-        if not args.raw_file_type:
-            row["raw_file_type"] = existing["raw_file_type"]
         if existing["retain_raw_files"] != row["retain_raw_files"] and (
             existing["deletion_status"] == "deleted"
         ):

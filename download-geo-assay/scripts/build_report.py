@@ -552,7 +552,9 @@ def build(args: argparse.Namespace) -> tuple[str, Path | None]:
         "preflight": root / "reports/preflight_audit.tsv",
         "coverage": root / "reports/ngdc_coverage.tsv",
         "downloads": root / "reports/download_integrity_audit.tsv",
-        "final": root / "reports/final_output_audit.tsv",
+        "final": root / "reports/processed_output_audit.tsv"
+        if (root / "reports/processed_output_audit.tsv").is_file()
+        else root / "reports/final_output_audit.tsv",
         "tools": root / "reports/tool_versions.tsv",
         "starsolo": root / "reports/starsolo_summary.tsv",
         "storage": root / "metadata/storage_policy.tsv",
@@ -647,9 +649,7 @@ def build(args: argparse.Namespace) -> tuple[str, Path | None]:
         ("routing", "数据源与 provenance"),
         ("downloads", "下载与完整性"),
         ("transfer-recovery", "断点恢复"),
-        ("qc", "FastQC / MultiQC"),
-        ("outputs", "STARsolo / velocity"),
-        ("starsolo-summary", "STARsolo 汇总"),
+        ("outputs", "转换状态"),
         ("repro", "复现信息"),
     ]
     navigation = "".join(
@@ -694,8 +694,9 @@ def build(args: argparse.Namespace) -> tuple[str, Path | None]:
         {"level": "Mode A IDAT", "path": "raw/GSM*/IDAT/", "content": "Illumina 表达或甲基化 IDAT"},
         {"level": "Mode B 临时 raw", "path": "temporary/GSM*/", "content": "仅供转换、验证后删除的 raw files"},
         {"level": "临时工作区", "path": "temporary/GSM*/work/", "content": "staging 与断点恢复"},
-        {"level": "表达矩阵", "path": "processed/GSM*/matrix_10x/", "content": "raw/filtered 10x 矩阵"},
-        {"level": "RNA velocity", "path": "processed/GSM*/velocity/", "content": "spliced/unspliced/ambiguous 与 loom"},
+        {"level": "10x 矩阵", "path": "processed/GSM*/matrix_10x/", "content": "sc/snRNA 的 raw/filtered feature-barcode matrix"},
+        {"level": "bulk count matrix", "path": "processed/gene_count_matrix.tsv", "content": "bulk RNA-seq gene × sample counts"},
+        {"level": "RNA velocity（可选）", "path": "processed/GSM*/velocity/", "content": "仅 sc/snRNA 且用户要求时的 spliced/unspliced"},
         {"level": "平台注释", "path": "annotation/platform_annotation/", "content": "probe 到 gene 映射"},
         {"level": "QC", "path": "qc/", "content": "芯片或测序 QC 中间文件"},
         {"level": "统一报告", "path": "reports/report.html", "content": "唯一的人类可读报告"},
@@ -719,7 +720,7 @@ def build(args: argparse.Namespace) -> tuple[str, Path | None]:
             "Assay 分流",
             table(
                 data["assay"],
-                ["gse", "gsm", "gpl", "assay_type", "raw_file_type", "workflow", "evidence"],
+                ["gse", "gsm", "gpl", "assay_type", "modality", "raw_file_type", "workflow", "evidence"],
                 root,
                 "尚未运行 detect_assay.py。",
             )
@@ -747,6 +748,7 @@ def build(args: argparse.Namespace) -> tuple[str, Path | None]:
             [
                 "gse",
                 "assay_type",
+                "modality",
                 "raw_file_type",
                 "retain_raw_files",
                 "storage_mode",
@@ -986,52 +988,33 @@ def build(args: argparse.Namespace) -> tuple[str, Path | None]:
         )
     )
 
-    multiqc = locate_multiqc(root, args.multiqc_html)
-    if multiqc:
-        multiqc_text = clean(multiqc.read_text(errors="replace"), root)
-        payload = base64.b64encode(multiqc_text.encode("utf-8")).decode("ascii")
-    else:
-        payload = existing_multiqc_payload(output)
-    if payload:
-        qc_body = (
-            "<p>以下内容为完整 MultiQC 报告，已内嵌于本文件，可离线展开查看。</p>"
-            '<button type="button" id="load-multiqc">加载 / 重新加载 MultiQC</button>'
-            '<iframe id="multiqc-frame" title="内嵌 MultiQC 报告"></iframe>'
-            f'<script type="application/octet-stream" id="multiqc-data">{payload}</script>'
-        )
-        qc_paths = [
-            path
-            for path in (multiqc, root / "reports/fastqc", root / "reports/multiqc_data")
-            if path is not None
-        ]
-    else:
-        qc_body = '<p class="empty">尚未生成 MultiQC；完成 FastQC/MultiQC 后重新构建报告。</p>'
-        qc_paths = [root / "reports/fastqc", root / "reports/multiqc_data"]
-    sections.append(section("FastQC / MultiQC", qc_body, root, output, qc_paths, "qc"))
-
     sections.append(
         section(
-            "STARsolo、10x 矩阵与 RNA velocity",
+            "转换状态",
             table(
+                data["conversion"],
+                [
+                    "gse",
+                    "gsm",
+                    "tool",
+                    "tool_version",
+                    "input_fastq",
+                    "output_matrix",
+                    "validated_at",
+                ],
+                root,
+                "尚未记录 conversion provenance。",
+            )
+            + table(
                 data["final"],
                 ["gse", "gsm", "raw_shape", "filtered_shape", "loom_shape", "status", "message"],
                 root,
-                "尚未运行 final output audit，或本项目仅要求 FASTQ/SRA。",
+                "尚未运行 processed output audit，或本项目仅保留 raw files。",
             ),
             root,
             output,
-            [paths["final"], root / "processed", root / "matrix_10x", root / "velocity"],
+            [paths["conversion"], paths["final"], root / "processed"],
             "outputs",
-        )
-    )
-    sections.append(
-        section(
-            "STARsolo 跨样本 Summary",
-            starsolo_body(data["starsolo"], root),
-            root,
-            output,
-            [paths["starsolo"], root / "reports/starsolo"],
-            "starsolo-summary",
         )
     )
 
@@ -1107,7 +1090,7 @@ const multiqcButton=document.getElementById("load-multiqc");if(multiqcButton){{m
 </script>
 </body></html>
 """
-    return document, multiqc
+    return document, args.multiqc_html
 
 
 def main() -> int:

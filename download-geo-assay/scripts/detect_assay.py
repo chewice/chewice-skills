@@ -21,6 +21,7 @@ FIELDS = [
     "gsm",
     "gpl",
     "assay_type",
+    "modality",
     "raw_file_type",
     "workflow",
     "evidence",
@@ -75,6 +76,8 @@ ATAC_LIB = re.compile(r"atac[- ]?seq", re.I)
 CHIP_LIB = re.compile(r"chip[- ]?seq", re.I)
 MIRNA_LIB = re.compile(r"mirna[- ]?seq", re.I)
 RNA_TEXT = re.compile(r"rna[- ]?seq|single[- ]cell|transcriptome|10x genomics", re.I)
+SCRNA_TEXT = re.compile(r"single[- ]cell|scrna|10x genomics|droplet", re.I)
+SNRNA_TEXT = re.compile(r"single[- ]nucle|snrna|sn[- ]rna", re.I)
 
 
 def read_tsv(path: Path) -> list[dict[str, str]]:
@@ -115,17 +118,27 @@ def classify(row: dict[str, str]) -> dict[str, str]:
         if SEQUENCING.search(blob):
             evidence.append("sequencing platform/technology")
         assay_type = "sequencing"
+        modality = "sequencing"
         if RNASEQ_LIB.search(library) or RNA_TEXT.search(blob):
             assay_type = "RNA-seq"
+            modality = "bulk_rnaseq"
+            if SNRNA_TEXT.search(blob) or SNRNA_TEXT.search(library):
+                modality = "snRNAseq"
+            elif SCRNA_TEXT.search(blob) or SCRNA_TEXT.search(library):
+                modality = "scRNAseq"
         if MIRNA_LIB.search(library) or MIRNA_LIB.search(blob):
             assay_type = "miRNA-seq"
+            modality = "mirna"
         if ATAC_LIB.search(library) or ATAC_LIB.search(blob):
             assay_type = "ATAC-seq"
+            modality = "atac"
         if CHIP_LIB.search(library) or CHIP_LIB.search(blob):
             assay_type = "ChIP-seq"
+            modality = "chip"
         return {
             "gpl": gpl,
             "assay_type": assay_type,
+            "modality": modality,
             "raw_file_type": "FASTQ",
             "workflow": "sra",
             "evidence": ";".join(evidence) or "sequencing",
@@ -135,6 +148,7 @@ def classify(row: dict[str, str]) -> dict[str, str]:
         return {
             "gpl": gpl,
             "assay_type": "microarray",
+            "modality": "microarray",
             "raw_file_type": "CEL",
             "workflow": "affymetrix",
             "evidence": ";".join(evidence),
@@ -144,6 +158,7 @@ def classify(row: dict[str, str]) -> dict[str, str]:
         return {
             "gpl": gpl,
             "assay_type": "methylation",
+            "modality": "methylation",
             "raw_file_type": "IDAT",
             "workflow": "methylation",
             "evidence": ";".join(evidence),
@@ -153,6 +168,7 @@ def classify(row: dict[str, str]) -> dict[str, str]:
         return {
             "gpl": gpl,
             "assay_type": "microarray",
+            "modality": "microarray",
             "raw_file_type": "IDAT",
             "workflow": "illumina",
             "evidence": ";".join(evidence),
@@ -169,7 +185,16 @@ def main() -> int:
     parser.add_argument("--expected-runs", type=Path)
     parser.add_argument("--root", type=Path, help="GSE project root")
     parser.add_argument("--output", type=Path)
-    parser.add_argument("--allow-mixed", action="store_true")
+    parser.add_argument(
+        "--allow-mixed",
+        action="store_true",
+        help="兼容旧参数；混合 assay 现在默认写入分流表并按 assay 分别记录存储策略",
+    )
+    parser.add_argument(
+        "--reject-mixed",
+        action="store_true",
+        help="遇到混合 workflow 时退出，不写分流表",
+    )
     args = parser.parse_args()
     root = args.root.resolve() if args.root else None
     samples_path = args.samples
@@ -218,7 +243,8 @@ def main() -> int:
         )
 
     workflows = {row["workflow"] for row in output_rows}
-    if len(workflows) > 1 and not args.allow_mixed:
+    modalities = {row["modality"] for row in output_rows}
+    if (len(workflows) > 1 or len(modalities) > 1) and args.reject_mixed:
         counts = dict(Counter(row["workflow"] for row in output_rows))
         raise SystemExit(f"同一 GSE 混合 assay workflow，暂停下载：{counts}")
 
@@ -228,14 +254,18 @@ def main() -> int:
             raise SystemExit("需要 --output 或 --root")
         output = root / "metadata/assay_routing.tsv"
     write_tsv_atomic(output, FIELDS, output_rows)
-    summary = Counter((row["assay_type"], row["raw_file_type"], row["workflow"]) for row in output_rows)
+    summary = Counter(
+        (row["assay_type"], row["modality"], row["raw_file_type"], row["workflow"])
+        for row in output_rows
+    )
+    mixed = " MIXED" if len({row["workflow"] for row in output_rows}) > 1 else ""
     print(
         "ASSAY_ROUTE "
         + " ".join(
-            f"{assay}/{raw}/{workflow}={count}"
-            for (assay, raw, workflow), count in sorted(summary.items())
+            f"{assay}/{modality}/{raw}/{workflow}={count}"
+            for (assay, modality, raw, workflow), count in sorted(summary.items())
         )
-        + f" output={output}"
+        + f" output={output}{mixed}"
     )
     return 0
 

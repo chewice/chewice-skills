@@ -21,6 +21,7 @@ from project_layout import (  # noqa: E402
     list_published_raw,
     list_temporary_raw,
     locate_outputs,
+    processed_audit_path,
     read_storage_policy,
     read_tsv,
     storage_policy_path,
@@ -109,7 +110,7 @@ def main() -> int:
     published = list_published_raw(root)
     deletion_log = read_tsv(deletion_log_path(root))
     provenance = read_tsv(conversion_provenance_path(root))
-    final_audit = read_tsv(root / "reports/final_output_audit.tsv")
+    final_audit = read_tsv(processed_audit_path(root))
     array_raw = is_array_raw(policy)
 
     if policy["retain_raw_files"] == "true":
@@ -244,10 +245,10 @@ def main() -> int:
                     f"rows={len(provenance)}",
                 )
             if final_audit and any(row.get("status") != "PASS" for row in final_audit):
-                add(findings, gse, "final_audit", "FAIL", "删除时 final-output audit 未全部通过")
+                add(findings, gse, "processed_audit", "FAIL", "删除时 processed-output audit 未全部通过")
                 errors += 1
             elif final_audit:
-                add(findings, gse, "final_audit", "PASS", "final-output audit PASS")
+                add(findings, gse, "processed_audit", "PASS", "processed-output audit PASS")
         elif policy["deletion_status"] == "pending":
             if not temporary:
                 add(

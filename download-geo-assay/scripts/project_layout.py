@@ -12,6 +12,7 @@ from pathlib import Path
 STORAGE_POLICY_FIELDS = [
     "gse",
     "assay_type",
+    "modality",
     "raw_file_type",
     "retain_raw_files",
     "storage_mode",
@@ -26,6 +27,19 @@ ASSAY_TYPES = {
     "ATAC-seq",
     "ChIP-seq",
     "miRNA-seq",
+    "sequencing",
+    "microarray",
+    "methylation",
+}
+MODALITIES = {
+    "",
+    "pending",
+    "bulk_rnaseq",
+    "scRNAseq",
+    "snRNAseq",
+    "atac",
+    "chip",
+    "mirna",
     "sequencing",
     "microarray",
     "methylation",
@@ -135,6 +149,9 @@ def normalize_policy(row: dict[str, str]) -> dict[str, str]:
     raw_type = normalized["raw_file_type"]
     if assay not in ASSAY_TYPES:
         raise StoragePolicyError(f"invalid assay_type={assay!r}")
+    modality = normalized.get("modality", "")
+    if modality not in MODALITIES:
+        raise StoragePolicyError(f"invalid modality={modality!r}")
     if raw_type not in RAW_FILE_TYPES:
         raise StoragePolicyError(f"invalid raw_file_type={raw_type!r}")
     expected_mode = (
@@ -164,20 +181,32 @@ def normalize_policy(row: dict[str, str]) -> dict[str, str]:
     return normalized
 
 
+def policy_key(row: dict[str, str]) -> tuple[str, str, str]:
+    return (
+        row.get("gse", ""),
+        row.get("assay_type", ""),
+        row.get("modality", ""),
+    )
+
+
 def default_policy(
     gse: str,
     retain_raw_files: bool,
     assay_type: str = "",
     raw_file_type: str = "",
+    modality: str = "",
 ) -> dict[str, str]:
     if assay_type not in ASSAY_TYPES:
         raise StoragePolicyError(f"invalid assay_type={assay_type!r}")
+    if modality not in MODALITIES:
+        raise StoragePolicyError(f"invalid modality={modality!r}")
     if raw_file_type not in RAW_FILE_TYPES:
         raise StoragePolicyError(f"invalid raw_file_type={raw_file_type!r}")
     if retain_raw_files:
         return {
             "gse": gse,
             "assay_type": assay_type,
+            "modality": modality,
             "raw_file_type": raw_file_type,
             "retain_raw_files": "true",
             "storage_mode": "retain",
@@ -188,6 +217,7 @@ def default_policy(
     return {
         "gse": gse,
         "assay_type": assay_type,
+        "modality": modality,
         "raw_file_type": raw_file_type,
         "retain_raw_files": "false",
         "storage_mode": "delete_after_validation",
@@ -197,29 +227,133 @@ def default_policy(
     }
 
 
-def read_storage_policy(root: Path, required: bool = True) -> dict[str, str] | None:
+def read_storage_policies(root: Path, required: bool = True) -> list[dict[str, str]]:
     path = storage_policy_path(root)
     rows = read_tsv(path)
     if not rows:
         if required:
             raise StoragePolicyError(f"缺少 {path.relative_to(root)}")
+        return []
+    return [normalize_policy(row) for row in rows]
+
+
+def read_storage_policy(
+    root: Path,
+    required: bool = True,
+    assay_type: str = "",
+    modality: str = "",
+    gsm: str = "",
+) -> dict[str, str] | None:
+    if gsm:
+        return policy_for_gsm(root, gsm, required=required)
+    policies = read_storage_policies(root, required=required)
+    if not policies:
         return None
-    if len(rows) != 1:
-        raise StoragePolicyError("storage_policy.tsv 必须恰好一行")
-    return normalize_policy(rows[0])
+    if assay_type:
+        matches = [
+            row
+            for row in policies
+            if row["assay_type"] == assay_type
+            and (not modality or row["modality"] == modality)
+        ]
+        if not matches:
+            if required:
+                raise StoragePolicyError(
+                    f"storage_policy.tsv 没有 assay_type={assay_type} modality={modality}"
+                )
+            return None
+        return matches[0]
+    if len(policies) == 1:
+        return policies[0]
+    flags = {row["retain_raw_files"] for row in policies}
+    if len(flags) == 1:
+        return policies[0]
+    raise StoragePolicyError("storage_policy.tsv 有多个 assay 且 retain 不一致，需要指定 gsm 或 assay_type")
 
 
 def write_storage_policy(root: Path, row: dict[str, str]) -> dict[str, str]:
     normalized = normalize_policy(row)
-    write_tsv_atomic(storage_policy_path(root), STORAGE_POLICY_FIELDS, [normalized])
+    existing = []
+    path = storage_policy_path(root)
+    if path.is_file():
+        existing = [normalize_policy(item) for item in read_tsv(path)]
+    key = policy_key(normalized)
+    updated: list[dict[str, str]] = []
+    replaced = False
+    for item in existing:
+        bootstrap = (
+            len(existing) == 1
+            and item["gse"] == normalized["gse"]
+            and not item["assay_type"]
+            and normalized["assay_type"]
+        )
+        same = policy_key(item) == key or (
+            item["gse"] == normalized["gse"]
+            and item["assay_type"] == normalized["assay_type"]
+            and not normalized["modality"]
+            and not item["modality"]
+        )
+        if bootstrap or same:
+            updated.append(normalized)
+            replaced = True
+        else:
+            updated.append(item)
+    if not replaced:
+        updated.append(normalized)
+    write_tsv_atomic(path, STORAGE_POLICY_FIELDS, updated)
     return normalized
 
 
 def retain_raw_files(root: Path, required: bool = True) -> bool | None:
-    policy = read_storage_policy(root, required=required)
+    policies = read_storage_policies(root, required=required)
+    if not policies:
+        return None
+    flags = {row["retain_raw_files"] == "true" for row in policies}
+    if len(flags) != 1:
+        if required:
+            raise StoragePolicyError("多个 assay 的 retain_raw_files 不一致，改用 retain_raw_for_gsm")
+        return None
+    return True in flags
+
+
+def retain_raw_for_gsm(root: Path, gsm: str, required: bool = True) -> bool | None:
+    policy = policy_for_gsm(root, gsm, required=required)
     if policy is None:
         return None
     return policy["retain_raw_files"] == "true"
+
+
+def policy_for_gsm(
+    root: Path,
+    gsm: str,
+    required: bool = True,
+) -> dict[str, str] | None:
+    policies = read_storage_policies(root, required=required)
+    if not policies:
+        return None
+    routing = {
+        row.get("gsm", ""): row
+        for row in read_tsv(root / "metadata/assay_routing.tsv")
+        if row.get("gsm")
+    }
+    sample = routing.get(gsm, {})
+    assay = sample.get("assay_type", "")
+    modality = sample.get("modality", "")
+    raw_type = sample.get("raw_file_type", "")
+    for row in policies:
+        if assay and row["assay_type"] == assay and (not row["modality"] or not modality or row["modality"] == modality):
+            return row
+    for row in policies:
+        if assay and row["assay_type"] == assay:
+            return row
+    for row in policies:
+        if raw_type and row["raw_file_type"] == raw_type:
+            return row
+    if len(policies) == 1:
+        return policies[0]
+    if required:
+        raise StoragePolicyError(f"无法为 {gsm} 匹配 storage_policy")
+    return None
 
 
 def retain_raw_fastq(root: Path, required: bool = True) -> bool | None:
@@ -233,8 +367,19 @@ def is_array_raw(policy: dict[str, str] | None) -> bool:
 
 
 def deletion_completed(root: Path) -> bool:
-    policy = read_storage_policy(root, required=False)
-    return bool(policy and policy["deletion_status"] == "deleted")
+    policies = read_storage_policies(root, required=False)
+    mode_b = [row for row in policies if row["retain_raw_files"] == "false"]
+    if not mode_b:
+        return False
+    return all(row["deletion_status"] == "deleted" for row in mode_b)
+
+
+def processed_audit_path(root: Path) -> Path:
+    current = root / "reports/processed_output_audit.tsv"
+    if current.is_file():
+        return current
+    legacy = root / "reports/final_output_audit.tsv"
+    return current if not legacy.is_file() else legacy
 
 
 def raw_dir(root: Path, gsm: str) -> Path:
@@ -277,7 +422,7 @@ def published_raw_dir(
     kind = file_type.upper()
     subdir = RAW_SUBDIRS.get(kind, kind.lower() or "assay_files")
     if retain is None:
-        retain = retain_raw_files(root, required=False)
+        retain = retain_raw_for_gsm(root, gsm, required=False)
     if retain is False:
         return temporary_dir(root, gsm) / subdir
     current = raw_dir(root, gsm) / subdir
@@ -415,7 +560,9 @@ def infer_srr(path: Path) -> str:
 
 
 def print_dirs(root: Path, gsm: str, srr: str) -> None:
-    policy = read_storage_policy(root)
+    policy = policy_for_gsm(root, gsm)
+    if policy is None:
+        raise StoragePolicyError(f"缺少 {gsm} 的 storage_policy")
     retain = policy["retain_raw_files"] == "true"
     mapping = {
         "RETAIN_RAW": "true" if retain else "false",

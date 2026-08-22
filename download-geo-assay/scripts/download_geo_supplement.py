@@ -18,9 +18,9 @@ if str(HERE) not in sys.path:
 
 from project_layout import (  # noqa: E402
     published_raw_dir,
-    read_storage_policy,
+    read_storage_policies,
     read_tsv,
-    retain_raw_files,
+    retain_raw_for_gsm,
     write_tsv_atomic,
 )
 
@@ -151,8 +151,11 @@ def main() -> int:
     parser.add_argument("--file-type", choices=("CEL", "IDAT"))
     args = parser.parse_args()
     root = args.root.resolve()
-    policy = read_storage_policy(root)
-    retain = retain_raw_files(root)
+    policies = read_storage_policies(root)
+    if not policies:
+        raise SystemExit("缺少 metadata/storage_policy.tsv")
+    array_policies = [item for item in policies if item.get("raw_file_type") in {"CEL", "IDAT"}]
+    policy = array_policies[0] if array_policies else policies[0]
     source = args.input or root / "metadata/supplement_files.tsv"
     rows = read_tsv(source)
     if not rows:
@@ -173,7 +176,12 @@ def main() -> int:
     for row in rows:
         gsm = row["gsm"]
         name = row.get("filename") or Path(row["url"].split("?")[0]).name
-        directory = published_raw_dir(root, gsm, file_type, retain)
+        directory = published_raw_dir(
+            root,
+            gsm,
+            file_type,
+            retain_raw_for_gsm(root, gsm),
+        )
         destination = directory / name
         download(row["url"], destination)
         if destination.stat().st_size == 0:

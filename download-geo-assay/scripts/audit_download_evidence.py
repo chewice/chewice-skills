@@ -22,6 +22,7 @@ if str(HERE) not in sys.path:
 from project_layout import (
     deletion_completed,
     iter_download_manifests,
+    processed_audit_path,
     published_fastq_files,
     published_sra_dir,
     read_storage_policy,
@@ -263,11 +264,11 @@ def main() -> int:
         elif product == "sra":
             mandatory_files.append(published_sra_dir(root, gsm) / f"{run}.sra")
         elif product == "matrix_velocity":
-            final_report = root / "reports/final_output_audit.tsv"
+            final_report = processed_audit_path(root)
             if retain and not final_report.is_file():
-                row_errors.append("matrix_velocity cleanup lacks final-output audit")
+                row_errors.append("matrix_velocity cleanup lacks processed-output audit")
             elif deleted and not final_report.is_file():
-                row_errors.append("matrix_velocity cleanup lacks final-output audit")
+                row_errors.append("matrix_velocity cleanup lacks processed-output audit")
             if not deleted:
                 mandatory_files.extend(
                     published_fastq_files(

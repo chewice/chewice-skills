@@ -25,7 +25,8 @@ from project_layout import (  # noqa: E402
     is_array_raw,
     list_temporary_raw,
     locate_outputs,
-    read_storage_policy,
+    processed_audit_path,
+    read_storage_policies,
     read_tsv,
     write_storage_policy,
     write_tsv_atomic,
@@ -52,11 +53,12 @@ def provenance_inputs(row: dict[str, str]) -> list[str]:
     ]
 
 
-def block(policy: dict[str, str], root: Path, message: str) -> int:
-    if policy["retain_raw_files"] == "false":
-        policy = dict(policy)
-        policy["deletion_status"] = "blocked"
-        write_storage_policy(root, policy)
+def block(policy: dict[str, str], root: Path, message: str, policies: list[dict[str, str]] | None = None) -> int:
+    for row in policies or [policy]:
+        if row["retain_raw_files"] == "false":
+            blocked = dict(row)
+            blocked["deletion_status"] = "blocked"
+            write_storage_policy(root, blocked)
     print(f"ERROR {message}", file=sys.stderr)
     return 1
 
@@ -104,7 +106,8 @@ def provenance_ok(root: Path, samples: set[tuple[str, str]]) -> list[str]:
 
 
 def audit_pass(root: Path, array_raw: bool) -> tuple[set[tuple[str, str]], list[str]]:
-    rows = read_tsv(root / "reports/final_output_audit.tsv")
+    report = processed_audit_path(root)
+    rows = read_tsv(report)
     if not rows:
         if array_raw:
             samples = {
@@ -113,7 +116,7 @@ def audit_pass(root: Path, array_raw: bool) -> tuple[set[tuple[str, str]], list[
                 if row.get("gsm")
             }
             return samples, []
-        return set(), ["missing reports/final_output_audit.tsv"]
+        return set(), [f"missing {report.name}"]
     samples: set[tuple[str, str]] = set()
     errors: list[str] = []
     for row in rows:
@@ -123,6 +126,9 @@ def audit_pass(root: Path, array_raw: bool) -> tuple[set[tuple[str, str]], list[
             errors.append(f"{gsm}: final-output audit is {row.get('status')!r}")
             continue
         if array_raw:
+            continue
+        gene_matrix = root / "processed/gene_count_matrix.tsv"
+        if gene_matrix.is_file() and gene_matrix.stat().st_size > 0:
             continue
         matrix_dir, _, _ = locate_outputs(root, gse, gsm)
         raw_matrix = matrix_dir / "raw_feature_bc_matrix/matrix.mtx.gz"
@@ -139,25 +145,41 @@ def main() -> int:
     args = parser.parse_args()
     root = args.root.resolve()
     try:
-        policy = read_storage_policy(root)
+        policies = read_storage_policies(root)
+        mode_b_early = [row for row in policies if row["retain_raw_files"] == "false"]
+        policy = mode_b_early[0] if mode_b_early else policies[0]
     except StoragePolicyError as exc:
         raise SystemExit(str(exc)) from exc
 
-    if policy["retain_raw_files"] == "true":
+    if all(row["retain_raw_files"] == "true" for row in policies):
         print("ERROR Mode A forbids raw-file deletion", file=sys.stderr)
         return 1
     if deletion_completed(root) and not list_temporary_raw(root):
         print("STORAGE_POLICY already deleted; nothing to apply")
         return 0
 
-    array_raw = is_array_raw(policy)
+    mode_b = [row for row in policies if row["retain_raw_files"] == "false"]
+    array_raw = bool(mode_b) and all(is_array_raw(row) for row in mode_b)
     samples, errors = audit_pass(root, array_raw)
     errors.extend(provenance_ok(root, samples))
     files = list_temporary_raw(root)
+    routing = read_tsv(root / "metadata/assay_routing.tsv")
+    mode_b_gsms = {
+        row.get("gsm", "")
+        for row in routing
+        for policy_row in mode_b
+        if row.get("gsm")
+        and (
+            not policy_row["assay_type"]
+            or row.get("assay_type") == policy_row["assay_type"]
+        )
+    }
+    if mode_b_gsms:
+        files = [path for path in files if infer_gsm(path, root) in mode_b_gsms]
     if not files:
         errors.append("Mode B has no temporary raw files to delete")
     if errors:
-        return block(policy, root, "; ".join(errors))
+        return block(policy, root, "; ".join(errors), mode_b)
 
     now = datetime.now().astimezone().isoformat(timespec="seconds")
     log_rows = read_tsv(deletion_log_path(root))
@@ -171,7 +193,7 @@ def main() -> int:
                 "path": relative(root, path),
                 "bytes": str(path.stat().st_size),
                 "md5": md5(path),
-                "validation_report": "reports/final_output_audit.tsv",
+                "validation_report": processed_audit_path(root).relative_to(root).as_posix(),
                 "deleted_at": now,
             }
         )
@@ -181,10 +203,12 @@ def main() -> int:
             parent.rmdir()
 
     write_tsv_atomic(deletion_log_path(root), DELETION_LOG_FIELDS, log_rows)
-    policy["validation_status"] = "validated"
-    policy["deletion_status"] = "deleted"
-    policy["deletion_time"] = now
-    write_storage_policy(root, policy)
+    for row in mode_b:
+        updated = dict(row)
+        updated["validation_status"] = "validated"
+        updated["deletion_status"] = "deleted"
+        updated["deletion_time"] = now
+        write_storage_policy(root, updated)
     print(
         f"STORAGE_POLICY deleted files={len(files)} "
         f"log={deletion_log_path(root).relative_to(root).as_posix()}"

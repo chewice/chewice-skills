@@ -22,7 +22,9 @@ PLATFORM_HEADER = (
     "gse\tgpl\ttitle\ttechnology\tassay_type\traw_file_type\t"
     "array_type\tannotation_version\n"
 )
-ASSAY_HEADER = "gse\tgsm\tgpl\tassay_type\traw_file_type\tworkflow\tevidence\n"
+ASSAY_HEADER = (
+    "gse\tgsm\tgpl\tassay_type\tmodality\traw_file_type\tworkflow\tevidence\n"
+)
 EXPECTED_HEADER = (
     "gse\tgsm\tsrx\tsrr\trun_alias\tlane\tlibrary_layout\tread_structure\t"
     "expected_spots\tcb_length\tumi_length\tngdc_run_page\tngdc_url\n"
@@ -62,6 +64,8 @@ def main() -> None:
             "fastq",
             "sra",
             "matrix_velocity",
+            "matrix_10x",
+            "gene_count_matrix",
             "CEL",
             "IDAT",
             "intensity",
@@ -108,11 +112,17 @@ def main() -> None:
     if retain_flag is None:
         raise SystemExit("必须指定 --retain-raw-files true|false，不允许默认")
     retain_raw = retain_flag == "true"
-    mode_b_products = {"matrix_velocity", "intensity", "processed"}
+    mode_b_products = {
+        "matrix_velocity",
+        "matrix_10x",
+        "gene_count_matrix",
+        "intensity",
+        "processed",
+    }
     if not retain_raw and args.final_product not in mode_b_products:
         raise SystemExit(
             "Mode B (--retain-raw-files false) 需要 --final-product "
-            "matrix_velocity|intensity|processed"
+            "matrix_velocity|matrix_10x|gene_count_matrix|intensity|processed"
         )
 
     output_root = args.output_root.resolve()
@@ -166,6 +176,7 @@ def main() -> None:
         f"assay_type\t{args.assay_type}\n"
         f"raw_file_type\t{args.raw_file_type}\n"
         f"max_project_bytes\t{args.max_project_gib * 1024**3}\n"
+        f"max_temporary_bytes\t{args.max_project_gib * 1024**3}\n"
         f"monitor_interval_seconds\t{args.monitor_interval}\n"
         "max_same_error_attempts\t3\n"
         "retry_delays_seconds\t0;30;120\n"
@@ -215,11 +226,8 @@ def main() -> None:
         'ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)\n'
         'MANIFEST="$ROOT/metadata/source_manifest.tsv"\n'
         'REPORTER="$ROOT/scripts/build_report.py"\n'
-        'MULTIQC_HTML="$ROOT/reports/multiqc_data/embedded_multiqc.html"\n'
         'refresh_report() {\n'
-        '  local args=(python "$REPORTER" --root "$ROOT")\n'
-        '  [[ -s "$MULTIQC_HTML" ]] && args+=(--multiqc-html "$MULTIQC_HTML")\n'
-        '  "${args[@]}" || echo "WARNING: HTML 报告刷新失败" >&2\n'
+        '  python "$REPORTER" --root "$ROOT" || echo "WARNING: HTML 报告刷新失败" >&2\n'
         '}\n'
         "trap refresh_report EXIT\n"
         '[[ -s "$MANIFEST" ]] || { echo "Missing $MANIFEST" >&2; exit 2; }\n'
@@ -227,22 +235,9 @@ def main() -> None:
         '  [[ -n "$run" ]] || continue\n'
         '  "$ROOT/scripts/download_run.sh" "$ROOT" "$run"\n'
         "done < <(awk -F '\\t' 'NR>1 {gsub(/\\r/,\"\",$4); print $4}' \"$MANIFEST\")\n"
-        'if [[ -d "$ROOT/reports/fastqc" ]]; then\n'
-        '  MULTIQC_DIR="$ROOT/reports/multiqc_data"\n'
-        '  mkdir -p "$MULTIQC_DIR"\n'
-        '  multiqc --force --data-dir --data-format json '
-        '--filename embedded_multiqc.html --outdir "$MULTIQC_DIR" '
-        '"$ROOT/reports/fastqc"\n'
-        '  refresh_report\n'
-        "fi\n"
         'python "$ROOT/scripts/audit_download_evidence.py" --root "$ROOT"\n'
         'python "$ROOT/scripts/audit_storage_policy.py" --root "$ROOT"\n'
-        'if [[ -s "$MULTIQC_HTML" ]]; then\n'
-        '  python "$REPORTER" --root "$ROOT" --multiqc-html "$MULTIQC_HTML" '
-        '--consume-multiqc\n'
-        "else\n"
-        "  refresh_report\n"
-        "fi\n"
+        "refresh_report\n"
         "trap - EXIT\n",
     )
 

@@ -102,7 +102,7 @@ def main() -> None:
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument(
         "--final-product",
-        choices=("fastq", "sra", "matrix_velocity"),
+        choices=("fastq", "sra", "matrix_velocity", "matrix_10x", "gene_count_matrix"),
         default="fastq",
     )
     args = parser.parse_args()

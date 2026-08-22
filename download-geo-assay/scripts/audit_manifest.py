@@ -43,7 +43,7 @@ PROVENANCE = {
 }
 NGDC_STATUS = {"available", "missing", "invalid", "unreachable", "not_probed"}
 ROLES = {"SRA", "R1", "R2", "I1", "I2", "BAM", "OTHER"}
-PRODUCTS = {"fastq", "sra", "matrix_velocity"}
+PRODUCTS = {"fastq", "sra", "matrix_velocity", "matrix_10x", "gene_count_matrix"}
 
 
 def refresh_report(root: Path) -> None:

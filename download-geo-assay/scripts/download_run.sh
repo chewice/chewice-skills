@@ -66,8 +66,8 @@ eval "$(python "$LAYOUT_HELPER" --root "$ROOT" --gsm "$GSM" --srr "$SRR" --print
     echo "Failed to resolve project layout for $SRR" >&2
     exit 2
 }
-if [[ "$RETAIN_RAW" != true && "$FINAL_PRODUCT" != matrix_velocity ]]; then
-    echo "Mode B requires final_product=matrix_velocity" >&2
+if [[ "$RETAIN_RAW" != true && "$FINAL_PRODUCT" != matrix_velocity && "$FINAL_PRODUCT" != matrix_10x && "$FINAL_PRODUCT" != gene_count_matrix ]]; then
+    echo "Mode B requires final_product=matrix_velocity|matrix_10x|gene_count_matrix" >&2
     exit 2
 fi
 STAGING_DIR="$WORK_DIR/staging"
