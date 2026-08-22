@@ -140,6 +140,50 @@ def assay_router_test(base: Path) -> None:
     assert affy_row["raw_file_type"] == "CEL"
     assert affy_row["workflow"] == "affymetrix"
 
+    atac = base / "assay_atac"
+    (atac / "metadata").mkdir(parents=True)
+    write_tsv(
+        atac / "metadata/sample_metadata.tsv",
+        ["gse", "gsm", "platform", "library_strategy"],
+        [
+            {
+                "gse": "GSE4",
+                "gsm": "GSM4",
+                "platform": "GPL20301",
+                "library_strategy": "ATAC-seq",
+            }
+        ],
+    )
+    write_tsv(
+        atac / "metadata/expected_runs.tsv",
+        ["gse", "gsm", "srr"],
+        [{"gse": "GSE4", "gsm": "GSM4", "srr": "SRR4"}],
+    )
+    run(sys.executable, str(HERE / "detect_assay.py"), "--root", str(atac))
+    atac_row = read_tsv(atac / "metadata/assay_routing.tsv")[0]
+    assert atac_row["assay_type"] == "ATAC-seq"
+    assert atac_row["raw_file_type"] == "FASTQ"
+    assert atac_row["workflow"] == "sra"
+
+    hiseq = base / "assay_hiseq"
+    (hiseq / "metadata").mkdir(parents=True)
+    write_tsv(
+        hiseq / "metadata/sample_metadata.tsv",
+        ["gse", "gsm", "platform", "instrument_model"],
+        [
+            {
+                "gse": "GSE5",
+                "gsm": "GSM5",
+                "platform": "GPL11154",
+                "instrument_model": "Illumina HiSeq 4000",
+            }
+        ],
+    )
+    run(sys.executable, str(HERE / "detect_assay.py"), "--root", str(hiseq))
+    hiseq_row = read_tsv(hiseq / "metadata/assay_routing.tsv")[0]
+    assert hiseq_row["assay_type"] == "sequencing"
+    assert hiseq_row["workflow"] == "sra"
+
     mixed = base / "assay_mixed"
     (mixed / "metadata").mkdir(parents=True)
     write_tsv(
@@ -221,6 +265,42 @@ def assay_router_test(base: Path) -> None:
         assert published.is_file() and published.stat().st_size > 0
         manifest = read_tsv(project / "metadata/download_manifests/GSM900001.tsv")
         assert manifest[0]["validation"] == "PASS"
+        inferred = base / "cel_inferred"
+        (inferred / "metadata").mkdir(parents=True)
+        write_policy(inferred, "GSE900001", retain=True)
+        run(
+            sys.executable,
+            str(HERE / "record_storage_policy.py"),
+            "--root",
+            str(inferred),
+            "--gse",
+            "GSE900001",
+            "--retain-raw-files",
+            "true",
+            "--assay-type",
+            "microarray",
+            "--raw-file-type",
+            "CEL",
+        )
+        write_tsv(
+            inferred / "metadata/supplement_files.tsv",
+            ["gse", "gsm", "filename", "url"],
+            [
+                {
+                    "gse": "GSE900001",
+                    "gsm": "GSM900002",
+                    "filename": cel.name,
+                    "url": f"http://127.0.0.1:{port}/{cel.name}",
+                }
+            ],
+        )
+        run(
+            sys.executable,
+            str(HERE / "download_geo_supplement.py"),
+            "--root",
+            str(inferred),
+        )
+        assert (inferred / "raw/GSM900002/CEL" / cel.name).is_file()
     finally:
         server.shutdown()
         server.server_close()

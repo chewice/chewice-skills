@@ -1,0 +1,44 @@
+[
+  {
+    "id": "trigger-gse-download",
+    "kind": "trigger",
+    "prompt": "帮我下载 GSE123456 的原始数据，先确认要不要长期保存 FASTQ。",
+    "should_trigger": true,
+    "expected_reason": "明确要求下载 GEO GSE 原始数据并涉及存储策略。"
+  },
+  {
+    "id": "trigger-affymetrix-cel",
+    "kind": "trigger",
+    "prompt": "这个 GSE 是 GPL570 Affymetrix 芯片，把 CEL 下到 raw/GSM*/CEL/，不要走 SRA。",
+    "should_trigger": true,
+    "expected_reason": "芯片 CEL 获取属于 assay 分流后的 GEO supplementary 分支。"
+  },
+  {
+    "id": "trigger-ngdc-resume",
+    "kind": "trigger",
+    "prompt": "GSE 的 SRR 下载断了，优先用 NGDC 镜像续传并校验 FASTQ。",
+    "should_trigger": true,
+    "expected_reason": "测序 run 的 NGDC 优先路由、续传和校验。"
+  },
+  {
+    "id": "nontrigger-seurat-analysis",
+    "kind": "trigger",
+    "prompt": "用 Seurat 对已经有的 10x 矩阵做聚类和注释。",
+    "should_trigger": false,
+    "expected_reason": "这是下游单细胞分析，不是 GEO 原始 assay 获取。"
+  },
+  {
+    "id": "nontrigger-geo-logcounts",
+    "kind": "trigger",
+    "prompt": "把 GEO 页面上的 logcounts 表达矩阵下载下来做差异分析。",
+    "should_trigger": false,
+    "expected_reason": "默认排除 GEO processed/logcounts 矩阵。"
+  },
+  {
+    "id": "nontrigger-sra-toolkit-install",
+    "kind": "trigger",
+    "prompt": "怎么在 Ubuntu 上安装 SRA Toolkit？",
+    "should_trigger": false,
+    "expected_reason": "只是安装工具，不涉及按 assay 分流获取数据集。"
+  }
+]

@@ -1,0 +1,49 @@
+[
+  {
+    "id": "task-storage-gate",
+    "kind": "task",
+    "prompt": "GSE 元数据和 assay_routing.tsv 已经写好，是 RNA-seq。直接开始下载 FASTQ。",
+    "fixture": "已有 sample_metadata 与 assay_routing，但没有用户确认的 storage_policy。",
+    "expected_signals": [
+      "在大规模传输前询问是否长期保存 raw files",
+      "拒绝默认选择 Mode A 或 Mode B",
+      "缺少 storage_policy.tsv 时不运行 download_run.sh"
+    ],
+    "fatal_failures": [
+      "未询问就下载",
+      "自行决定 retain_raw_files",
+      "下载 GEO logcounts 或创建 Seurat object"
+    ]
+  },
+  {
+    "id": "task-array-not-sra",
+    "kind": "task",
+    "prompt": "GPL570 的 GSE，workflow=affymetrix。把原始数据准备好。",
+    "fixture": "assay_routing 全为 affymetrix/CEL。",
+    "expected_signals": [
+      "走 GEO supplementary 下载 CEL",
+      "不运行 probe_ngdc.py 或 download_run.sh",
+      "--file-type 与 raw_file_type=CEL 一致"
+    ],
+    "fatal_failures": [
+      "把芯片当 RNA-seq 去拉 SRR",
+      "默认按 IDAT 下载",
+      "把 CEL 标成 RNA-seq"
+    ]
+  },
+  {
+    "id": "task-mixed-pause",
+    "kind": "task",
+    "prompt": "这个 GSE 里有的 GSM 是 RNA-seq，有的是 GPL570。继续下载。",
+    "fixture": "detect_assay.py 报告混合 workflow。",
+    "expected_signals": [
+      "暂停大规模传输",
+      "报告混合 workflow 计数",
+      "等待用户拆分或明确允许"
+    ],
+    "fatal_failures": [
+      "对混合 GSE 直接开下",
+      "把芯片 GSM 丢进 download_run.sh"
+    ]
+  }
+]
