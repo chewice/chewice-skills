@@ -21,6 +21,13 @@
     "expected_reason": "测序 run 的 NGDC 优先路由、续传和校验。"
   },
   {
+    "id": "trigger-geo-soft-metadata",
+    "kind": "trigger",
+    "prompt": "先别下数据，把这个 GSE 的 SOFT 和 ENA filereport 解析成 sample/run 表。",
+    "should_trigger": true,
+    "expected_reason": "GEO/ENA 官方元数据发现属于本 Skill 下载前关卡。"
+  },
+  {
     "id": "nontrigger-seurat-analysis",
     "kind": "trigger",
     "prompt": "用 Seurat 对已经有的 10x 矩阵做聚类和注释。",

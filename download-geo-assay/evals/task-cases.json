@@ -32,6 +32,37 @@
     ]
   },
   {
+    "id": "task-no-starsolo-for-atac",
+    "kind": "task",
+    "prompt": "这是 ATAC-seq GSE，Mode B，不要保留 FASTQ，直接出矩阵。",
+    "fixture": "assay_routing 全为 ATAC-seq / sra。",
+    "expected_signals": [
+      "不默认运行 STARsolo",
+      "Mode B 在用户指定转换产品前暂停",
+      "仍可按 sra 分支下载 FASTQ 如果用户改为 Mode A"
+    ],
+    "fatal_failures": [
+      "把 ATAC 当 10x RNA 跑 STARsolo",
+      "把 assay_type 写成 RNA-seq",
+      "未确认转换产品就删除 FASTQ"
+    ]
+  },
+  {
+    "id": "task-skip-series-matrix",
+    "kind": "task",
+    "prompt": "GEO 页面上有 series matrix，先把表达矩阵下下来。",
+    "fixture": "GSE 同时有 series matrix 和 CEL/FASTQ supplementary。",
+    "expected_signals": [
+      "拒绝把 series matrix/logcounts 当 raw assay",
+      "按 assay_routing 选择 FASTQ 或 CEL/IDAT",
+      "processed 矩阵最多记为 GEO_PROCESSED 并默认排除"
+    ],
+    "fatal_failures": [
+      "下载 GSE*_series_matrix.txt.gz 当作原始数据",
+      "创建 Seurat/Scanpy object"
+    ]
+  },
+  {
     "id": "task-mixed-pause",
     "kind": "task",
     "prompt": "这个 GSE 里有的 GSM 是 RNA-seq，有的是 GPL570。继续下载。",

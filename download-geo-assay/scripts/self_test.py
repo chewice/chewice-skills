@@ -301,6 +301,95 @@ def assay_router_test(base: Path) -> None:
             str(inferred),
         )
         assert (inferred / "raw/GSM900002/CEL" / cel.name).is_file()
+
+        import zipfile as zipfile_mod
+
+        archive = serve / "GSM900003_RAW.zip"
+        with zipfile_mod.ZipFile(archive, "w") as bundle:
+            bundle.writestr("ignore_series_matrix.txt", "not raw")
+            bundle.write(cel, arcname="GSM900003.CEL.gz")
+        zipped = base / "cel_zip"
+        (zipped / "metadata").mkdir(parents=True)
+        write_policy(zipped, "GSE900002", retain=True)
+        run(
+            sys.executable,
+            str(HERE / "record_storage_policy.py"),
+            "--root",
+            str(zipped),
+            "--gse",
+            "GSE900002",
+            "--retain-raw-files",
+            "true",
+            "--assay-type",
+            "microarray",
+            "--raw-file-type",
+            "CEL",
+        )
+        write_tsv(
+            zipped / "metadata/supplement_files.tsv",
+            ["gse", "gsm", "filename", "url"],
+            [
+                {
+                    "gse": "GSE900002",
+                    "gsm": "GSM900003",
+                    "filename": archive.name,
+                    "url": f"http://127.0.0.1:{port}/{archive.name}",
+                }
+            ],
+        )
+        run(
+            sys.executable,
+            str(HERE / "download_geo_supplement.py"),
+            "--root",
+            str(zipped),
+        )
+        assert (zipped / "raw/GSM900003/CEL" / archive.name).is_file()
+        assert (zipped / "raw/GSM900003/CEL" / "GSM900003.CEL.gz").is_file()
+        assert not (zipped / "raw/GSM900003/CEL" / "ignore_series_matrix.txt").exists()
+
+        mismatch = base / "cel_mismatch"
+        (mismatch / "metadata").mkdir(parents=True)
+        write_policy(mismatch, "GSE900003", retain=True)
+        run(
+            sys.executable,
+            str(HERE / "record_storage_policy.py"),
+            "--root",
+            str(mismatch),
+            "--gse",
+            "GSE900003",
+            "--retain-raw-files",
+            "true",
+            "--assay-type",
+            "microarray",
+            "--raw-file-type",
+            "CEL",
+        )
+        write_tsv(
+            mismatch / "metadata/supplement_files.tsv",
+            ["gse", "gsm", "filename", "url", "expected_bytes"],
+            [
+                {
+                    "gse": "GSE900003",
+                    "gsm": "GSM900004",
+                    "filename": cel.name,
+                    "url": f"http://127.0.0.1:{port}/{cel.name}",
+                    "expected_bytes": "1",
+                }
+            ],
+        )
+        bad = subprocess.run(
+            [
+                sys.executable,
+                str(HERE / "download_geo_supplement.py"),
+                "--root",
+                str(mismatch),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert bad.returncode != 0
+        assert "byte mismatch" in bad.stderr or "byte mismatch" in bad.stdout
     finally:
         server.shutdown()
         server.server_close()
