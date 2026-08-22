@@ -4,7 +4,7 @@
 
 主要特性：
 
-- 下载前先判定 `assay_type` / `raw_file_type` / `workflow`；混合 assay 暂停。
+- 下载前先判定 `assay_type` / `raw_file_type` / `workflow`；测序与芯片走不同获取分支，混合 assay 暂停。
 - 下载前强制确认是否长期保存 raw files；不允许默认选择。
 - 测序 run 优先使用有效的 NGDC 数据，必要时回退 ENA 或 NCBI。
 - 芯片走 GEO supplementary（CEL/IDAT），并保存 GPL 与 probe 注释。
