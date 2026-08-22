@@ -58,6 +58,7 @@ def main() -> None:
     parser.add_argument(
         "--final-product",
         choices=(
+            "pending",
             "fastq",
             "sra",
             "matrix_velocity",
