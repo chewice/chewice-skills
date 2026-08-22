@@ -7,14 +7,14 @@
 1. 解析数据集并判定 assay（`scripts/detect_assay.py`）。
 2. 询问用户：是否长期保存 raw files？选项只有 A / B。
 3. 运行 `scripts/record_storage_policy.py` 写入 `metadata/storage_policy.tsv`。
-4. Mode B 必须确认转换产品后，才运行 `download_run.sh` 或 `download_geo_supplement.py`。测序为 `matrix_velocity`；芯片为 `intensity` 或 `processed`。
+4. Mode B 必须确认转换产品后，才运行 `download_run.sh` 或 `download_geo_supplement.py`。测序为 `matrix_velocity`；芯片为 `intensity` 或 `processed`。Mode A 芯片最终产品可以是 `CEL` / `IDAT`。
 5. 缺少或非法的 storage policy 时，下载脚本必须退出。
 
 ## 取值
 
 | 字段 | 允许值 |
 |---|---|
-| `assay_type` | `RNA-seq` / `microarray` / `methylation`，未判定前可空或 `pending` |
+| `assay_type` | `RNA-seq` / `ATAC-seq` / `ChIP-seq` / `miRNA-seq` / `sequencing` / `microarray` / `methylation`，未判定前可空或 `pending` |
 | `raw_file_type` | `FASTQ` / `SRA` / `CEL` / `IDAT`，未判定前可空或 `pending` |
 | `retain_raw_files` | `true` / `false`（兼容旧列 `retain_raw_fastq`） |
 | `storage_mode` | `retain` / `delete_after_validation` |

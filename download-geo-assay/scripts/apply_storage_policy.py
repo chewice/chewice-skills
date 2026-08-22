@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Delete temporary FASTQ only after Mode B conversion validation succeeds."""
+"""Delete temporary raw files only after Mode B conversion validation succeeds."""
 
 from __future__ import annotations
 

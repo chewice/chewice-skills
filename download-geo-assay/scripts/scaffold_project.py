@@ -57,7 +57,15 @@ def main() -> None:
     parser.add_argument("--output-root", type=Path, default=Path.cwd())
     parser.add_argument(
         "--final-product",
-        choices=("fastq", "sra", "matrix_velocity", "intensity", "processed"),
+        choices=(
+            "fastq",
+            "sra",
+            "matrix_velocity",
+            "CEL",
+            "IDAT",
+            "intensity",
+            "processed",
+        ),
         default="fastq",
     )
     parser.add_argument("--retain-raw-files", choices=("true", "false"))
@@ -69,7 +77,17 @@ def main() -> None:
     parser.add_argument(
         "--assay-type",
         default="",
-        choices=("", "pending", "RNA-seq", "microarray", "methylation"),
+        choices=(
+            "",
+            "pending",
+            "RNA-seq",
+            "ATAC-seq",
+            "ChIP-seq",
+            "miRNA-seq",
+            "sequencing",
+            "microarray",
+            "methylation",
+        ),
     )
     parser.add_argument(
         "--raw-file-type",

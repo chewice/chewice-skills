@@ -7,7 +7,7 @@ publishing -> complete`。`reports/status/<run>.transfer.json` 是跨进程状�
 `reports/status/<run>.complete` 仅在最终 manifest 原子写入后生成。
 
 - 下载与转换只写 `temporary/GSM*/work/<run>/staging/`。
-- Mode A 最终 FASTQ/SRA 属于 `raw/GSM*/`；Mode B 转换前 FASTQ 属于 `temporary/GSM*/fastq/`。
+- Mode A 最终 FASTQ/SRA/CEL/IDAT 属于 `raw/GSM*/`；Mode B 转换前 raw files 属于 `temporary/GSM*/fastq/`、`temporary/GSM*/CEL/` 或 `temporary/GSM*/IDAT/`。
 - 最终目录中的文件必须属于已校验的发布事务。
 - 同一 run 由 `flock` 串行化。
 - R1、R2 和适用的 I1/I2 作为一个 run 事务校验；任一文件失败都不得发布。
@@ -57,7 +57,7 @@ aria2 每次调用只尝试一次。外层默认最多三次同类错误，并�
    再归档该 transfer JSON。
 4. 若换源，重新运行 source selection/audit。新的 fingerprint 会归档旧状态并隔离
    不匹配断点。
-5. 不要手工把 `.part` 政名为最终文件，不要热修改活动脚本。
+5. 不要手工把 `.part` 改名为最终文件，不要热修改活动脚本。
 
 ## 清理关卡
 

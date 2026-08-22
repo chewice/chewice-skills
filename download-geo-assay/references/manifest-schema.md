@@ -131,7 +131,7 @@ deletion_time
 
 | 列 | 允许值 |
 |---|---|
-| `assay_type` | `RNA-seq`、`microarray`、`methylation`；未判定前可空或 `pending` |
+| `assay_type` | `RNA-seq`、`ATAC-seq`、`ChIP-seq`、`miRNA-seq`、`sequencing`、`microarray`、`methylation`；未判定前可空或 `pending` |
 | `raw_file_type` | `FASTQ`、`SRA`、`CEL`、`IDAT`；未判定前可空或 `pending` |
 | `retain_raw_files` | `true` 或 `false`，不得留空，不得默认；兼容旧列 `retain_raw_fastq` |
 | `storage_mode` | `retain` 或 `delete_after_validation`，必须与 `retain_raw_files` 一致 |
@@ -143,7 +143,7 @@ Mode A 的 `deletion_status` 必须是 `not_applicable`。Mode B 初始为 `pend
 
 ## `conversion_provenance.tsv`
 
-每个完成转换的 GSM 一行：`gse`、`gsm`、`tool`、`tool_version`、`input_fastq`、`output_matrix`、`validated_at`。路径使用项目相对路径，分号分隔多个 FASTQ。
+每个完成转换的 GSM 一行：`gse`、`gsm`、`tool`、`tool_version`、`input_fastq`、`output_matrix`、`validated_at`。路径使用项目相对路径，分号分隔。测序把 FASTQ 写在 `input_fastq`；芯片可把 CEL/IDAT 路径写在同一列，或额外提供 `input_files`。`output_matrix` 对芯片表示 intensity/processed 产物路径。
 
 ## `storage_deletion_log.tsv`
 
@@ -267,7 +267,7 @@ fallback_reason
 - `AUTHOR_SUBMITTED_BAM`
 - `GEO_PROCESSED`
 
-允许的 `final_product`：`fastq`、`sra`、`matrix_velocity`。
+允许的测序 `final_product`：`fastq`、`sra`、`matrix_velocity`。芯片 Mode A 可为 `CEL` 或 `IDAT`；芯片 Mode B 为 `intensity` 或 `processed`。`source_manifest.tsv` 只用于 `workflow=sra`。
 
 `selected_urls`、`selected_bytes`、`selected_md5` 和 `read_roles` 使用分号分隔数组。角色为 `SRA`、`R1`、`R2`、`I1`、`I2`、`BAM` 或 `OTHER`。每个非 NGDC 选择都必须填写 `fallback_reason`。
 

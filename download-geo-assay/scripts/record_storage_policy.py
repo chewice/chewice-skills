@@ -41,6 +41,10 @@ def main() -> int:
         "",
         "pending",
         "RNA-seq",
+        "ATAC-seq",
+        "ChIP-seq",
+        "miRNA-seq",
+        "sequencing",
         "microarray",
         "methylation",
     ))

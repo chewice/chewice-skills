@@ -19,7 +19,17 @@ STORAGE_POLICY_FIELDS = [
     "deletion_status",
     "deletion_time",
 ]
-ASSAY_TYPES = {"", "pending", "RNA-seq", "microarray", "methylation"}
+ASSAY_TYPES = {
+    "",
+    "pending",
+    "RNA-seq",
+    "ATAC-seq",
+    "ChIP-seq",
+    "miRNA-seq",
+    "sequencing",
+    "microarray",
+    "methylation",
+}
 RAW_FILE_TYPES = {"", "pending", "FASTQ", "SRA", "CEL", "IDAT"}
 RAW_SUBDIRS = {
     "FASTQ": "fastq",

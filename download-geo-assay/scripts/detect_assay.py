@@ -70,7 +70,11 @@ SEQUENCING = re.compile(
 AFFY_TEXT = re.compile(r"affymetrix|genechip|u133|hugene|hta[- ]2", re.I)
 METHYL_TEXT = re.compile(r"methylat|450k|epic|infinium.*cpg", re.I)
 ILLUMINA_BEAD = re.compile(r"beadchip|humanht-12|humanref-8|illumina.*expression", re.I)
-RNASEQ_LIB = re.compile(r"rna[- ]?seq|ncrna[- ]?seq|mirna[- ]?seq|transcriptome", re.I)
+RNASEQ_LIB = re.compile(r"rna[- ]?seq|ncrna[- ]?seq|transcriptome", re.I)
+ATAC_LIB = re.compile(r"atac[- ]?seq", re.I)
+CHIP_LIB = re.compile(r"chip[- ]?seq", re.I)
+MIRNA_LIB = re.compile(r"mirna[- ]?seq", re.I)
+RNA_TEXT = re.compile(r"rna[- ]?seq|single[- ]cell|transcriptome|10x genomics", re.I)
 
 
 def read_tsv(path: Path) -> list[dict[str, str]]:
@@ -106,13 +110,22 @@ def classify(row: dict[str, str]) -> dict[str, str]:
     if has_run(row) or RNASEQ_LIB.search(library) or SEQUENCING.search(blob):
         if has_run(row):
             evidence.append("SRR/run accession")
-        if RNASEQ_LIB.search(library):
+        if RNASEQ_LIB.search(library) or ATAC_LIB.search(library) or CHIP_LIB.search(library) or MIRNA_LIB.search(library):
             evidence.append(f"library_strategy={row.get('library_strategy', '')}")
         if SEQUENCING.search(blob):
             evidence.append("sequencing platform/technology")
+        assay_type = "sequencing"
+        if RNASEQ_LIB.search(library) or RNA_TEXT.search(blob):
+            assay_type = "RNA-seq"
+        if MIRNA_LIB.search(library) or MIRNA_LIB.search(blob):
+            assay_type = "miRNA-seq"
+        if ATAC_LIB.search(library) or ATAC_LIB.search(blob):
+            assay_type = "ATAC-seq"
+        if CHIP_LIB.search(library) or CHIP_LIB.search(blob):
+            assay_type = "ChIP-seq"
         return {
             "gpl": gpl,
-            "assay_type": "RNA-seq",
+            "assay_type": assay_type,
             "raw_file_type": "FASTQ",
             "workflow": "sra",
             "evidence": ";".join(evidence) or "sequencing",
