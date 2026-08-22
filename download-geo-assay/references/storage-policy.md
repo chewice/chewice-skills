@@ -7,7 +7,11 @@
 1. 解析数据集并判定 assay（`scripts/detect_assay.py`）。
 2. 询问用户：是否长期保存 raw files？选项只有 A / B。
 3. 运行 `scripts/record_storage_policy.py` 写入 `metadata/storage_policy.tsv`。
-4. Mode B 必须确认转换产品后，才运行 `download_run.sh` 或 `download_geo_supplement.py`。测序为 `matrix_velocity`；芯片为 `intensity` 或 `processed`。Mode A 芯片最终产品可以是 `CEL` / `IDAT`。
+4. Mode B 必须确认**该 assay 允许的**转换产品后，才运行下载脚本：
+   - 10x/droplet RNA-seq：`matrix_velocity`
+   - 芯片 / 甲基化：`intensity` 或 `processed`
+   - ATAC-seq / ChIP-seq / miRNA-seq / bulk RNA-seq：用户未指定转换产品则暂停，不要默认 STARsolo
+   Mode A 芯片最终产品可以是 `CEL` / `IDAT`。
 5. 缺少或非法的 storage policy 时，下载脚本必须退出。
 
 ## 取值

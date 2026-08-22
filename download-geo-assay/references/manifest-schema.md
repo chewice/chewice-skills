@@ -309,6 +309,22 @@ notes
 
 不要将任意 GEO characteristics 扁平化为会丢失信息的列。将其保存到 `sample_characteristics.tsv`，字段为 `gse`、`gsm`、`key`、`value` 和 `source_order`。
 
+## `supplement_files.tsv`
+
+仅芯片 / 甲基化使用。每个待下载文件一行：
+
+```text
+gse
+gsm
+filename
+url
+file_type
+expected_bytes
+expected_md5
+```
+
+`file_type` 为 `CEL` 或 `IDAT`。不要把 series matrix、标准化表达矩阵或 RData 写入此表。发现规则见 `references/metadata-discovery.md`，下载规则见 `references/array-download.md`。
+
 ## 每个 GSM 的 `metadata/download_manifests/<GSM>.tsv`
 
 仅当 run 达到通过校验的终态后追加一行。Mode B 删除 FASTQ 后此文件仍保留，作为下载证据。

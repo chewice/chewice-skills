@@ -1,5 +1,7 @@
 # STARsolo read geometry 判定
 
+仅用于有 10x/droplet scRNA 证据的 `workflow=sra` 样本。ATAC-seq、ChIP-seq、miRNA-seq、bulk RNA-seq 不要套用本节。
+
 ## 必须判定角色，不得假设
 
 对于标准 10x 3' 文库，STARsolo 通常先接收 cDNA reads，再接收 barcode/UMI reads，尽管对应文件通常命名为 R2 和 R1。必须根据实验确认，不能将此规则全局套用。

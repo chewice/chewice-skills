@@ -34,10 +34,6 @@ Mode B 将上述目录替换为 `temporary/GSM*/...`。禁止写入 Seurat/Scanp
 
 不能只依据 GPL 数字猜测测序平台：HiSeq/NovaSeq 的 GPL 仍走 `sra`。10x Genomics 无其他文库证据时标 `RNA-seq`。
 
-## Affymetrix 额外产物
+STARsolo / velocity 只适用于有 10x/droplet scRNA 证据的 `sra` 样本。ATAC-seq、ChIP-seq、miRNA-seq、bulk RNA-seq 即使 `workflow=sra` 也不要默认 STARsolo。
 
-- `metadata/platform_metadata.tsv`：GPL、array type、annotation version。
-- `annotation/platform_annotation/probe_to_gene_mapping.tsv`：probe 到 gene 的映射。
-- CEL 文件保存为 `GSM*.CEL` 或 `GSM*.CEL.gz`。
-
-芯片补充文件清单写入 `metadata/supplement_files.tsv` 后，运行 `scripts/download_geo_supplement.py`。
+芯片补充文件、probe 注释和解包规则见 `references/array-download.md`。
