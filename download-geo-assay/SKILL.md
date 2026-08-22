@@ -1,68 +1,88 @@
 ---
-name: download-geo-sra-safely
-description: 安全检查、规划、下载、续传、校验和记录 GEO/GSE/GSM、SRA/SRR/SRX/PRJNA、ENA 及 CNCB-NGDC GSA/INSDC 公共测序数据，并按用户确认的存储策略管理 FASTQ/SRA 生命周期。当 Codex 需要下载或核验 GSE/SRA 数据、确认是否长期保存原始测序文件、恢复中断传输、区分作者提交文件与数据库生成的 FASTQ/SRA/BAM、检查 R1/R2/I1/I2 或多 run/lane 结构、按 GSM 建立 raw/temporary/processed 目录，或从公共原始 reads 生成 STARsolo/RNA velocity 输入时使用。有效且可用的 NGDC 镜像 run 优先于 ENA 或 NCBI；长任务使用 pixi 和 detached tmux；生成单文件中文 HTML 报告并保留可审计的机器证据。
+name: download-geo-assay
+description: 按 GEO assay 分流检查、规划、下载、续传、校验和记录公共组学原始数据（RNA-seq FASTQ/SRA、Affymetrix CEL、Illumina/甲基化 IDAT），并按用户确认的存储策略管理 raw files 生命周期。当 Codex 需要下载或核验 GSE/GSM/GPL、SRA/SRR、ENA 或 CNCB-NGDC 数据、判定 assay workflow、确认是否长期保存原始文件、恢复中断传输、区分作者提交与数据库生成产物、按 GSM 建立 raw/temporary/processed 目录，或从测序 reads 生成 STARsolo/RNA velocity 输入时使用。测序 run 优先使用有效 NGDC 镜像；长任务使用 pixi 和 detached tmux；生成单文件中文 HTML 报告并保留可审计的机器证据。
 ---
 
-# 安全下载 GEO/SRA
+# 安全下载 GEO assay 原始数据
 
 ## 执行约定
 
-将元数据发现、存储策略确认、传输、转换和分析视为相互独立的关卡。accession 集合、存储策略和最终数据产品未明确前，不得开始大规模传输。默认最终产品为可直接分析的 FASTQ。除非用户明确要求，否则不要下载 GEO logcounts 或标准化表达矩阵。不要引入 Seurat object、Scanpy object、RData 或 Python pickle。
+将元数据发现、assay 分流、存储策略确认、传输、转换和分析视为相互独立的关卡。accession 集合、assay workflow、存储策略和最终数据产品未明确前，不得开始大规模传输。测序数据的默认最终产品为可直接分析的 FASTQ。除非用户明确要求，否则不要下载 GEO logcounts 或标准化表达矩阵。不要引入 Seurat object、Scanpy object、RData 或 Python pickle。
+
+统一数据模型：Study → Donor → Sample (GSM) → raw assay file。
 
 使用 pixi 管理环境，并在 `pixi.lock` 中锁定解析后的工具版本。长时间下载和处理必须在 detached tmux 会话中运行。默认每 1800 秒监测一次，并按 sample/run、阶段、错误、字节数和剩余空间报告进度。
 
 每个 GSE 只生成一份面向用户的报告：`reports/report.html`。将 TSV、JSON、log 和 status marker 作为机器证据保留，不把它们视为额外的人类报告。报告标题、摘要、状态和解释使用简体中文；accession、chemistry、provenance、read structure 等专业术语可保留英文。
 
-在报告和目录说明中使用相对于 GSE 根目录的路径，例如 `metadata/sample_metadata.tsv`、`raw/GSM*/fastq/`、`temporary/GSM*/fastq/`、`processed/GSM*/matrix_10x/`、`reports/logs/`。不得写入项目绝对路径。每个报告章节都要列出其机器数据来源的相对路径。
+在报告和目录说明中使用相对于 GSE 根目录的路径，例如 `metadata/sample_metadata.tsv`、`raw/GSM*/fastq/`、`raw/GSM*/CEL/`、`temporary/GSM*/fastq/`、`processed/GSM*/matrix_10x/`、`annotation/platform_annotation/`、`qc/`、`reports/logs/`。不得写入项目绝对路径。每个报告章节都要列出其机器数据来源的相对路径。
 
 使用内置命令前先设置 helper 路径：
 
 ```bash
-SKILL_DIR="${CODEX_HOME:-$HOME/.codex}/skills/download-geo-sra-safely"
+SKILL_DIR="${CODEX_HOME:-$HOME/.codex}/skills/download-geo-assay"
 ```
 
-使用 `scripts/scaffold_project.py` 创建数据集目录结构；`--retain-raw-fastq` 必填，无默认值。创建元数据表之前，先阅读 `references/manifest-schema.md`。存储策略细节阅读 `references/storage-policy.md`。
+使用 `scripts/scaffold_project.py` 创建数据集目录结构；`--retain-raw-files` 必填，无默认值。创建元数据表之前，先阅读 `references/manifest-schema.md`。存储策略细节阅读 `references/storage-policy.md`。assay 分流阅读 `references/assay-routing.md`。
 
 ## 1. 介绍并解析数据集
 
 下载前：
 
-1. 根据 GEO、SRA 和 ENA 官方元数据解析 GSE -> GSM -> SRX -> SRR 与 BioProject 的关系。
-2. 说明研究标题、目的、物种、组织/疾病、设计、分组、assay、平台、文库策略和 chemistry（如可获得）。
-3. 统计预期 GSM 和 SRR 数量，识别拆分为多个 run 或 lane 的 GSM。
-4. 检查作者提交文件名和数据库生成文件名中的 R1/R2/I1/I2 与技术 read 结构。必须结合 read 长度和实验元数据，不能只依据文件名。
-5. 判断下游工作真正需要 FASTQ、BAM、SRA 还是作者原始提交字节。STARsolo、重新比对和 RNA velocity 通常需要 FASTQ。
-6. 将研究介绍保存到 `metadata/study_metadata.tsv`，标准化 sample 元数据保存到 `metadata/sample_metadata.tsv`，多值 characteristics 保存到 `metadata/sample_characteristics.tsv`，完整预期 run 集合保存到 `metadata/expected_runs.tsv`；再刷新 `reports/report.html`。
+1. 根据 GEO、SRA 和 ENA 官方元数据解析 GSE -> Donor -> GSM ->（测序则 SRX -> SRR / BioProject）的关系。
+2. 说明研究标题、目的、物种、组织/疾病、设计、分组、assay、平台（GPL）、文库策略和 chemistry（如可获得）。
+3. 运行 `scripts/detect_assay.py`，写入 `metadata/assay_routing.tsv`。混合 workflow 的 GSE 必须暂停。
+4. 测序：统计预期 GSM 和 SRR 数量，识别拆分为多个 run 或 lane 的 GSM；检查 R1/R2/I1/I2 与技术 read 结构，必须结合 read 长度和实验元数据。
+5. 芯片：记录 GPL、array type、probe annotation version；Affymetrix 原始文件为 `CEL`/`CEL.gz`，Illumina 表达与甲基化为 `IDAT`。
+6. 判断下游真正需要 FASTQ、BAM、SRA、CEL、IDAT 还是作者原始提交字节。STARsolo、重新比对和 RNA velocity 通常需要 FASTQ。
+7. 将研究介绍保存到 `metadata/study_metadata.tsv`，donor 保存到 `metadata/donor_metadata.tsv`，标准化 sample 元数据保存到 `metadata/sample_metadata.tsv`，平台保存到 `metadata/platform_metadata.tsv`，多值 characteristics 保存到 `metadata/sample_characteristics.tsv`；测序再写入 `metadata/expected_runs.tsv`；刷新 `reports/report.html`。
 
 当 GEO、ENA 和 SRA 对预期 run 集合的记录不一致时，不得静默继续。将差异写入预检报告并暂停，直至解决。
+
+```bash
+pixi run --locked python "$SKILL_DIR/scripts/detect_assay.py" --root .
+```
 
 ## 1b. 强制确认存储策略
 
 大规模传输开始前必须主动询问：
 
-> 是否需要长期保存下载后的原始测序文件（FASTQ/SRA）？
+> 是否需要长期保存下载后的原始 assay 文件（FASTQ/SRA/CEL/IDAT）？
 
 选项只有：
 
-- A. 保存 FASTQ 原始文件（`retain_raw_fastq=true`）
-- B. 不保存 FASTQ，仅保留转换后的分析结果（`retain_raw_fastq=false`）
+- A. 保存 raw files（`retain_raw_files=true`）
+- B. 不保存 raw files，仅保留转换后的分析结果（`retain_raw_files=false`）
 
 不允许默认选择。记录用户选择：
 
 ```bash
 pixi run --locked python "$SKILL_DIR/scripts/record_storage_policy.py" \
-  --root . --gse <GSE> --retain-raw-fastq true|false
+  --root . --gse <GSE> --retain-raw-files true|false \
+  --assay-type RNA-seq|microarray|methylation \
+  --raw-file-type FASTQ|CEL|IDAT
 ```
 
-Mode A：FASTQ 发布到 `raw/GSM*/fastq/`，不允许自动删除。`final_product` 可以是 `fastq`、`sra` 或 `matrix_velocity`。
+Mode A：raw files 发布到 `raw/GSM*/fastq/`、`raw/GSM*/sra/`、`raw/GSM*/CEL/` 或 `raw/GSM*/IDAT/`，不允许自动删除。测序 `final_product` 可以是 `fastq`、`sra` 或 `matrix_velocity`；芯片可以是 `CEL`/`IDAT` 或 `intensity`/`processed`。
 
-Mode B：必须 `final_product=matrix_velocity`。未确认转换产品前不得下载。FASTQ 只进入 `temporary/GSM*/fastq/`，转换并验证成功后由 `scripts/apply_storage_policy.py` 删除。禁止下载完成后立即删除。
+Mode B：未确认转换产品前不得下载。测序必须 `final_product=matrix_velocity`；芯片必须 `intensity` 或 `processed`。raw files 只进入 `temporary/GSM*/`，转换并验证成功后由 `scripts/apply_storage_policy.py` 删除。禁止下载完成后立即删除。
 
-缺少 `metadata/storage_policy.tsv` 时不得运行 `download_run.sh`。
+缺少 `metadata/storage_policy.tsv` 时不得运行 `download_run.sh` 或 `download_geo_supplement.py`。
+
+## 1c. 芯片补充文件
+
+Affymetrix / Illumina / methylation 不走 SRA。将 GEO supplementary 清单写入 `metadata/supplement_files.tsv` 后：
+
+```bash
+pixi run --locked python "$SKILL_DIR/scripts/download_geo_supplement.py" \
+  --root . --file-type CEL
+```
+
+Affymetrix 发布路径：`raw/GSM*/CEL/GSM*.CEL.gz`（Mode B 为 `temporary/GSM*/CEL/`）。同时保存 `annotation/platform_annotation/probe_to_gene_mapping.tsv`。
 
 ## 2. 判定 provenance 并优先使用 NGDC
 
-选择文件前阅读 `references/provenance-routing.md`。
+仅 `workflow=sra` 进入本节。选择文件前阅读 `references/provenance-routing.md`。
 
 逐个检查预期 run 在 `https://ngdc.cncb.ac.cn/gsa/browse/` 中对应的 GSA 或 INSDC run 记录。必须探测实际的 `download*.cncb.ac.cn` 文件 endpoint，不能只检查 browse 页面。运行：
 
@@ -128,7 +148,7 @@ pixi run --locked python "$SKILL_DIR/scripts/build_report.py" \
   --root <GSE-dir>
 ```
 
-默认输出为 `<GSE-dir>/reports/report.html`。报告必须整合 study/sample metadata、存储策略、预检、NGDC coverage、source routing、provenance、下载与转换完整性、FastQC/MultiQC、STARsolo/velocity、工具版本和清理状态。
+默认输出为 `<GSE-dir>/reports/report.html`。报告必须整合 study/sample/platform metadata、assay 分流、存储策略、预检、NGDC coverage、source routing、provenance、下载与转换完整性、FastQC/MultiQC、STARsolo/velocity、工具版本和清理状态。
 
 MultiQC 使用项目内临时 HTML 时，运行：
 
@@ -152,7 +172,7 @@ pixi run --locked python "$SKILL_DIR/scripts/build_report.py" \
 
 ## 6. 可选 STARsolo 与 velocity 分支
 
-仅当用户要求矩阵、重新比对、RNA velocity，或选择 Mode B 时进入此分支。阅读 `references/starsolo-read-geometry.md`。
+仅当用户要求矩阵、重新比对、RNA velocity，或测序选择 Mode B 时进入此分支。阅读 `references/starsolo-read-geometry.md`。芯片数据不走 STARsolo。
 
 - 明确记录参考物种和版本。
 - 使用同一个锁定 STAR 版本建立并运行 STAR index。
@@ -173,16 +193,16 @@ pixi run --locked python "$SKILL_DIR/scripts/build_report.py" \
 
 先运行 `scripts/audit_download_evidence.py --root <GSE-dir>`。若发生转换，再运行 `scripts/audit_final_outputs.py`。然后运行 `scripts/audit_storage_policy.py --root <GSE-dir>`。
 
-- Mode A：保留 `raw/` 中的 FASTQ 或 SRA；可删除 `.part`、`.aria2` 和 `temporary/*/work`。不得调用删除 FASTQ 的脚本。
-- Mode B：仅当 download-evidence、final-output 和 storage-policy 审计均通过后，运行 `scripts/apply_storage_policy.py --root <GSE-dir>`。该脚本是删除 FASTQ 的唯一入口。
+- Mode A：保留 `raw/` 中的 FASTQ、SRA、CEL 或 IDAT；可删除 `.part`、`.aria2` 和 `temporary/*/work`。不得调用删除 raw files 的脚本。
+- Mode B：仅当 download-evidence、final-output 和 storage-policy 审计均通过后，运行 `scripts/apply_storage_policy.py --root <GSE-dir>`。该脚本是删除 raw files 的唯一入口。
 - 不得清理未完成或未经审计的 sample。
 - 清理后再次生成 `reports/report.html`，并确认其中不存在项目绝对路径。
 
 报告：
 
-- 预期与实际 GSM、SRR 数量；
+- 预期与实际 GSM、SRR 数量，以及 assay_type / raw_file_type / workflow；
 - 存储策略、validation_status 与 deletion_status；
-- NGDC available/missing/invalid 和 fallback 数量；
+- NGDC available/missing/invalid 和 fallback 数量（仅测序）；
 - 作者提交产品与数据库生成产品的分类；
 - 多 run/lane 与 read role 检查结果；
 - 保留产品路径、总大小、完整性状态及已执行的清理。

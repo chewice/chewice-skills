@@ -131,7 +131,11 @@ LABELS = {
     "median_genefull_per_cell": "Median GeneFull/cell",
     "deletion_time": "删除时间",
     "storage_mode": "存储模式",
+    "retain_raw_files": "保留 raw files",
     "retain_raw_fastq": "保留 FASTQ",
+    "assay_type": "Assay",
+    "raw_file_type": "原始文件类型",
+    "workflow": "Workflow",
     "validation_status": "验证状态",
     "deletion_status": "删除状态",
     "tool": "工具",
@@ -555,6 +559,9 @@ def build(args: argparse.Namespace) -> tuple[str, Path | None]:
         "storage_audit": root / "reports/storage_policy_audit.tsv",
         "deletion_log": root / "reports/storage_deletion_log.tsv",
         "conversion": root / "reports/conversion_provenance.tsv",
+        "assay": root / "metadata/assay_routing.tsv",
+        "platforms": root / "metadata/platform_metadata.tsv",
+        "donors": root / "metadata/donor_metadata.tsv",
     }
     data = {name: read_tsv(path) for name, path in paths.items()}
     legacy = legacy_tables(root)
@@ -632,6 +639,7 @@ def build(args: argparse.Namespace) -> tuple[str, Path | None]:
     nav_items = [
         ("overview", "研究概览"),
         ("directories", "目录与层级"),
+        ("assay", "Assay 分流"),
         ("storage", "存储策略"),
         ("samples", "样本"),
         ("runs", "run 与 read"),
@@ -677,14 +685,19 @@ def build(args: argparse.Namespace) -> tuple[str, Path | None]:
 
     directory_rows = [
         {"level": "项目", "path": ".", "content": "单个 GSE 的项目根目录"},
-        {"level": "元数据", "path": "metadata/", "content": "研究、样本、run、来源与存储策略"},
+        {"level": "说明", "path": "README.md", "content": "Study → Donor → Sample → raw assay file"},
+        {"level": "元数据", "path": "metadata/", "content": "研究、donor、样本、平台、assay、run、来源与存储策略"},
         {"level": "下载证据", "path": "metadata/download_manifests/", "content": "每个 GSM 的已校验下载记录"},
-        {"level": "Mode A 原始数据", "path": "raw/GSM*/fastq/", "content": "长期保存的 R1/R2/I1/I2 FASTQ"},
+        {"level": "Mode A FASTQ", "path": "raw/GSM*/fastq/", "content": "长期保存的 R1/R2/I1/I2 FASTQ"},
         {"level": "归档", "path": "raw/GSM*/sra/", "content": "需要保留时的 SRA 文件"},
-        {"level": "Mode B 临时 FASTQ", "path": "temporary/GSM*/fastq/", "content": "仅供转换、验证后删除的 FASTQ"},
+        {"level": "Mode A CEL", "path": "raw/GSM*/CEL/", "content": "Affymetrix CEL / CEL.gz"},
+        {"level": "Mode A IDAT", "path": "raw/GSM*/IDAT/", "content": "Illumina 表达或甲基化 IDAT"},
+        {"level": "Mode B 临时 raw", "path": "temporary/GSM*/", "content": "仅供转换、验证后删除的 raw files"},
         {"level": "临时工作区", "path": "temporary/GSM*/work/", "content": "staging 与断点恢复"},
         {"level": "表达矩阵", "path": "processed/GSM*/matrix_10x/", "content": "raw/filtered 10x 矩阵"},
         {"level": "RNA velocity", "path": "processed/GSM*/velocity/", "content": "spliced/unspliced/ambiguous 与 loom"},
+        {"level": "平台注释", "path": "annotation/platform_annotation/", "content": "probe 到 gene 映射"},
+        {"level": "QC", "path": "qc/", "content": "芯片或测序 QC 中间文件"},
         {"level": "统一报告", "path": "reports/report.html", "content": "唯一的人类可读报告"},
         {"level": "机器报告", "path": "reports/*.tsv", "content": "供程序读取的审计证据"},
         {"level": "日志", "path": "reports/logs/", "content": "下载与分析原始日志"},
@@ -701,19 +714,48 @@ def build(args: argparse.Namespace) -> tuple[str, Path | None]:
             "directories",
         )
     )
+    sections.append(
+        section(
+            "Assay 分流",
+            table(
+                data["assay"],
+                ["gse", "gsm", "gpl", "assay_type", "raw_file_type", "workflow", "evidence"],
+                root,
+                "尚未运行 detect_assay.py。",
+            )
+            + table(
+                data["platforms"],
+                ["gse", "gpl", "title", "technology", "assay_type", "raw_file_type", "array_type", "annotation_version"],
+                root,
+                "尚未写入 platform_metadata.tsv。",
+            )
+            + table(
+                data["donors"],
+                ["gse", "donor_id", "sex", "age", "organism", "notes"],
+                root,
+                "尚未写入 donor_metadata.tsv。",
+            ),
+            root,
+            output,
+            [paths["assay"], paths["platforms"], paths["donors"]],
+            "assay",
+        )
+    )
     storage_body = (
         table(
             data["storage"],
             [
                 "gse",
-                "retain_raw_fastq",
+                "assay_type",
+                "raw_file_type",
+                "retain_raw_files",
                 "storage_mode",
                 "validation_status",
                 "deletion_status",
                 "deletion_time",
             ],
             root,
-            "尚未记录存储策略。大规模下载前必须确认是否长期保存 FASTQ。",
+            "尚未记录存储策略。大规模下载前必须确认是否长期保存 raw files。",
         )
         + table(
             data["storage_audit"],
@@ -1056,7 +1098,7 @@ footer{{color:var(--muted);text-align:center;padding:1.5rem}} a{{color:#086d91}}
 <p><label for="report-filter">筛选所有表格：</label> <input id="report-filter" type="search" placeholder="输入 GSM、SRR、状态或关键词"></p>
 {''.join(sections)}
 </main>
-<footer>由 <code>download-geo-sra-safely/scripts/build_report.py</code> 原子生成。</footer>
+<footer>由 <code>download-geo-assay/scripts/build_report.py</code> 原子生成。</footer>
 <script>
 const filter=document.getElementById("report-filter");
 filter.addEventListener("input",()=>{{const q=filter.value.toLowerCase();document.querySelectorAll("table.filterable tbody tr").forEach(r=>r.hidden=!r.textContent.toLowerCase().includes(q));}});

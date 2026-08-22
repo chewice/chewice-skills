@@ -85,9 +85,145 @@ def write_policy(project: Path, gse: str, retain: bool = True) -> None:
         str(project),
         "--gse",
         gse,
-        "--retain-raw-fastq",
+        "--retain-raw-files",
         "true" if retain else "false",
     )
+
+
+def assay_router_test(base: Path) -> None:
+    rnaseq = base / "assay_rnaseq"
+    (rnaseq / "metadata").mkdir(parents=True)
+    write_tsv(
+        rnaseq / "metadata/sample_metadata.tsv",
+        ["gse", "gsm", "platform", "library_strategy"],
+        [
+            {
+                "gse": "GSE1",
+                "gsm": "GSM1",
+                "platform": "GPL11154",
+                "library_strategy": "RNA-Seq",
+            }
+        ],
+    )
+    write_tsv(
+        rnaseq / "metadata/expected_runs.tsv",
+        ["gse", "gsm", "srr"],
+        [{"gse": "GSE1", "gsm": "GSM1", "srr": "SRR1"}],
+    )
+    run(sys.executable, str(HERE / "detect_assay.py"), "--root", str(rnaseq))
+    rna_row = read_tsv(rnaseq / "metadata/assay_routing.tsv")[0]
+    assert rna_row["assay_type"] == "RNA-seq"
+    assert rna_row["raw_file_type"] == "FASTQ"
+    assert rna_row["workflow"] == "sra"
+
+    affy = base / "assay_affy"
+    (affy / "metadata").mkdir(parents=True)
+    write_tsv(
+        affy / "metadata/sample_metadata.tsv",
+        ["gse", "gsm", "platform"],
+        [{"gse": "GSE2", "gsm": "GSM2", "platform": "GPL570"}],
+    )
+    write_tsv(
+        affy / "metadata/platform_metadata.tsv",
+        ["gpl", "title", "technology"],
+        [
+            {
+                "gpl": "GPL570",
+                "title": "Affymetrix Human Genome U133 Plus 2.0 Array",
+                "technology": "in situ oligonucleotide",
+            }
+        ],
+    )
+    run(sys.executable, str(HERE / "detect_assay.py"), "--root", str(affy))
+    affy_row = read_tsv(affy / "metadata/assay_routing.tsv")[0]
+    assert affy_row["assay_type"] == "microarray"
+    assert affy_row["raw_file_type"] == "CEL"
+    assert affy_row["workflow"] == "affymetrix"
+
+    mixed = base / "assay_mixed"
+    (mixed / "metadata").mkdir(parents=True)
+    write_tsv(
+        mixed / "metadata/sample_metadata.tsv",
+        ["gse", "gsm", "platform", "library_strategy"],
+        [
+            {
+                "gse": "GSE3",
+                "gsm": "GSM3",
+                "platform": "GPL570",
+                "library_strategy": "",
+            },
+            {
+                "gse": "GSE3",
+                "gsm": "GSM4",
+                "platform": "GPL11154",
+                "library_strategy": "RNA-Seq",
+            },
+        ],
+    )
+    mixed_run = subprocess.run(
+        [sys.executable, str(HERE / "detect_assay.py"), "--root", str(mixed)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert mixed_run.returncode != 0
+    assert "混合 assay" in mixed_run.stderr or "混合 assay" in mixed_run.stdout
+
+    serve = base / "cel_serve"
+    project = base / "cel_project"
+    serve.mkdir(parents=True)
+    (project / "metadata").mkdir(parents=True)
+    cel = serve / "GSM900001.CEL.gz"
+    with gzip.open(cel, "wb") as handle:
+        handle.write(b"CEL dummy payload")
+    handler = functools.partial(QuietHandler, directory=str(serve))
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        port = server.server_address[1]
+        write_policy(project, "GSE900000", retain=True)
+        run(
+            sys.executable,
+            str(HERE / "record_storage_policy.py"),
+            "--root",
+            str(project),
+            "--gse",
+            "GSE900000",
+            "--retain-raw-files",
+            "true",
+            "--assay-type",
+            "microarray",
+            "--raw-file-type",
+            "CEL",
+        )
+        write_tsv(
+            project / "metadata/supplement_files.tsv",
+            ["gse", "gsm", "filename", "url"],
+            [
+                {
+                    "gse": "GSE900000",
+                    "gsm": "GSM900001",
+                    "filename": cel.name,
+                    "url": f"http://127.0.0.1:{port}/{cel.name}",
+                }
+            ],
+        )
+        run(
+            sys.executable,
+            str(HERE / "download_geo_supplement.py"),
+            "--root",
+            str(project),
+            "--file-type",
+            "CEL",
+        )
+        published = project / "raw/GSM900001/CEL" / cel.name
+        assert published.is_file() and published.stat().st_size > 0
+        manifest = read_tsv(project / "metadata/download_manifests/GSM900001.tsv")
+        assert manifest[0]["validation"] == "PASS"
+    finally:
+        server.shutdown()
+        server.server_close()
 
 
 def child_env(**updates: str) -> dict[str, str]:
@@ -365,6 +501,7 @@ def unified_report_test(base: Path, project: Path) -> None:
     text = report.read_text()
     assert 'lang="zh-CN"' in text
     assert "目录与层级说明" in text
+    assert "Assay 分流" in text
     assert "作者原始上传还是数据库转换" in text
     assert "STARsolo 跨样本 Summary" in text
     assert "Estimated Number of Cells" in text
@@ -1079,7 +1216,7 @@ def storage_lifecycle_test(base: Path) -> None:
         str(mode_b),
         "--gse",
         "GSE800000",
-        "--retain-raw-fastq",
+        "--retain-raw-files",
         "false",
         "--deletion-status",
         "pending",
@@ -1161,6 +1298,7 @@ def main() -> None:
             interrupted_resume_test(base)
         prefetch_resume_test(base)
         watchdog_terminal_test(base)
+        assay_router_test(base)
         storage_lifecycle_test(base)
         run(
             sys.executable,
@@ -1179,6 +1317,13 @@ def main() -> None:
         assert (project / "scripts/run_all.sh").is_file()
         assert (project / "reports/report.html").is_file()
         assert (project / "metadata/storage_policy.tsv").is_file()
+        assert (project / "README.md").is_file()
+        assert (project / "metadata/donor_metadata.tsv").is_file()
+        assert (project / "metadata/platform_metadata.tsv").is_file()
+        assert (project / "annotation/platform_annotation").is_dir()
+        assert (project / "qc").is_dir()
+        policy = read_tsv(project / "metadata/storage_policy.tsv")[0]
+        assert policy["retain_raw_files"] == "true"
         assert (project / "raw").is_dir()
         assert (project / "temporary").is_dir()
         assert (project / "processed").is_dir()

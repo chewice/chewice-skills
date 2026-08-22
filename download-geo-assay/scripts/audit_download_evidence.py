@@ -250,7 +250,7 @@ def main() -> int:
                 )
 
         policy = read_storage_policy(root, required=False)
-        retain = True if policy is None else policy["retain_raw_fastq"] == "true"
+        retain = True if policy is None else policy["retain_raw_files"] == "true"
         deleted = deletion_completed(root)
         product = source["final_product"]
         mandatory_files: list[Path] = []

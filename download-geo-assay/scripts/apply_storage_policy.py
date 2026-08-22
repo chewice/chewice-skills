@@ -22,7 +22,8 @@ from project_layout import (  # noqa: E402
     deletion_log_path,
     infer_gsm,
     infer_srr,
-    list_temporary_fastq,
+    is_array_raw,
+    list_temporary_raw,
     locate_outputs,
     read_storage_policy,
     read_tsv,
@@ -43,8 +44,16 @@ def relative(root: Path, path: Path) -> str:
     return path.resolve().relative_to(root).as_posix()
 
 
+def provenance_inputs(row: dict[str, str]) -> list[str]:
+    return [
+        item
+        for item in (row.get("input_files") or row.get("input_fastq") or "").split(";")
+        if item
+    ]
+
+
 def block(policy: dict[str, str], root: Path, message: str) -> int:
-    if policy["retain_raw_fastq"] == "false":
+    if policy["retain_raw_files"] == "false":
         policy = dict(policy)
         policy["deletion_status"] = "blocked"
         write_storage_policy(root, policy)
@@ -70,10 +79,10 @@ def provenance_ok(root: Path, samples: set[tuple[str, str]]) -> list[str]:
             errors.append(f"{gsm}: provenance gse mismatch")
         if not row.get("tool") or not row.get("tool_version"):
             errors.append(f"{gsm}: missing conversion tool/version")
-        inputs = [item for item in row.get("input_fastq", "").split(";") if item]
+        inputs = provenance_inputs(row)
         outputs = [item for item in row.get("output_matrix", "").split(";") if item]
         if not inputs or not outputs:
-            errors.append(f"{gsm}: provenance lacks input FASTQ or output matrix")
+            errors.append(f"{gsm}: provenance lacks input files or output product")
             continue
         for item in inputs + outputs:
             candidate = Path(item)
@@ -94,9 +103,16 @@ def provenance_ok(root: Path, samples: set[tuple[str, str]]) -> list[str]:
     return errors
 
 
-def audit_pass(root: Path) -> tuple[set[tuple[str, str]], list[str]]:
+def audit_pass(root: Path, array_raw: bool) -> tuple[set[tuple[str, str]], list[str]]:
     rows = read_tsv(root / "reports/final_output_audit.tsv")
     if not rows:
+        if array_raw:
+            samples = {
+                (row.get("gse", ""), row.get("gsm", ""))
+                for row in read_tsv(conversion_provenance_path(root))
+                if row.get("gsm")
+            }
+            return samples, []
         return set(), ["missing reports/final_output_audit.tsv"]
     samples: set[tuple[str, str]] = set()
     errors: list[str] = []
@@ -105,6 +121,8 @@ def audit_pass(root: Path) -> tuple[set[tuple[str, str]], list[str]]:
         samples.add((gse, gsm))
         if row.get("status") != "PASS":
             errors.append(f"{gsm}: final-output audit is {row.get('status')!r}")
+            continue
+        if array_raw:
             continue
         matrix_dir, _, _ = locate_outputs(root, gse, gsm)
         raw_matrix = matrix_dir / "raw_feature_bc_matrix/matrix.mtx.gz"
@@ -125,18 +143,19 @@ def main() -> int:
     except StoragePolicyError as exc:
         raise SystemExit(str(exc)) from exc
 
-    if policy["retain_raw_fastq"] == "true":
-        print("ERROR Mode A forbids FASTQ deletion", file=sys.stderr)
+    if policy["retain_raw_files"] == "true":
+        print("ERROR Mode A forbids raw-file deletion", file=sys.stderr)
         return 1
-    if deletion_completed(root) and not list_temporary_fastq(root):
+    if deletion_completed(root) and not list_temporary_raw(root):
         print("STORAGE_POLICY already deleted; nothing to apply")
         return 0
 
-    samples, errors = audit_pass(root)
+    array_raw = is_array_raw(policy)
+    samples, errors = audit_pass(root, array_raw)
     errors.extend(provenance_ok(root, samples))
-    files = list_temporary_fastq(root)
+    files = list_temporary_raw(root)
     if not files:
-        errors.append("Mode B has no temporary FASTQ to delete")
+        errors.append("Mode B has no temporary raw files to delete")
     if errors:
         return block(policy, root, "; ".join(errors))
 

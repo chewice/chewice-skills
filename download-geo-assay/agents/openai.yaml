@@ -1,6 +1,6 @@
 interface:
-  display_name: "安全下载 GEO/SRA"
-  short_description: "安全续传、校验，并按存储策略管理 FASTQ 生命周期"
-  default_prompt: "使用 $download-geo-sra-safely 检查、确认存储策略、下载、续传、校验并记录这个 GEO/SRA 数据集。"
+  display_name: "安全下载 GEO assay"
+  short_description: "按 assay 分流下载并按存储策略管理 raw files 生命周期"
+  default_prompt: "使用 $download-geo-assay 检查 assay 类型、确认存储策略、下载、续传、校验并记录这个 GEO 数据集。"
 policy:
   allow_implicit_invocation: true

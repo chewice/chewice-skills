@@ -17,6 +17,12 @@ if str(HERE) not in sys.path:
 
 from project_layout import default_policy, write_storage_policy
 
+DONOR_HEADER = "gse\tdonor_id\tsex\tage\torganism\tnotes\n"
+PLATFORM_HEADER = (
+    "gse\tgpl\ttitle\ttechnology\tassay_type\traw_file_type\t"
+    "array_type\tannotation_version\n"
+)
+ASSAY_HEADER = "gse\tgsm\tgpl\tassay_type\traw_file_type\tworkflow\tevidence\n"
 EXPECTED_HEADER = (
     "gse\tgsm\tsrx\tsrr\trun_alias\tlane\tlibrary_layout\tread_structure\t"
     "expected_spots\tcb_length\tumi_length\tngdc_run_page\tngdc_url\n"
@@ -51,14 +57,24 @@ def main() -> None:
     parser.add_argument("--output-root", type=Path, default=Path.cwd())
     parser.add_argument(
         "--final-product",
-        choices=("fastq", "sra", "matrix_velocity"),
+        choices=("fastq", "sra", "matrix_velocity", "intensity", "processed"),
         default="fastq",
     )
+    parser.add_argument("--retain-raw-files", choices=("true", "false"))
     parser.add_argument(
         "--retain-raw-fastq",
-        required=True,
         choices=("true", "false"),
-        help="User-confirmed storage policy; no default",
+        help="兼容旧参数；等价于 --retain-raw-files",
+    )
+    parser.add_argument(
+        "--assay-type",
+        default="",
+        choices=("", "pending", "RNA-seq", "microarray", "methylation"),
+    )
+    parser.add_argument(
+        "--raw-file-type",
+        default="",
+        choices=("", "pending", "FASTQ", "SRA", "CEL", "IDAT"),
     )
     parser.add_argument("--max-project-gib", type=int, default=500)
     parser.add_argument("--monitor-interval", type=int, default=1800)
@@ -69,9 +85,16 @@ def main() -> None:
         raise SystemExit(f"Invalid GSE accession: {args.gse}")
     if args.max_project_gib <= 0 or args.monitor_interval < 60:
         raise SystemExit("Storage cap must be positive and monitor interval >= 60")
-    retain_raw = args.retain_raw_fastq == "true"
-    if not retain_raw and args.final_product != "matrix_velocity":
-        raise SystemExit("Mode B (--retain-raw-fastq false) requires --final-product matrix_velocity")
+    retain_flag = args.retain_raw_files or args.retain_raw_fastq
+    if retain_flag is None:
+        raise SystemExit("必须指定 --retain-raw-files true|false，不允许默认")
+    retain_raw = retain_flag == "true"
+    mode_b_products = {"matrix_velocity", "intensity", "processed"}
+    if not retain_raw and args.final_product not in mode_b_products:
+        raise SystemExit(
+            "Mode B (--retain-raw-files false) 需要 --final-product "
+            "matrix_velocity|intensity|processed"
+        )
 
     output_root = args.output_root.resolve()
     geo_root = output_root if output_root.name.upper() == "GEO" else output_root / "GEO"
@@ -82,13 +105,32 @@ def main() -> None:
         project / "raw",
         project / "temporary",
         project / "processed",
+        project / "annotation/platform_annotation",
+        project / "qc",
         project / "reports/logs",
         project / "reports/status",
         project / "scripts",
     ):
         directory.mkdir(parents=True, exist_ok=True)
 
+    write_new(
+        project / "README.md",
+        f"# {gse}\n\n"
+        "Study -> Donor -> Sample (GSM) -> raw assay file。\n\n"
+        "- 元数据：`metadata/`\n"
+        "- 原始文件：`raw/GSM*/`（Mode A）或 `temporary/GSM*/`（Mode B）\n"
+        "- 平台注释：`annotation/platform_annotation/`\n"
+        "- QC：`qc/`\n"
+        "- 报告：`reports/report.html`\n",
+    )
     write_new(project / "metadata/study_metadata.tsv", STUDY_HEADER)
+    write_new(project / "metadata/donor_metadata.tsv", DONOR_HEADER)
+    write_new(project / "metadata/platform_metadata.tsv", PLATFORM_HEADER)
+    write_new(project / "metadata/assay_routing.tsv", ASSAY_HEADER)
+    write_new(
+        project / "annotation/platform_annotation/probe_to_gene_mapping.tsv",
+        "gpl\tprobe_id\tgene_symbol\tentrez_id\tannotation_version\n",
+    )
     write_new(project / "metadata/sample_metadata.tsv", SAMPLE_HEADER)
     write_new(
         project / "metadata/sample_characteristics.tsv",
@@ -101,7 +143,9 @@ def main() -> None:
         "key\tvalue\n"
         f"gse\t{gse}\n"
         f"final_product\t{args.final_product}\n"
-        f"retain_raw_fastq\t{args.retain_raw_fastq}\n"
+        f"retain_raw_files\t{retain_flag}\n"
+        f"assay_type\t{args.assay_type}\n"
+        f"raw_file_type\t{args.raw_file_type}\n"
         f"max_project_bytes\t{args.max_project_gib * 1024**3}\n"
         f"monitor_interval_seconds\t{args.monitor_interval}\n"
         "max_same_error_attempts\t3\n"
@@ -109,7 +153,15 @@ def main() -> None:
         "provider_priority\tngdc_gsa;ngdc_insdc;ena_submitted;ena_fastq;ncbi_sra\n",
     )
     if not (project / "metadata/storage_policy.tsv").exists():
-        write_storage_policy(project, default_policy(gse, retain_raw))
+        write_storage_policy(
+            project,
+            default_policy(
+                gse,
+                retain_raw,
+                assay_type=args.assay_type,
+                raw_file_type=args.raw_file_type,
+            ),
+        )
     write_new(
         project / "pixi.toml",
         "[workspace]\n"

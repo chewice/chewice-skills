@@ -11,12 +11,22 @@ from pathlib import Path
 
 STORAGE_POLICY_FIELDS = [
     "gse",
-    "retain_raw_fastq",
+    "assay_type",
+    "raw_file_type",
+    "retain_raw_files",
     "storage_mode",
     "validation_status",
     "deletion_status",
     "deletion_time",
 ]
+ASSAY_TYPES = {"", "pending", "RNA-seq", "microarray", "methylation"}
+RAW_FILE_TYPES = {"", "pending", "FASTQ", "SRA", "CEL", "IDAT"}
+RAW_SUBDIRS = {
+    "FASTQ": "fastq",
+    "SRA": "sra",
+    "CEL": "CEL",
+    "IDAT": "IDAT",
+}
 CONVERSION_PROVENANCE_FIELDS = [
     "gse",
     "gsm",
@@ -91,23 +101,41 @@ def deletion_log_path(root: Path) -> Path:
     return root / "reports/storage_deletion_log.tsv"
 
 
+def coerce_retain_flag(row: dict[str, str]) -> str:
+    raw = (
+        row.get("retain_raw_files")
+        or row.get("retain_raw_fastq")
+        or ""
+    ).rstrip("\r").strip().lower()
+    if raw in {"true", "1", "yes"}:
+        return "true"
+    if raw in {"false", "0", "no"}:
+        return "false"
+    raise StoragePolicyError(
+        f"invalid retain_raw_files={row.get('retain_raw_files') or row.get('retain_raw_fastq')!r}"
+    )
+
+
 def normalize_policy(row: dict[str, str]) -> dict[str, str]:
     normalized = {field: row.get(field, "").rstrip("\r").strip() for field in STORAGE_POLICY_FIELDS}
+    normalized["retain_raw_files"] = coerce_retain_flag(row)
     if not normalized["gse"]:
         raise StoragePolicyError("storage_policy.tsv 缺少 gse")
-    if normalized["retain_raw_fastq"] not in RETAIN_VALUES:
-        raise StoragePolicyError(
-            f"invalid retain_raw_fastq={normalized['retain_raw_fastq']!r}"
-        )
+    assay = normalized["assay_type"]
+    raw_type = normalized["raw_file_type"]
+    if assay not in ASSAY_TYPES:
+        raise StoragePolicyError(f"invalid assay_type={assay!r}")
+    if raw_type not in RAW_FILE_TYPES:
+        raise StoragePolicyError(f"invalid raw_file_type={raw_type!r}")
     expected_mode = (
-        "retain" if normalized["retain_raw_fastq"] == "true" else "delete_after_validation"
+        "retain" if normalized["retain_raw_files"] == "true" else "delete_after_validation"
     )
     if normalized["storage_mode"] not in STORAGE_MODES:
         raise StoragePolicyError(f"invalid storage_mode={normalized['storage_mode']!r}")
     if normalized["storage_mode"] != expected_mode:
         raise StoragePolicyError(
-            "retain_raw_fastq 与 storage_mode 不一致："
-            f"{normalized['retain_raw_fastq']} / {normalized['storage_mode']}"
+            "retain_raw_files 与 storage_mode 不一致："
+            f"{normalized['retain_raw_files']} / {normalized['storage_mode']}"
         )
     if normalized["validation_status"] not in VALIDATION_STATUSES:
         raise StoragePolicyError(
@@ -117,7 +145,7 @@ def normalize_policy(row: dict[str, str]) -> dict[str, str]:
         raise StoragePolicyError(
             f"invalid deletion_status={normalized['deletion_status']!r}"
         )
-    if normalized["retain_raw_fastq"] == "true":
+    if normalized["retain_raw_files"] == "true":
         if normalized["deletion_status"] != "not_applicable":
             raise StoragePolicyError("Mode A 的 deletion_status 必须是 not_applicable")
     else:
@@ -126,11 +154,22 @@ def normalize_policy(row: dict[str, str]) -> dict[str, str]:
     return normalized
 
 
-def default_policy(gse: str, retain_raw_fastq: bool) -> dict[str, str]:
-    if retain_raw_fastq:
+def default_policy(
+    gse: str,
+    retain_raw_files: bool,
+    assay_type: str = "",
+    raw_file_type: str = "",
+) -> dict[str, str]:
+    if assay_type not in ASSAY_TYPES:
+        raise StoragePolicyError(f"invalid assay_type={assay_type!r}")
+    if raw_file_type not in RAW_FILE_TYPES:
+        raise StoragePolicyError(f"invalid raw_file_type={raw_file_type!r}")
+    if retain_raw_files:
         return {
             "gse": gse,
-            "retain_raw_fastq": "true",
+            "assay_type": assay_type,
+            "raw_file_type": raw_file_type,
+            "retain_raw_files": "true",
             "storage_mode": "retain",
             "validation_status": "not_applicable",
             "deletion_status": "not_applicable",
@@ -138,7 +177,9 @@ def default_policy(gse: str, retain_raw_fastq: bool) -> dict[str, str]:
         }
     return {
         "gse": gse,
-        "retain_raw_fastq": "false",
+        "assay_type": assay_type,
+        "raw_file_type": raw_file_type,
+        "retain_raw_files": "false",
         "storage_mode": "delete_after_validation",
         "validation_status": "conversion_pending",
         "deletion_status": "pending",
@@ -164,11 +205,21 @@ def write_storage_policy(root: Path, row: dict[str, str]) -> dict[str, str]:
     return normalized
 
 
-def retain_raw_fastq(root: Path, required: bool = True) -> bool | None:
+def retain_raw_files(root: Path, required: bool = True) -> bool | None:
     policy = read_storage_policy(root, required=required)
     if policy is None:
         return None
-    return policy["retain_raw_fastq"] == "true"
+    return policy["retain_raw_files"] == "true"
+
+
+def retain_raw_fastq(root: Path, required: bool = True) -> bool | None:
+    return retain_raw_files(root, required=required)
+
+
+def is_array_raw(policy: dict[str, str] | None) -> bool:
+    if not policy:
+        return False
+    return policy.get("raw_file_type", "") in {"CEL", "IDAT"}
 
 
 def deletion_completed(root: Path) -> bool:
@@ -207,16 +258,27 @@ def iter_download_manifests(root: Path) -> list[Path]:
     return sorted(root.glob("GSM*/download_manifest.tsv"))
 
 
-def published_fastq_dir(root: Path, gsm: str, retain: bool | None = None) -> Path:
+def published_raw_dir(
+    root: Path,
+    gsm: str,
+    file_type: str,
+    retain: bool | None = None,
+) -> Path:
+    kind = file_type.upper()
+    subdir = RAW_SUBDIRS.get(kind, kind.lower() or "assay_files")
     if retain is None:
-        retain = retain_raw_fastq(root, required=False)
+        retain = retain_raw_files(root, required=False)
     if retain is False:
-        return temporary_dir(root, gsm) / "fastq"
-    current = raw_dir(root, gsm) / "fastq"
-    if current.exists() or retain is True:
+        return temporary_dir(root, gsm) / subdir
+    current = raw_dir(root, gsm) / subdir
+    if current.exists() or retain is True or kind != "FASTQ":
         return current
-    legacy = root / gsm / "fastq"
+    legacy = root / gsm / subdir
     return legacy if legacy.exists() else current
+
+
+def published_fastq_dir(root: Path, gsm: str, retain: bool | None = None) -> Path:
+    return published_raw_dir(root, gsm, "FASTQ", retain)
 
 
 def published_sra_dir(root: Path, gsm: str) -> Path:
@@ -289,11 +351,41 @@ def published_fastq_files(
     return files
 
 
-def list_temporary_fastq(root: Path) -> list[Path]:
+def list_temporary_raw(root: Path) -> list[Path]:
     files: list[Path] = []
-    for path in sorted((root / "temporary").glob("GSM*/fastq/*")):
-        if path.is_file() and path.name.endswith(".fastq.gz"):
-            files.append(path)
+    patterns = (
+        "GSM*/fastq/*",
+        "GSM*/CEL/*",
+        "GSM*/IDAT/*",
+        "GSM*/sra/*",
+    )
+    for pattern in patterns:
+        for path in sorted((root / "temporary").glob(pattern)):
+            if path.is_file() and not path.name.endswith((".part", ".aria2", ".json")):
+                files.append(path)
+    return files
+
+
+def list_temporary_fastq(root: Path) -> list[Path]:
+    return [
+        path
+        for path in list_temporary_raw(root)
+        if path.parent.name == "fastq" and path.name.endswith(".fastq.gz")
+    ]
+
+
+def list_published_raw(root: Path) -> list[Path]:
+    files: list[Path] = []
+    patterns = (
+        "GSM*/fastq/*.fastq.gz",
+        "GSM*/sra/*.sra",
+        "GSM*/CEL/*",
+        "GSM*/IDAT/*",
+    )
+    for pattern in patterns:
+        for path in sorted((root / "raw").glob(pattern)):
+            if path.is_file():
+                files.append(path)
     return files
 
 
@@ -314,7 +406,7 @@ def infer_srr(path: Path) -> str:
 
 def print_dirs(root: Path, gsm: str, srr: str) -> None:
     policy = read_storage_policy(root)
-    retain = policy["retain_raw_fastq"] == "true"
+    retain = policy["retain_raw_files"] == "true"
     mapping = {
         "RETAIN_RAW": "true" if retain else "false",
         "STORAGE_MODE": policy["storage_mode"],

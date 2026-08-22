@@ -20,15 +20,38 @@ from project_layout import (  # noqa: E402
 )
 
 
+def parse_retain(args: argparse.Namespace) -> bool:
+    retain = args.retain_raw_files or args.retain_raw_fastq
+    if retain is None:
+        raise SystemExit("必须指定 --retain-raw-files true|false，不允许默认")
+    return retain == "true"
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", required=True, type=Path)
     parser.add_argument("--gse", required=True)
+    parser.add_argument("--retain-raw-files", choices=("true", "false"))
     parser.add_argument(
         "--retain-raw-fastq",
-        required=True,
         choices=("true", "false"),
+        help="兼容旧参数；等价于 --retain-raw-files",
     )
+    parser.add_argument("--assay-type", default="", choices=(
+        "",
+        "pending",
+        "RNA-seq",
+        "microarray",
+        "methylation",
+    ))
+    parser.add_argument("--raw-file-type", default="", choices=(
+        "",
+        "pending",
+        "FASTQ",
+        "SRA",
+        "CEL",
+        "IDAT",
+    ))
     parser.add_argument("--validation-status", choices=(
         "pending",
         "conversion_pending",
@@ -46,20 +69,26 @@ def main() -> int:
     args = parser.parse_args()
     root = args.root.resolve()
     gse = args.gse.upper()
-    retain = args.retain_raw_fastq == "true"
+    retain = parse_retain(args)
     try:
         existing = read_storage_policy(root, required=False)
     except StoragePolicyError as exc:
         raise SystemExit(str(exc)) from exc
-    row = default_policy(gse, retain)
+    assay_type = args.assay_type or (existing["assay_type"] if existing else "")
+    raw_file_type = args.raw_file_type or (existing["raw_file_type"] if existing else "")
+    row = default_policy(gse, retain, assay_type=assay_type, raw_file_type=raw_file_type)
     if existing and existing["gse"] == gse:
         row["validation_status"] = existing["validation_status"]
         row["deletion_status"] = existing["deletion_status"]
         row["deletion_time"] = existing["deletion_time"]
-        if existing["retain_raw_fastq"] != row["retain_raw_fastq"] and (
+        if not args.assay_type:
+            row["assay_type"] = existing["assay_type"]
+        if not args.raw_file_type:
+            row["raw_file_type"] = existing["raw_file_type"]
+        if existing["retain_raw_files"] != row["retain_raw_files"] and (
             existing["deletion_status"] == "deleted"
         ):
-            raise SystemExit("不得在 FASTQ 已删除后改写 retain_raw_fastq")
+            raise SystemExit("不得在 raw files 已删除后改写 retain_raw_files")
     if args.validation_status:
         row["validation_status"] = args.validation_status
     if args.deletion_status:

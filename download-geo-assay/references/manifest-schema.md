@@ -6,14 +6,19 @@
 
 ```text
 GEO/GSE123456/
+├── README.md
 ├── metadata/
 │   ├── study_metadata.tsv
+│   ├── donor_metadata.tsv
 │   ├── sample_metadata.tsv
+│   ├── platform_metadata.tsv
+│   ├── assay_routing.tsv
 │   ├── sample_characteristics.tsv
 │   ├── srr_gsm_mapping.tsv
 │   ├── expected_runs.tsv
 │   ├── ena_runs.tsv
 │   ├── source_manifest.tsv
+│   ├── supplement_files.tsv
 │   ├── acquisition_config.tsv
 │   ├── storage_policy.tsv
 │   └── download_manifests/
@@ -21,16 +26,24 @@ GEO/GSE123456/
 ├── raw/
 │   └── GSM000001/
 │       ├── fastq/
-│       └── sra/
+│       ├── sra/
+│       ├── CEL/
+│       └── IDAT/
 ├── temporary/
 │   └── GSM000001/
 │       ├── fastq/
+│       ├── CEL/
+│       ├── IDAT/
 │       └── work/
 │           └── SRR000001/
 ├── processed/
 │   └── GSM000001/
 │       ├── matrix_10x/
 │       └── velocity/
+├── annotation/
+│   └── platform_annotation/
+│       └── probe_to_gene_mapping.tsv
+├── qc/
 ├── reports/
 │   ├── logs/
 │   ├── status/
@@ -61,11 +74,15 @@ GEO/GSE123456/
 | 层级 | 相对路径 | 内容 |
 |---|---|---|
 | GSE 项目 | `.` | 单个数据集的完整获取和处理项目 |
-| 元数据 | `metadata/` | study、sample、run、ENA、source 与 storage policy |
+| 元数据 | `metadata/` | study、donor、sample、platform、assay、run、ENA、source 与 storage policy |
 | 下载证据 | `metadata/download_manifests/<GSM>.tsv` | 每个 GSM 的已校验下载记录 |
 | Mode A FASTQ | `raw/GSM*/fastq/` | 长期保存的 R1/R2/I1/I2 |
 | Mode A SRA | `raw/GSM*/sra/` | 需要保留时的归档文件 |
-| Mode B FASTQ | `temporary/GSM*/fastq/` | 仅供转换的临时 FASTQ，验证后删除 |
+| Mode A CEL | `raw/GSM*/CEL/` | Affymetrix CEL / CEL.gz |
+| Mode A IDAT | `raw/GSM*/IDAT/` | Illumina 表达或甲基化 IDAT |
+| Mode B raw | `temporary/GSM*/fastq/` 等 | 仅供转换的临时 raw files，验证后删除 |
+| 平台注释 | `annotation/platform_annotation/` | probe_to_gene_mapping 等 |
+| QC | `qc/` | 芯片或测序 QC 中间文件 |
 | 临时工作区 | `temporary/GSM*/work/<run>/` | staging、`.part`、SRA 转换和断点 |
 | 10x 矩阵 | `processed/GSM*/matrix_10x/` | raw/filtered feature-barcode matrix |
 | RNA velocity | `processed/GSM*/velocity/` | spliced、unspliced、ambiguous 与 loom |
@@ -103,7 +120,9 @@ HTML 中显示上述项目相对路径。从 `reports/report.html` 链接文件�
 
 ```text
 gse
-retain_raw_fastq
+assay_type
+raw_file_type
+retain_raw_files
 storage_mode
 validation_status
 deletion_status
@@ -112,13 +131,15 @@ deletion_time
 
 | 列 | 允许值 |
 |---|---|
-| `retain_raw_fastq` | `true` 或 `false`，不得留空，不得默认 |
-| `storage_mode` | `retain` 或 `delete_after_validation`，必须与 `retain_raw_fastq` 一致 |
+| `assay_type` | `RNA-seq`、`microarray`、`methylation`；未判定前可空或 `pending` |
+| `raw_file_type` | `FASTQ`、`SRA`、`CEL`、`IDAT`；未判定前可空或 `pending` |
+| `retain_raw_files` | `true` 或 `false`，不得留空，不得默认；兼容旧列 `retain_raw_fastq` |
+| `storage_mode` | `retain` 或 `delete_after_validation`，必须与 `retain_raw_files` 一致 |
 | `validation_status` | `pending`、`conversion_pending`、`validated`、`failed`、`not_applicable` |
 | `deletion_status` | `not_applicable`、`pending`、`deleted`、`blocked` |
 | `deletion_time` | 删除完成时的 ISO-8601，否则留空 |
 
-Mode A 的 `deletion_status` 必须是 `not_applicable`。Mode B 初始为 `pending`，仅在 matrix 验证通过并由 `apply_storage_policy.py` 删除 temporary FASTQ 后变为 `deleted`。
+Mode A 的 `deletion_status` 必须是 `not_applicable`。Mode B 初始为 `pending`，仅在转换产物验证通过并由 `apply_storage_policy.py` 删除 temporary raw files 后变为 `deleted`。
 
 ## `conversion_provenance.tsv`
 

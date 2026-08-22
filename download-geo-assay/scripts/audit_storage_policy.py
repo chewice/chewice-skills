@@ -17,7 +17,9 @@ from project_layout import (  # noqa: E402
     conversion_provenance_path,
     deletion_log_path,
     infer_gsm,
-    list_temporary_fastq,
+    is_array_raw,
+    list_published_raw,
+    list_temporary_raw,
     locate_outputs,
     read_storage_policy,
     read_tsv,
@@ -98,29 +100,29 @@ def main() -> int:
         gse,
         "user_choice",
         "PASS",
-        f"retain_raw_fastq={policy['retain_raw_fastq']} storage_mode={policy['storage_mode']}",
+        f"retain_raw_files={policy['retain_raw_files']} storage_mode={policy['storage_mode']}",
     )
 
     samples = {(row.get("gse", gse), row.get("gsm", "")) for row in sample_rows(root)}
     samples = {(gse_id, gsm) for gse_id, gsm in samples if gsm}
-    temporary = list_temporary_fastq(root)
+    temporary = list_temporary_raw(root)
+    published = list_published_raw(root)
     deletion_log = read_tsv(deletion_log_path(root))
     provenance = read_tsv(conversion_provenance_path(root))
     final_audit = read_tsv(root / "reports/final_output_audit.tsv")
+    array_raw = is_array_raw(policy)
 
-    if policy["retain_raw_fastq"] == "true":
+    if policy["retain_raw_files"] == "true":
         if policy["deletion_status"] != "not_applicable":
-            add(findings, gse, "mode_a_retention", "FAIL", "Mode A 不得删除 FASTQ")
+            add(findings, gse, "mode_a_retention", "FAIL", "Mode A 不得删除 raw files")
             errors += 1
         elif deletion_log:
             add(findings, gse, "mode_a_retention", "FAIL", "Mode A 出现删除日志")
             errors += 1
         else:
             add(findings, gse, "mode_a_retention", "PASS", "deletion_status=not_applicable")
-        raw_fastq = list((root / "raw").glob("GSM*/fastq/*.fastq.gz"))
-        raw_sra = list((root / "raw").glob("GSM*/sra/*.sra"))
-        if not raw_fastq and not raw_sra:
-            add(findings, gse, "raw_present", "FAIL", "Mode A 缺少 raw FASTQ/SRA")
+        if not published:
+            add(findings, gse, "raw_present", "FAIL", "Mode A 缺少 raw 文件")
             errors += 1
         else:
             add(
@@ -128,19 +130,19 @@ def main() -> int:
                 gse,
                 "raw_present",
                 "PASS",
-                f"fastq={len(raw_fastq)} sra={len(raw_sra)}",
+                f"files={len(published)}",
             )
         if temporary:
             add(
                 findings,
                 gse,
-                "no_temporary_fastq",
+                "no_temporary_raw",
                 "FAIL",
-                "Mode A 不应留下 temporary FASTQ",
+                "Mode A 不应留下 temporary raw files",
             )
             errors += 1
         else:
-            add(findings, gse, "no_temporary_fastq", "PASS", "temporary FASTQ 已清空或不存在")
+            add(findings, gse, "no_temporary_raw", "PASS", "temporary raw files 已清空或不存在")
     else:
         if policy["deletion_status"] == "not_applicable":
             add(findings, gse, "mode_b_status", "FAIL", "Mode B 不得使用 not_applicable")
@@ -185,29 +187,47 @@ def main() -> int:
                     gse,
                     "temporary_cleared",
                     "FAIL",
-                    "deleted 后仍有 temporary FASTQ",
+                    "deleted 后仍有 temporary raw files",
                 )
                 errors += 1
             else:
-                add(findings, gse, "temporary_cleared", "PASS", "temporary FASTQ 已删除")
-            if (root / "raw").exists() and list((root / "raw").glob("GSM*/fastq/*")):
-                add(findings, gse, "raw_forbidden", "FAIL", "Mode B 不得写入 raw FASTQ")
+                add(findings, gse, "temporary_cleared", "PASS", "temporary raw files 已删除")
+            raw_left = list((root / "raw").glob("GSM*/fastq/*")) + list(
+                (root / "raw").glob("GSM*/CEL/*")
+            ) + list((root / "raw").glob("GSM*/IDAT/*"))
+            if (root / "raw").exists() and raw_left:
+                add(findings, gse, "raw_forbidden", "FAIL", "Mode B 不得写入 raw files")
                 errors += 1
             else:
-                add(findings, gse, "raw_forbidden", "PASS", "raw FASTQ 不存在")
-            missing_matrix = []
+                add(findings, gse, "raw_forbidden", "PASS", "raw files 不存在")
+            missing_product = []
             for gse_id, gsm in sorted(samples):
+                if array_raw:
+                    outputs = []
+                    for row in provenance:
+                        if row.get("gsm") == gsm:
+                            outputs.extend(
+                                item
+                                for item in row.get("output_matrix", "").split(";")
+                                if item
+                            )
+                    if not outputs or any(
+                        not (root / item).is_file() or (root / item).stat().st_size == 0
+                        for item in outputs
+                    ):
+                        missing_product.append(gsm)
+                    continue
                 matrix_dir, _, _ = locate_outputs(root, gse_id, gsm)
                 matrix = matrix_dir / "raw_feature_bc_matrix/matrix.mtx.gz"
                 if not matrix.is_file() or matrix.stat().st_size == 0:
-                    missing_matrix.append(gsm)
-            if missing_matrix:
+                    missing_product.append(gsm)
+            if missing_product:
                 add(
                     findings,
                     gse,
                     "matrix_retained",
                     "FAIL",
-                    "缺少 processed matrix: " + ",".join(missing_matrix),
+                    "缺少 processed 产物: " + ",".join(missing_product),
                 )
                 errors += 1
             else:
@@ -235,7 +255,7 @@ def main() -> int:
                     gse,
                     "temporary_present",
                     "FAIL",
-                    "Mode B pending 但 temporary FASTQ 不存在",
+                    "Mode B pending 但 temporary raw files 不存在",
                 )
                 errors += 1
             else:
