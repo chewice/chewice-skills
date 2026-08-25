@@ -1,0 +1,65 @@
+[
+  {
+    "id": "trigger-doi-markers",
+    "kind": "trigger",
+    "prompt": "把这篇 Word 里的 DOI 和 PMID 转成 Zotero live citation 字段，不要把 [1] 写成普通文本，先用 MCP 核对库里有没有这些条目。",
+    "should_trigger": true,
+    "expected_reason": "DOI/PMID must become Word Zotero live fields, with MCP library lookup."
+  },
+  {
+    "id": "trigger-static-docx-audit",
+    "kind": "trigger",
+    "prompt": "Audit this DOCX offline to confirm that its Zotero citation fields, bibliography field, item occurrences, and document preferences match the frozen manifest. Do not open Word.",
+    "should_trigger": true,
+    "expected_reason": "Static Word–Zotero OOXML audit against a manifest."
+  },
+  {
+    "id": "trigger-refresh-authorization",
+    "kind": "trigger",
+    "prompt": "Create and verify a write-once authorization contract for one ZoteroRefresh attempt, binding the source, candidate, manifest, audit, destination, report, diagnostics, and expected counts. Do not execute it.",
+    "should_trigger": true,
+    "expected_reason": "Digest-bound Refresh authorization gate for marker-built fields."
+  },
+  {
+    "id": "trigger-recovery",
+    "kind": "trigger",
+    "prompt": "The citation run stopped after Refresh. Inspect its journal and hashes, recover only to the highest verified phase, and generate a non-destructive rollback proposal if needed.",
+    "should_trigger": true,
+    "expected_reason": "Run lineage, recovery, and rollback for the DOI/PMID workflow."
+  },
+  {
+    "id": "trigger-mcp-collection",
+    "kind": "trigger",
+    "prompt": "用 Zotero MCP 给这篇稿建一个 collection，把文中 DOI 对应的条目加进去，先只读确认，不要启动 Word。",
+    "should_trigger": true,
+    "expected_reason": "Zotero MCP collection/staging is in-scope library management for this Skill."
+  },
+  {
+    "id": "nontrigger-endnote-migration",
+    "kind": "trigger",
+    "prompt": "把这篇 Word 里的 EndNote 动态引用迁到隔离 Zotero profile，先做 cited-only 身份映射和人工批准。",
+    "should_trigger": false,
+    "expected_reason": "EndNote field migration belongs to endnote-zotero, not DOI/PMID marker conversion."
+  },
+  {
+    "id": "nontrigger-style-advice",
+    "kind": "trigger",
+    "prompt": "What is the difference between APA 7 and Vancouver citation style?",
+    "should_trigger": false,
+    "expected_reason": "General citation-style advice with no Word–Zotero fields."
+  },
+  {
+    "id": "nontrigger-zotero-library-cleanup",
+    "kind": "trigger",
+    "prompt": "Please merge duplicate items in my Zotero library and clean up all tags.",
+    "should_trigger": false,
+    "expected_reason": "Bulk library hygiene without a Word live-field or DOI-staging task."
+  },
+  {
+    "id": "nontrigger-plain-text-numbers",
+    "kind": "trigger",
+    "prompt": "把引用写成普通上标 [1][2][3] 直接写进 Word，不要 Zotero 字段。",
+    "should_trigger": false,
+    "expected_reason": "Plain-text citation numbers are forbidden; this Skill only writes Zotero live fields."
+  }
+]
