@@ -1,6 +1,6 @@
 # Windows 下创建与切换隔离 Zotero Profile
 
-在需要与日常主库隔离的 staging 时阅读。Word 引用工作流中始终只运行一个 Zotero 实例。
+在用户**明确要求**与日常主库隔离的 staging 时阅读。本 Skill 默认走日常库 + Zotero MCP。Word 引用工作流中始终只运行一个 Zotero 实例。
 
 ## 为何隔离
 

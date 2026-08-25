@@ -2,6 +2,7 @@
 
 ## Scope
 
+- Route: L (MCP library) / W (Word live field)
 - Requested phase(s):
 - Completed phase(s):
 - Live integration authorized: no

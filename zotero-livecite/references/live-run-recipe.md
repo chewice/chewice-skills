@@ -1,10 +1,9 @@
 # Reproducible live run recipe
 
-Parameterized, machine-independent live sequence for DOI/PMID **live fields**.
-Do not write citation numbers as ordinary text. Library search, collection
-creation, and item selection go through Zotero MCP (`references/mcp-library.md`).
-Everything under `scripts/` is self-contained in this Skill; only the zotero-mcp
-package itself is external.
+Parameterized, machine-independent live sequence for **路线 W** (DOI/PMID live fields).
+Do not write citation numbers as ordinary text. Complete 路线 L first
+(`references/mcp-library.md`). If the user only asked for library management,
+stop after `zotero-item-selection.json` and do not run the commands below.
 
 ## Preconditions (read this before starting)
 

@@ -1,4 +1,4 @@
 interface:
   display_name: "Zotero Live Cite"
-  short_description: "Word 正文必须是 Zotero live field，并用 MCP 管理文献"
-  default_prompt: "使用 $zotero-livecite：正文引用必须写成 Zotero live citation 字段，不得把编号当普通文本写入；先用 Zotero MCP 核对或入藏 DOI/PMID，不要覆盖原稿，也不要启动 Word。"
+  short_description: "Word live field + Zotero MCP 管库"
+  default_prompt: "使用 $zotero-livecite。若只要管库：用 MCP 按 DOI/PMID 检索或入藏，不要启动 Word。若要改 Word：正文必须写成 Zotero live citation 字段，不得把编号当普通文本写入；先离线扫描，不要覆盖原稿。"

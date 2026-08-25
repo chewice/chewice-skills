@@ -35,6 +35,20 @@
     "expected_reason": "Zotero MCP collection/staging is in-scope library management for this Skill."
   },
   {
+    "id": "trigger-add-doi-only",
+    "kind": "trigger",
+    "prompt": "把这几个 DOI 加进我的 Zotero 库，不要改 Word。",
+    "should_trigger": true,
+    "expected_reason": "MCP library ingest by DOI without a Word conversion request."
+  },
+  {
+    "id": "trigger-refresh-bibliography",
+    "kind": "trigger",
+    "prompt": "刷新这篇 Word 里的 Zotero 文献表，引用必须还是动态字段。",
+    "should_trigger": true,
+    "expected_reason": "Refresh of live Zotero bibliography fields in Word."
+  },
+  {
     "id": "nontrigger-endnote-migration",
     "kind": "trigger",
     "prompt": "把这篇 Word 里的 EndNote 动态引用迁到隔离 Zotero profile，先做 cited-only 身份映射和人工批准。",

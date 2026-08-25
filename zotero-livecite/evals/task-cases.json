@@ -86,5 +86,22 @@
       "Search-replaces visible citation text instead of field blocks",
       "Launches Word or overwrites the source"
     ]
+  },
+  {
+    "id": "task-mcp-library-only",
+    "kind": "task",
+    "prompt": "Look up these DOIs in Zotero via MCP and write a selection JSON. Do not build Word fields and do not launch Word.",
+    "fixture": "A list of DOIs; MCP read tools available; no Word authorization.",
+    "expected_signals": [
+      "Uses read-only MCP lookup first",
+      "Writes zotero-item-selection.json or an equivalent mapping",
+      "Stops without candidate-build or Refresh",
+      "Does not launch Word"
+    ],
+    "fatal_failures": [
+      "Starts Word or the Refresh wrapper",
+      "Writes citation numbers as plain text into a DOCX",
+      "Merges or deletes Zotero items"
+    ]
   }
 ]
