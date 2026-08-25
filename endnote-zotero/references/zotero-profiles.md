@@ -1,6 +1,6 @@
 # Windows 下创建与切换隔离 Zotero Profile
 
-轨道 A 在需要与日常主库隔离的 staging 时、轨道 B 在 EndNote→Zotero 迁移时阅读。Word 引用工作流中始终只运行一个 Zotero 实例。
+EndNote→Zotero 迁移必须使用隔离 profile。Word 引用工作流中始终只运行一个 Zotero 实例。
 
 ## 为何隔离
 

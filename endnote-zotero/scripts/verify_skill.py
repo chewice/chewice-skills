@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Offline structural verification for the zotero-e2z-wordcitation Skill."""
+"""Offline structural verification for the endnote-zotero Skill."""
 
 from __future__ import annotations
 
@@ -10,15 +10,12 @@ import re
 import sys
 from pathlib import Path, PurePosixPath
 
-SKILL_NAME = "zotero-e2z-wordcitation"
+SKILL_NAME = "endnote-zotero"
 REQUIRED_REFERENCES = {
     "references/contracts.md",
-    "references/implementation-map.md",
     "references/live-refresh-protocol.md",
     "references/recovery-and-rollback.md",
-    "references/verification-matrix.md",
     "references/zotero-mcp-configuration.md",
-    "references/live-run-recipe.md",
     "references/endnote-migration.md",
     "references/zotero-profiles.md",
 }
@@ -140,7 +137,12 @@ def _validate_tree(root: Path) -> None:
     if "## Safety boundary" not in body or "## Output contract" not in body:
         raise ValueError("SKILL.md is missing required safety/output sections")
 
-    expected = REQUIRED_REFERENCES | REQUIRED_EVALS | {"scripts/verify_skill.py", "scripts/run_live_workflow.py", "scripts/refresh_word_zotero.ps1", "scripts/validate_word_zotero_ui.ps1", "assets/templates/offline-run-summary.md"}
+    expected = REQUIRED_REFERENCES | REQUIRED_EVALS | {
+        "scripts/verify_skill.py",
+        "scripts/refresh_word_zotero.ps1",
+        "scripts/validate_word_zotero_ui.ps1",
+        "assets/templates/offline-run-summary.md",
+    }
     missing = sorted(relative for relative in expected if not (root / relative).is_file())
     if missing:
         raise ValueError(f"missing required files: {', '.join(missing)}")

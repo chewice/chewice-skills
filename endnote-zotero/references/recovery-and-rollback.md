@@ -1,10 +1,10 @@
 # Recovery and rollback
 
-Recovery is evidence-driven. Rollback is non-destructive and proposal-only.
+Recovery is evidence-driven. Rollback is non-destructive and proposal-only. This Skill has no `zotero_mcp.word_citations` journal; recover from written mapping tables, hashes, audits, and candidate files. Do not invent a package phase enum.
 
 ## Run states
 
-Use the implementation's explicit phase enum and allowed transition graph. Conceptually the run advances through:
+Conceptually the run advances through:
 
 ```text
 initialized
@@ -22,7 +22,7 @@ initialized
 → finalized
 ```
 
-A failure state may be recorded from an active phase. Exact enum names in code are authoritative; do not invent a transition that `state.py` rejects.
+A failure may be recorded from an active phase. Do not skip a failed human-approval or structure gate because a later file exists.
 
 ## Locking
 

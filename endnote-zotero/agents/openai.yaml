@@ -1,0 +1,4 @@
+interface:
+  display_name: "EndNote to Zotero"
+  short_description: "把 EndNote 文献迁入隔离 Zotero 管理，必要时再迁 Word 字段"
+  default_prompt: "使用 $endnote-zotero 把 EndNote 文献迁入隔离 Zotero 管理；若这份 Word 含 EndNote 动态引用，再迁成 Zotero 字段。先做身份映射和人工批准，不要覆盖原稿或日常主库，也不要启动 Word。"

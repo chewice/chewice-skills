@@ -1,0 +1,65 @@
+[
+  {
+    "id": "trigger-endnote-library",
+    "kind": "trigger",
+    "prompt": "把这份 EndNote XML 导出迁入隔离 Zotero profile 管理，先做身份映射和人工批准，不要动日常主库，也不要启动 Word。",
+    "should_trigger": true,
+    "expected_reason": "EndNote literature import into isolated Zotero for management."
+  },
+  {
+    "id": "trigger-endnote-migration",
+    "kind": "trigger",
+    "prompt": "把这篇 Word 里的 EndNote 动态引用迁到隔离 Zotero profile，先做 cited-only 身份映射和人工批准，不要覆盖原稿，也不要启动 Word。",
+    "should_trigger": true,
+    "expected_reason": "EndNote-to-Zotero dynamic field migration with isolation and a human approval gate."
+  },
+  {
+    "id": "trigger-isolated-profile",
+    "kind": "trigger",
+    "prompt": "Help me switch Windows Zotero to an isolated citation-migration profile and confirm Word will not attach to my daily library before any Refresh.",
+    "should_trigger": true,
+    "expected_reason": "Isolated Zotero profiles as a prerequisite of EndNote-to-Zotero migration."
+  },
+  {
+    "id": "trigger-mapping-gate",
+    "kind": "trigger",
+    "prompt": "映射表里还有两处题名年份歧义。先停在人工批准门，不要写 Zotero 字段。",
+    "should_trigger": true,
+    "expected_reason": "Human approval gate before writing Zotero fields during EndNote migration."
+  },
+  {
+    "id": "trigger-recovery",
+    "kind": "trigger",
+    "prompt": "EndNote 迁移在 Refresh 后停下。根据工作目录里的哈希和批准表恢复到最高已核验阶段，必要时给一份只复制的 rollback 提案。",
+    "should_trigger": true,
+    "expected_reason": "Recovery and rollback for an EndNote-to-Zotero citation run."
+  },
+  {
+    "id": "nontrigger-doi-markers",
+    "kind": "trigger",
+    "prompt": "把这篇 Word 里的 DOI 和 PMID 标记转成可刷新的 Zotero 引用字段。",
+    "should_trigger": false,
+    "expected_reason": "DOI/PMID live fields and Zotero MCP library work belong to zotero-livecite."
+  },
+  {
+    "id": "nontrigger-style-advice",
+    "kind": "trigger",
+    "prompt": "What is the difference between APA 7 and Vancouver citation style?",
+    "should_trigger": false,
+    "expected_reason": "General citation-style advice with no EndNote or Zotero Word fields."
+  },
+  {
+    "id": "nontrigger-manual-bibliography",
+    "kind": "trigger",
+    "prompt": "Format these ten references as plain text in Chicago style for an email.",
+    "should_trigger": false,
+    "expected_reason": "Plain bibliography formatting, not EndNote-to-Zotero field migration."
+  },
+  {
+    "id": "nontrigger-installation",
+    "kind": "trigger",
+    "prompt": "Help me install the Zotero Word add-in.",
+    "should_trigger": false,
+    "expected_reason": "Installation rather than protected EndNote-to-Zotero conversion."
+  }
+]

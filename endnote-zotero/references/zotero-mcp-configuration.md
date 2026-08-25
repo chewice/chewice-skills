@@ -61,9 +61,8 @@ Create or edit `~/.config/zotero-mcp/config.json`:
    - a `zotero_search_collections` call should work.
 5. Verify write access with an idempotent action you are prepared to keep:
    - `zotero_create_collection(name='<probe>')`, then read it back, then
-     `zotero_delete_collection` only after confirming it is empty. This is the
-     step that failed in the 2026-08-15 run when the connector had not been
-     restarted.
+     `zotero_delete_collection` only after confirming it is empty. A running
+     connector will not pick up config edits until it is restarted.
 
 ## Secrets hygiene
 
@@ -76,9 +75,7 @@ Create or edit `~/.config/zotero-mcp/config.json`:
 
 ## Runtime identity used by the Skill
 
-The Skill scripts derive the Zotero user identity exclusively from
-`ZOTERO_LIBRARY_ID` (and the `library_type=user` convention). A task
-**collection** is created by name under `My Library`; the collection key is
-captured into `zotero-item-selection.json` and later bound into the manifest
-and Refresh authorization. Item keys are never guessed; they come from
-read-back verification of DOI matches.
+If write tools are used, derive Zotero user identity from `ZOTERO_LIBRARY_ID`
+(and `library_type=user`). EndNote migration targets an isolated profile and a
+cited-only subset; do not bind identity from the daily library or guess item
+keys. Record approved mappings with verified keys before any field write.

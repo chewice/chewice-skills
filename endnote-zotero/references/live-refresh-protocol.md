@@ -19,11 +19,11 @@ If any item is absent or ambiguous, stop. Do not broaden authorization from “v
 ## Pre-execution gates
 
 1. Inventory exact files and recompute their hashes.
-2. Load and verify the frozen manifest, pre-Refresh audit, and Refresh authorization.
+2. Load and verify the approved mapping package (and any frozen audit/authorization files that exist).
 3. Verify protected source and candidate size/SHA-256.
 4. Verify destination/report/diagnostic paths are exactly authorized, pairwise distinct, and appropriately absent or idempotent.
 5. If enabled, run only the restricted read-only visibility check against `http://127.0.0.1:23119`.
-6. Parse the PowerShell wrapper and confirm the static wrapper contract tests still pass.
+6. Parse the PowerShell wrapper with the PowerShell AST; do not execute it as a test.
 7. Confirm that no prior incomplete attempt or live lock is active.
 
 Any failure cancels the attempt before Word COM creation.

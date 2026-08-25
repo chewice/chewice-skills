@@ -1,51 +1,48 @@
-# zotero-e2z-wordcitation offline run summary
+# endnote-zotero offline run summary
 
 ## Scope
 
 - Requested phase(s):
 - Completed phase(s):
+- Mapping approval: incomplete / 100%
 - Live integration authorized: no
 
 ## Protected files
 
 | Role | Path | Size | SHA-256 | Status |
 |---|---|---:|---|---|
-| Source |  |  |  | unchanged / unavailable |
-| Candidate |  |  |  | unchanged / unavailable |
+| Source DOCX |  |  |  | unchanged / unavailable |
+| EndNote XML |  |  |  | unchanged / unavailable |
+| Candidate |  |  |  | not created / verified |
 | Destination |  |  |  | not created / verified |
 
-## Frozen artifacts
+## Mapping package
 
 | Artifact | Path | SHA-256 | Gate result |
 |---|---|---|---|
-| Manifest |  |  |  |
-| Pre-Refresh audit |  |  |  |
+| Cited-only subset |  |  |  |
+| Auto-match candidates |  |  |  |
+| Human approval table |  |  |  |
 | Refresh authorization |  |  |  |
 | Refresh report |  |  |  |
-| Post-Refresh audit |  |  |  |
-| Citation UI evidence |  |  |  |
-| Bibliography UI evidence |  |  |  |
+| Structure audit |  |  |  |
 | Finalization |  |  |  |
 
-## Acceptance counts
+## Structure counts
 
-- Citation fields:
-- Citation item occurrences:
+- EndNote citation occurrences (source):
+- Unique source identities:
+- Approved mappings:
+- Zotero citation fields:
 - Unique Zotero item keys:
-- Bibliography fields:
-- References headings:
-- Formal Refresh count:
+- Zotero bibliography fields:
+- Residual EndNote fields:
 
 ## Verification
 
-- Focused tests:
-- Full `tests/word_citations`:
-- Ruff:
-- PowerShell AST parse:
-- Protected baseline:
-- Full project suite:
+Migration run: `scripts/verify_skill.py` only if the user asked to change this Skill.
+
 - Skill verification:
-- Skill quick validation/package:
 
 ## Blockers or manual review
 
@@ -58,4 +55,5 @@
 - `ZoteroRefresh` invoked: 0
 - Zotero Local API contacted: no
 - Zotero modified: no
+- Full EndNote library imported: no
 - Files deleted or overwritten: no
