@@ -1,108 +1,69 @@
 ---
 name: download-geo-assay
-description: 按 GEO assay 分流后检查、规划、下载、续传、校验和记录公共组学原始数据（bulk/sc/snRNA-seq FASTQ、ATAC/ChIP FASTQ/SRA、Affymetrix CEL、Illumina/甲基化 IDAT），并按 assay 分别确认是否长期保存 raw files。当用户要求下载或核验 GSE/GSM/GPL、SRA/SRR、ENA、CNCB-NGDC、判定 assay workflow、按 assay 保存原始文件、设置下载配额、恢复中断传输、区分作者提交与数据库生成产物、按 GSM 建立 raw/temporary/processed 目录，或把 FASTQ 转成 count matrix / 10x matrix / 可选 velocity 输入时使用。测序 run 优先使用有效 NGDC 镜像；芯片走 GEO supplementary；长任务使用 pixi 和 detached tmux；每个 GSE 只生成一份中文 HTML 获取/转换/存储报告。不要用本技能下载 GEO series matrix、logcounts，或做 DESeq2、GO/KEGG、Seurat/Scanpy 分析。
+description: 按 GEO assay 和来源对象分流，规划、下载、续传、校验并转换公共组学原始数据；在逐 GSM/文库的标准产物与 provenance 审计通过后，按预先确认的存储策略释放对应 raw。用于 GSE/GSM/GPL、SRA/SRR、ENA、CNCB-NGDC、FASTQ/SRA、CEL、IDAT、配额恢复和有限存储下的滚动转换。不要用来下载 GEO series matrix/logcounts，或执行 DESeq2、RMA、GO/KEGG、Seurat/Scanpy、ATAC/ChIP 下游分析。
 ---
 
-# 安全下载 GEO assay 原始数据
+# Download GEO Assay
 
-定位：GEO 数据发现 + assay 识别 + raw/processed 管理 + assay-specific 转换 + 标准化储存入口。不扩展为完整下游分析 pipeline。
-
-统一数据模型：Study → Donor → Sample (GSM) → raw assay file。先读 `assay_capability.yaml`，只生成该 modality 声明的产物。使用 pixi，长时间任务在 detached tmux 中运行。
-
-每个 GSE 只生成 `reports/report.html`，职责是数据获取、转换和存储状态。不要把 FastQC/MultiQC、STARsolo 分析指标或 DEG 写进该报告。路径一律相对 GSE 根目录。
-
-```bash
-SKILL_DIR="${CODEX_HOME:-$HOME/.codex}/skills/download-geo-assay"
-```
-
-若当前仓库就是本 Skill，则 `SKILL_DIR` 为本目录。表结构阅读 `references/manifest-schema.md`。
-
-## 关卡顺序
-
-不要跳步。混合 assay 不要整包暂停，也不要用一个全局 `retain_raw_files`。
-
-1. `scaffold_project.py`（分流前 `final-product` 可为 `pending`）。
-2. 发现官方元数据并填表（`references/metadata-discovery.md`）。
-3. `detect_assay.py`，再读 `assay_capability.yaml`（`references/assay-routing.md`）。
-4. **按 assay** 询问是否长期保存 raw files，写入 `storage_policy.tsv` 多行（`references/storage-policy.md`）。
-5. 询问本次最大临时存储（`references/download-quota.md`）。
-6. 按每个 GSM 的 `workflow` 进入 3a 或 3b。不得把芯片 GSM 丢进 `download_run.sh`。
-7. 按 modality 转换（`references/conversion.md`）。
-8. 统一报告 → `audit_processed_outputs.py` → 按存储策略清理。
-
-| workflow | 进入 | 不要做 |
-|---|---|---|
-| `sra` | `references/provenance-routing.md` 与 `references/sra-download.md` | 不要用 GEO supplementary 当测序原始 reads |
-| `affymetrix` / `illumina` / `methylation` | `references/array-download.md` | 不要跑 `probe_ngdc.py`、`download_run.sh`、STAR/STARsolo |
-
-## 1. 脚手架与数据集解析
-
-```bash
-pixi run --locked python "$SKILL_DIR/scripts/scaffold_project.py" \
-  --gse <GSE> --retain-raw-files true|false --final-product <product>
-```
-
-脚手架里的 retain 只是占位，检测 assay 后必须按 assay 重问并 upsert。Mode A 常用 `fastq` / `sra` / `CEL` / `IDAT`。Mode B 必须已有该 modality 允许的转换产品：bulk 为 `gene_count_matrix`；sc/snRNA 为 `matrix_10x` 或 `matrix_velocity`；芯片为 `intensity` / `processed`。ATAC/ChIP/miRNA 的 Mode B 若用户未指定转换产品，暂停。
-
-下载前解析 GSE → Donor → GSM →（测序则 SRX → SRR）。写入 `study_metadata.tsv`、`donor_metadata.tsv`、`sample_metadata.tsv`、`platform_metadata.tsv`、`sample_characteristics.tsv`；测序写 `expected_runs.tsv`，芯片写 `supplement_files.tsv`。然后：
-
-```bash
-pixi run --locked python "$SKILL_DIR/scripts/detect_assay.py" --root .
-pixi run --locked python "$SKILL_DIR/scripts/build_report.py" --root .
-```
-
-`assay_type=RNA-seq` 只在有 RNA-seq 证据时使用，并用 `modality` 区分 `bulk_rnaseq` / `scRNAseq` / `snRNAseq`。不得把 HiSeq/NovaSeq 的 GPL 猜成芯片。GEO、ENA、SRA 对预期 run 集合不一致时写入预检并暂停该测序子集。
-
-## 2. 按 assay 记录存储策略与配额
-
-检测到多个 assay 时逐个询问，例如：
+固定主线：
 
 ```text
-请选择是否保存以下 assay 的 raw files：
-1. bulk RNA-seq    Raw format: FASTQ    Y/N
-2. single-cell RNA-seq    Raw format: FASTQ    Y/N
-3. microarray    Raw format: CEL    Y/N
+下载来源对象并校验
+→ 转换为分析输入/标准产物
+→ 审计产物与 provenance
+→ 按已授权策略删除对应 raw
 ```
 
-```bash
-pixi run --locked python "$SKILL_DIR/scripts/record_storage_policy.py" \
-  --root . --gse <GSE> --assay-type <assay_type> --modality <modality> \
-  --raw-file-type FASTQ|SRA|CEL|IDAT --retain-raw-files true|false \
-  --max-temporary-gib 100|500|1024|<custom>
-```
+SRR 是下载单元；GSM 或建库文库是转换、审计和释放 raw 的原子单元。没有标准产物、成员 run 不完整、产物审计失败或删除未获前置授权时，均不得删除 raw。
 
-每个 assay 一行。Mode A 发布到 `raw/GSM*/`。Mode B 未确认转换产品前不得下载；raw 只进 `temporary/GSM*/`，删除入口只能是 `scripts/apply_storage_policy.py`。缺少 `metadata/storage_policy.tsv` 时不得运行 `download_run.sh` 或 `download_geo_supplement.py`。
+## 渐进路由
 
-大规模传输前询问最大临时存储：A. 100 GB / B. 500 GB / C. 1 TB / D. 自定义。Mode B 分批下载-转换-删除，使 `temporary/` 低于配额。
+始终先读：
 
-## 3a. 测序分支（`workflow=sra`）
+- [references/gates.md](references/gates.md)：不变量、停止条件与人机决策边界。
+- [references/manifest-schema.md](references/manifest-schema.md)：状态文件和证据合同。
 
-选择文件前阅读 `references/provenance-routing.md`。探测 NGDC 文件 endpoint，不能只看 browse 页。优先级：原生 GSA → 有效 NGDC INSDC SRA → ENA 作者 FASTQ / ENA 生成 FASTQ → NCBI SRA Toolkit。
+根据已判定的 assay 只读一个匹配的 assay reference：
 
-下载、续传、校验阅读 `references/sra-download.md`。对 manifest 中测序行在 detached tmux 中运行 `scripts/download_run.sh <project-root> <SRR>`。监测与恢复阅读 `references/recovery-playbook.md`。
+| Assay | Reference |
+|---|---|
+| bulk RNA-seq | [references/assays/bulk-rnaseq.md](references/assays/bulk-rnaseq.md) |
+| sc/snRNA-seq | [references/assays/scrna.md](references/assays/scrna.md)，需要时再读 `starsolo-read-geometry.md` |
+| Affymetrix/Illumina expression array、methylation array | [references/assays/array.md](references/assays/array.md) |
+| ATAC-seq、ChIP-seq、miRNA-seq 等 raw-only | [references/assays/raw-only-seq.md](references/assays/raw-only-seq.md) |
 
-转换阅读 `references/conversion.md`。bulk：STAR GeneCounts → `processed/gene_count_matrix.tsv`，默认不保存 BAM。sc/snRNA：STARsolo → `processed/GSM*/matrix_10x/`；velocity 仅用户要求时生成。ATAC/ChIP/miRNA 不要默认 STAR/STARsolo。参考基因组与 GTF 由用户提供，不在下载关卡构建人类基因组 index。转换后运行：
+再根据实际来源只读一个匹配的 source reference：
 
-```bash
-pixi run --locked python "$SKILL_DIR/scripts/audit_processed_outputs.py" --root <GSE-dir>
-```
+| 来源 | Reference |
+|---|---|
+| NGDC/GSA 或 INSDC 镜像 | [references/sources/ngdc.md](references/sources/ngdc.md) |
+| ENA submitted/generated FASTQ | [references/sources/ena.md](references/sources/ena.md) |
+| NCBI SRA、source bucket、ODP、Lite | [references/sources/ncbi-sra.md](references/sources/ncbi-sra.md) |
+| GEO supplementary、GPL、SOFT/MINiML | [references/sources/geo-supplement.md](references/sources/geo-supplement.md) |
 
-## 3b. 芯片 / 甲基化分支
+不要为了“完整阅读”同时加载全部 assay/source reference。路由和校验必须实际读取 `assay_capability.yaml` 与 `source_capability.yaml`，不能仅把它们当文档。
 
-阅读 `references/array-download.md`。本 Skill 只下载并管理 CEL/IDAT，不做 normalization。将清单写入 `metadata/supplement_files.tsv` 后运行 `download_geo_supplement.py --file-type CEL|IDAT`。GEO/厂商 probe 映射可保存到 `annotation/platform_annotation/`。
+## 执行顺序
 
-## 4. 统一 HTML 报告
+1. 用 `scripts/scaffold_project.py` 新建项目。assay、最终产物和 raw 去留均可先为 `pending`；不要替用户提前承诺删除。
+2. 获取最小必要元数据并运行 `detect_assay.py`。自动探测参考文件、endpoint、工具能力、read length、quota 和文件系统可用空间。
+3. 只询问无法可靠推导的选择：最终产物、raw 去留、可用预算、明确来源偏好、是否接受 SRA Lite、是否授权自动恢复。用 `record_storage_policy.py` 写入确认。
+4. 探测来源并运行 `select_sources.py`。先按保真度与下游需求选对象类别，再选传输 endpoint。用户明确指定来源时必须服从；NGDC 只是在 `auto` 模式下的有效镜像偏好。
+5. 先以一个 GSM/文库做 pilot，并运行 `audit_manifest.py` 做峰值预算。预算取项目上限、working/temporary 上限、用户 quota 和文件系统可用空间中的最严约束。
+6. 下载并校验该单元全部 runs，转换为该 assay 的标准产物；用带 `--gsm`/`--unit` 的 `audit_processed_outputs.py` 审计结构、样本覆盖、输入映射和 provenance。
+7. 仅当存储策略已确认且 release 证据原子写入后，才用 `apply_storage_policy.py --gsm ... --confirm-delete` 删除该单元 raw。随后处理下一个单元。
+8. 每个 GSE 只生成一份中文 `reports/report.html`，同时保留 TSV/JSON 审计证据。
 
-```bash
-pixi run --locked python "$SKILL_DIR/scripts/build_report.py" --root <GSE-dir>
-```
+长任务使用项目 Pixi 环境与 detached tmux。先验证 pilot，再扩大并发或进入滚动下载—转换—释放。
 
-报告只保留：数据集、assay/modality、样本、文件与校验、存储策略、转换状态、清理状态。不要内嵌 FastQC/MultiQC 或 STARsolo 分析汇总。
+## 强制边界
 
-## 5. 清理与交付
+- provenance 与 transport 分开记录。Phred 分布只能提示质量是否简化，不能证明文件来自作者提交。
+- SRA Lite 是 `SIMPLIFIED` quality class，必须显式 opt-in；不得伪装为 full-quality archive。
+- raw-only assay，或 CEL/IDAT 尚未指定可审计转换产物时，不具备 raw 删除资格。
+- STAR 一次保留全部 GeneCounts 列；未知链特异性保持 `unknown/pending`，不得自动定为 unstranded。
+- 代理是可选 transport 配置。凭据不得写入 TSV、HTML 或明文日志。
+- watchdog 默认只记录快照，不自动重启。自动恢复需要显式授权、持久预算并且能证明产生新进展。
+- 不热改活动脚本。此 Skill 的新行为只用于新建项目；现有项目已复制的脚本与活动队列不自动迁移。
 
-先运行 `audit_download_evidence.py`。若发生转换，再运行 `audit_processed_outputs.py`。然后 `audit_storage_policy.py`。
-
-- Mode A（按 assay）：保留对应 `raw/` 文件；可删除 `.part`、`.aria2` 和 `temporary/*/work`。
-- Mode B（按 assay）：该 assay 审计通过后才 `apply_storage_policy.py`。
-- 不得清理未完成或未经审计的 sample。清理后再次生成 `reports/report.html`。
+本 Skill 到“可审计的标准分析输入”为止，不扩展到统计分析或生物学解释。

@@ -1,6 +1,6 @@
 # 测序 run 的原子下载与校验
 
-仅 `workflow=sra` 时阅读。芯片 / 甲基化走 `scripts/download_geo_supplement.py`，不要套用本节。中断恢复细节见 `references/recovery-playbook.md`。
+仅测序来源对象时阅读。芯片 / 甲基化走 `scripts/download_geo_supplement.py`，不要套用本节。中断恢复细节见 `references/recovery-playbook.md`。
 
 ## 布局
 
@@ -13,6 +13,10 @@ scripts/download_run.sh <project-root> <SRR>
 ```
 
 在 detached tmux 中启动 sample 循环。
+
+代理是可选配置：直连可用时不要求主备代理。aria2/curl 使用其支持的 HTTP(S)
+proxy URL；SOCKS 是否可用必须按当前工具实测，不能写成全局网络定律。任何含凭据的 proxy
+值都不得进入 TSV、HTML 或明文日志。
 
 ## 下载器必须
 

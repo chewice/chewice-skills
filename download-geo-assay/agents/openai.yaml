@@ -1,6 +1,4 @@
 interface:
-  display_name: "安全下载 GEO assay"
-  short_description: "按 assay 分流下载，并按存储策略管理 raw files"
-  default_prompt: "使用 $download-geo-assay 先解析 GEO/ENA 元数据、判定 assay/modality，按 assay 确认存储策略和临时存储配额，再下载、转换、校验并记录这个数据集。"
-policy:
-  allow_implicit_invocation: true
+  display_name: "Download GEO Assay"
+  short_description: "按 assay 下载、转换、审计并安全释放公共组学 raw"
+  default_prompt: "请使用 $download-geo-assay 处理该 GEO 数据：识别 assay 和来源对象，在预算内下载校验，再按 GSM/文库转换和审计；只有在我已授权且该单元通过后才释放对应 raw。"

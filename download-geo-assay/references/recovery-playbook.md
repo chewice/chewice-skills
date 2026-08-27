@@ -44,6 +44,11 @@ aria2 每次调用只尝试一次。外层默认最多三次同类错误，并�
 三次相同可恢复错误或任一不可安全重试错误将状态设为 `terminal_failed`。watchdog
 看到该状态必须停止，不得循环启动 pipeline。
 
+watchdog 默认 `auto_restart=false`，只采集快照。自动恢复必须在
+`acquisition_config.tsv` 中显式授权并配置正数 `max_auto_restarts` 持久预算；它只能恢复
+曾被观察为 running 的会话。一次授权重启后若完成数没有新进展，再次缺失时必须停止。
+日志中早于上次快照的历史错误不算新事故，也不能触发重启。
+
 ## NCBI prefetch
 
 `prefetch` 的工作目录跨重试保留，使 SRA Toolkit 自身恢复缓存。只有出现完整
@@ -64,4 +69,5 @@ aria2 每次调用只尝试一次。外层默认最多三次同类错误，并�
 仅当每个预期 run 均有 PASS download manifest、匹配的 complete marker、直接终端
 文件审计且没有活动事务时清理。执行 `audit_download_evidence.py --deep` 与
 `audit_storage_policy.py` 后，才删除 `.part`、`.aria2`、resume metadata 或 work。
-FASTQ 删除只允许 `apply_storage_policy.py` 在 Mode B 且 matrix 验证通过后执行。
+raw 删除只允许 `apply_storage_policy.py --gsm <GSM> --confirm-delete` 在 Mode B 且当前
+GSM 全部成员 runs、标准产物和 provenance 验证通过后执行。

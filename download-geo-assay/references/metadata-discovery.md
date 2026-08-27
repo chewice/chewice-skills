@@ -23,7 +23,7 @@
 1. 用 GSE 取 series SOFT / MINiML，解析每个 GSM 的标题、organism、characteristics、GPL、library 字段和 supplementary 文件名。
 2. 测序：从 SOFT 的 SRA/BioProject 关系或 ENA filereport 展开 GSM → SRX → SRR。每个 SRR 一行写入 `metadata/expected_runs.tsv`。GEO、ENA、SRA 的 run 集合不一致时写入 `reports/preflight_audit.tsv` 并暂停。
 3. 芯片 / 甲基化：不要找 SRR。把每个 GSM 的 CEL/IDAT（或仅含这些文件的 zip）写入 `metadata/supplement_files.tsv`。
-4. 平台：写入 `metadata/platform_metadata.tsv`（GPL、title、technology、array type、annotation version）。probe 映射来自 GEO platform SOFT 或厂商注释，不要手编。
+4. 平台：用 `download_geo_platform.py --root . --gpl GPL... --gse GSE...` 先取最小 GPL self/full，失败后自动走官方 family fallback；再写入 `metadata/platform_metadata.tsv`（GPL、title、technology、array type、annotation version）。probe 映射来自 GEO platform SOFT 或厂商注释，不要手编。
 5. 多值 characteristics 放到 `metadata/sample_characteristics.tsv`，不要压扁成会丢信息的单列。
 6. 运行 `scripts/detect_assay.py --root .`，再按 SKILL.md 更新 `storage_policy.tsv`。
 
