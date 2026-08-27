@@ -1,100 +1,52 @@
-# Assay 能力定义：决定本 Skill 允许生成哪些数据产品。
-# 不负责 DEG、pathway、可视化或生物学解释。
-
-bulk_rnaseq:
-  raw:
-    - FASTQ
-  conversion:
-    tool: STAR GeneCounts
-    alternatives:
-      - STAR + featureCounts
-      - Salmon
-  output:
-    - gene_count_matrix
-  optional:
-    - BAM
-  velocity: false
-  reference_required:
-    - star_index
-    - gtf
-
-scRNAseq:
-  raw:
-    - FASTQ
-  conversion:
-    tool: STARsolo
-    alternatives:
-      - Cell Ranger
-      - kallisto bustools
-  output:
-    - matrix_10x
-  optional:
-    - velocity_input
-  velocity: optional
-  reference_required:
-    - star_index
-    - gtf
-
-snRNAseq:
-  raw:
-    - FASTQ
-  conversion:
-    tool: STARsolo
-    alternatives:
-      - Cell Ranger
-      - kallisto bustools
-  output:
-    - matrix_10x
-  optional:
-    - velocity_input
-  velocity: optional_with_caution
-  reference_required:
-    - star_index
-    - gtf
-
-microarray:
-  raw:
-    - CEL
-  conversion: null
-  output: []
-  optional:
-    - GEO_or_vendor_probe_mapping
-  velocity: false
-  notes: 本 Skill 只下载并管理 CEL；不做 normalization / RMA / 下游分析。
-
-illumina_array:
-  raw:
-    - IDAT
-  conversion: null
-  output: []
-  velocity: false
-  notes: 本 Skill 只下载并管理 IDAT；不做 normalization。
-
-methylation:
-  raw:
-    - IDAT
-  conversion: null
-  output: []
-  velocity: false
-
-atac:
-  raw:
-    - FASTQ
-  conversion: null
-  output: []
-  velocity: false
-  notes: 用户未指定转换产品则只获取 FASTQ，不默认 STARsolo。
-
-chip:
-  raw:
-    - FASTQ
-  conversion: null
-  output: []
-  velocity: false
-
-mirna:
-  raw:
-    - FASTQ
-  conversion: null
-  output: []
-  velocity: false
+version: 2
+assays:
+  bulk_rnaseq:
+    labels: [bulk_rnaseq]
+    workflow: convert
+    raw_types: [FASTQ, SRA]
+    standard_products: [gene_count_matrix]
+    optional_products: [aligned_bam]
+    default_tool: STAR
+    release_unit: gsm
+    reference_required: true
+    reference: references/assays/bulk-rnaseq.md
+  scrnaseq:
+    labels: [scrnaseq, snrnaseq]
+    workflow: convert
+    raw_types: [FASTQ, SRA]
+    standard_products: [matrix_10x]
+    optional_products: [matrix_velocity]
+    default_tool: STARsolo
+    release_unit: gsm
+    reference_required: true
+    reference: references/assays/scrna.md
+  expression_array:
+    labels: [microarray, affymetrix, illumina_expression]
+    workflow: raw_or_explicit_conversion
+    raw_types: [CEL, IDAT]
+    standard_products: []
+    optional_products: [intensity, intensity_matrix, processed]
+    default_tool: null
+    release_unit: gsm
+    reference_required: true
+    reference: references/assays/array.md
+  methylation_array:
+    labels: [methylation, methylation_array]
+    workflow: raw_or_explicit_conversion
+    raw_types: [IDAT]
+    standard_products: []
+    optional_products: [methylation_matrix, processed]
+    default_tool: null
+    release_unit: gsm
+    reference_required: true
+    reference: references/assays/array.md
+  raw_only_sequencing:
+    labels: [atac, chip, mirna, atacseq, chipseq, mirnaseq, sequencing]
+    workflow: raw_only
+    raw_types: [FASTQ, SRA]
+    standard_products: []
+    optional_products: []
+    default_tool: null
+    release_unit: gsm
+    reference_required: false
+    reference: references/assays/raw-only-seq.md

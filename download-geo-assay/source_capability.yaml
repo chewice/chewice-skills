@@ -1,0 +1,69 @@
+version: 1
+object_classes:
+  AUTHOR_SUBMITTED_READS:
+    provenance_classes: [AUTHOR_SUBMITTED, GSA_AUTHOR_SUBMITTED]
+    quality_class: AS_SUBMITTED
+    fidelity_rank: 10
+    raw_input: true
+  FULL_QUALITY_ARCHIVE:
+    provenance_classes: [NGDC_MIRROR_SRA, ARCHIVE_NORMALIZED_SRA]
+    quality_class: FULL
+    fidelity_rank: 20
+    raw_input: true
+  ARCHIVE_GENERATED_FASTQ:
+    provenance_classes: [ARCHIVE_GENERATED_FASTQ]
+    quality_class: FULL
+    fidelity_rank: 20
+    raw_input: true
+  SRA_LITE:
+    provenance_classes: [SRA_LITE]
+    quality_class: SIMPLIFIED
+    fidelity_rank: 90
+    raw_input: true
+    requires: allow_sra_lite
+  PROCESSED_ALIGNED_OBJECT:
+    provenance_classes: [PROCESSED, ALIGNED_OBJECT]
+    quality_class: PROCESSED
+    fidelity_rank: 100
+    raw_input: false
+sources:
+  ngdc_gsa:
+    object_classes: [AUTHOR_SUBMITTED_READS]
+    transport: https
+    auto_transport_rank: 10
+    reference: references/sources/ngdc.md
+  ngdc_insdc:
+    object_classes: [FULL_QUALITY_ARCHIVE]
+    transport: https
+    auto_transport_rank: 10
+    reference: references/sources/ngdc.md
+  ena_submitted:
+    object_classes: [AUTHOR_SUBMITTED_READS]
+    transport: https
+    auto_transport_rank: 20
+    reference: references/sources/ena.md
+  ena_fastq:
+    object_classes: [ARCHIVE_GENERATED_FASTQ]
+    transport: https
+    auto_transport_rank: 20
+    reference: references/sources/ena.md
+  ncbi_source:
+    object_classes: [AUTHOR_SUBMITTED_READS]
+    transport: s3
+    auto_transport_rank: 30
+    reference: references/sources/ncbi-sra.md
+  ncbi_ondemand:
+    object_classes: [FULL_QUALITY_ARCHIVE]
+    transport: s3
+    auto_transport_rank: 30
+    reference: references/sources/ncbi-sra.md
+  ncbi_sra:
+    object_classes: [FULL_QUALITY_ARCHIVE, SRA_LITE]
+    transport: prefetch
+    auto_transport_rank: 40
+    reference: references/sources/ncbi-sra.md
+  geo_supplement:
+    object_classes: [AUTHOR_SUBMITTED_READS]
+    transport: https
+    auto_transport_rank: 10
+    reference: references/sources/geo-supplement.md
