@@ -1,4 +1,3 @@
-﻿#!/usr/bin/env python3
 """Convert WeChat-style Chinese registration notes to paste-ready TSV."""
 
 from __future__ import annotations
@@ -93,17 +92,15 @@ def label_value(block: str, label: str) -> str:
     return match.group(1).strip() if match else ""
 
 
-def normalize_id(value: str) -> str:
-    digits = re.search(r"\d+", value)
-    if not digits:
-        return ""
-    normalized = digits.group(0).lstrip("0")
-    return normalized or "0"
-
-
-def extract_hwn(block: str) -> str:
-    match = re.search(r"HWn\s*[-_]?(\d+)", block, flags=re.IGNORECASE)
-    return normalize_id(match.group(1)) if match else ""
+def extract_brain_id(block: str) -> str:
+    """Extract full brain-project ID preserving prefix, separator and leading zeros.
+    Prefers HWn/HWbd project IDs over HWt tube IDs:
+    HWn-0772 -> HWn-0772, HWbd-0004 -> HWbd-0004, HWt-0621 -> HWt-0621."""
+    match = re.search(r"HW(?:n|bd)\s*[-_]?\d+", block, flags=re.IGNORECASE)
+    if match:
+        return match.group(0)
+    match = re.search(r"HW[a-z]*\s*[-_]?\d+", block, flags=re.IGNORECASE)
+    return match.group(0) if match else ""
 
 
 def extract_hwn_full(block: str) -> str:
@@ -115,10 +112,9 @@ def extract_hwn_full(block: str) -> str:
 
 
 def extract_hwt(block: str) -> str:
-    match = re.search(r"HWt\s*[-_]?(\d+)", block, flags=re.IGNORECASE)
-    if not match:
-        return ""
-    return f"HWt-{normalize_id(match.group(1))}"
+    """Extract full HWt identifier preserving format: HWt-0621 -> HWt-0621"""
+    match = re.search(r"HWt\s*[-_]?\d+", block, flags=re.IGNORECASE)
+    return match.group(0) if match else ""
 
 
 def extract_date(block: str) -> str:
@@ -211,13 +207,15 @@ def extract_crf(block: str) -> str:
 def split_records(text: str) -> list[str]:
     records: list[list[str]] = []
     current: list[str] = []
-    pending_date: str = ""
     start_prefix_re = re.compile(r"^(脑计划|瑞美特)", re.IGNORECASE)
-    start_id_re = re.compile(r"HWn\s*[-_]?\d+|HWt\s*[-_]?\d+", re.IGNORECASE)
+    start_id_re = re.compile(r"HW[a-z]*\s*[-_]?\d+", re.IGNORECASE)
     control_re = re.compile(r"(开始|转换|开始转换)[。.!！?？:：,，、\s]*")
+    wechat_datetime_re = re.compile(
+        r"^20\d{2}年\d{1,2}月\d{1,2}日(?:\s+\d{1,2}[:：]\d{2}(?::\d{2})?)?$"
+    )
     date_re = re.compile(r"20\d{2}[年./-]\d{1,2}[月./-]\d{1,2}日?")
-    # Single-char separator/section markers to skip (e.g. 椎, 脊, etc.)
     separator_re = re.compile(r"^[椎脊]$")
+    clinical_note_re = re.compile(r"他评|自评|留样|留取|随访|拒绝|完成|已做|跟进")
 
     def _is_record_start(line: str) -> bool:
         if start_prefix_re.match(line):
@@ -226,49 +224,81 @@ def split_records(text: str) -> list[str]:
             return True
         return False
 
+    def _flush() -> None:
+        nonlocal current
+        if current:
+            records.append(current)
+            current = []
+
+    def _is_date_header(line: str) -> bool:
+        if "姓名" in line or _is_record_start(line):
+            return False
+        if wechat_datetime_re.fullmatch(line):
+            return True
+        if "：" in line or ":" in line:
+            return False
+        return bool(date_re.search(line))
+
+    def _looks_like_wechat_nickname(line: str) -> bool:
+        if "：" in line or ":" in line:
+            return False
+        if _is_record_start(line) or _is_date_header(line):
+            return False
+        if clinical_note_re.search(line):
+            return False
+        if "，" in line or "," in line:
+            return False
+        return len(line) <= 20
+
+    def _has_record_body(lines: list[str]) -> bool:
+        return any(_is_record_start(x) and "姓名" not in x for x in lines)
+
     for raw_line in text.splitlines():
         line = strip_md(raw_line)
         if not line:
+            _flush()
             continue
         if control_re.fullmatch(line):
-            if current:
-                records.append(current)
-                current = []
+            _flush()
             continue
         if re.fullmatch(r"(正常|随访|转化|转换|补充)[:：]?", line):
             if current and re.fullmatch(r"(随访|转化|转换)[:：]?", line):
-                records.append(current)
-                current = []
+                _flush()
             continue
         if line.startswith("|") or re.match(r"^-{3,}$", line):
             continue
-        # Skip single-char separators
         if separator_re.fullmatch(line):
             continue
-        if date_re.search(line) and "姓名" not in line and not _is_record_start(line):
-            pending_date = line
+        if _is_date_header(line):
+            if current and _looks_like_wechat_nickname(current[-1]):
+                current.pop()
+            _flush()
+            current = [line]
             continue
-        if _is_record_start(line) and ("姓名" not in line) and current:
-            records.append(current)
-            current = [line]
-            if pending_date:
-                current.insert(0, pending_date)
-        elif _is_record_start(line) and ("姓名" not in line):
-            current = [line]
-            if pending_date:
-                current.insert(0, pending_date)
-        elif current:
+        if _is_record_start(line) and ("姓名" not in line):
+            if current and _has_record_body(current):
+                _flush()
+                current = [line]
+            elif current:
+                current.append(line)
+            else:
+                current = [line]
+            continue
+        if _looks_like_wechat_nickname(line) and not current:
+            continue
+        if current:
             current.append(line)
+        else:
+            current = [line]
 
-    if current:
-        records.append(current)
+    _flush()
     return ["\n".join(lines) for lines in records]
 
 
 def record_to_normal(block: str) -> dict[str, str]:
     sample_status, sample_type = extract_samples(block)
     return {
-        "序号": extract_hwn(block),
+        "序号": extract_brain_id(block),
         "其他编号": extract_hwt(block),
         "评估日期": extract_date(block),
         "院号": label_value(block, "院号"),
