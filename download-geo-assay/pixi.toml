@@ -1,0 +1,15 @@
+[workspace]
+name = "download-geo-assay-skill-tests"
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[dependencies]
+python = ">=3.12,<3.13"
+pyyaml = "*"
+numpy = "*"
+scipy = "*"
+h5py = "*"
+
+[tasks]
+test = "python scripts/self_test.py"
+compile = "python -m compileall -q scripts"
