@@ -78,7 +78,7 @@ def write_fastq(path: Path, count: int, length: int = 28) -> None:
 
 def write_policy(project: Path, gse: str, retain: bool = True) -> None:
     (project / "metadata").mkdir(parents=True, exist_ok=True)
-    run(
+    command = [
         sys.executable,
         str(HERE / "record_storage_policy.py"),
         "--root",
@@ -87,7 +87,15 @@ def write_policy(project: Path, gse: str, retain: bool = True) -> None:
         gse,
         "--retain-raw-files",
         "true" if retain else "false",
-    )
+    ]
+    if not retain:
+        command.extend(
+            [
+                "--assay-type", "RNA-seq", "--modality", "scRNAseq",
+                "--raw-file-type", "FASTQ", "--final-product", "matrix_velocity",
+            ]
+        )
+    run(*command)
 
 
 def assay_router_test(base: Path) -> None:
@@ -115,7 +123,8 @@ def assay_router_test(base: Path) -> None:
     assert rna_row["assay_type"] == "RNA-seq"
     assert rna_row["modality"] == "bulk_rnaseq"
     assert rna_row["raw_file_type"] == "FASTQ"
-    assert rna_row["workflow"] == "sra"
+    assert rna_row["workflow"] == "convert"
+    assert rna_row["capability_reference"] == "references/assays/bulk-rnaseq.md"
 
     scrna = base / "assay_scrna"
     (scrna / "metadata").mkdir(parents=True)
@@ -162,7 +171,7 @@ def assay_router_test(base: Path) -> None:
     affy_row = read_tsv(affy / "metadata/assay_routing.tsv")[0]
     assert affy_row["assay_type"] == "microarray"
     assert affy_row["raw_file_type"] == "CEL"
-    assert affy_row["workflow"] == "affymetrix"
+    assert affy_row["workflow"] == "raw_or_explicit_conversion"
 
     atac = base / "assay_atac"
     (atac / "metadata").mkdir(parents=True)
@@ -187,7 +196,7 @@ def assay_router_test(base: Path) -> None:
     atac_row = read_tsv(atac / "metadata/assay_routing.tsv")[0]
     assert atac_row["assay_type"] == "ATAC-seq"
     assert atac_row["raw_file_type"] == "FASTQ"
-    assert atac_row["workflow"] == "sra"
+    assert atac_row["workflow"] == "raw_only"
 
     hiseq = base / "assay_hiseq"
     (hiseq / "metadata").mkdir(parents=True)
@@ -206,7 +215,7 @@ def assay_router_test(base: Path) -> None:
     run(sys.executable, str(HERE / "detect_assay.py"), "--root", str(hiseq))
     hiseq_row = read_tsv(hiseq / "metadata/assay_routing.tsv")[0]
     assert hiseq_row["assay_type"] == "sequencing"
-    assert hiseq_row["workflow"] == "sra"
+    assert hiseq_row["workflow"] == "raw_only"
 
     mixed = base / "assay_mixed"
     (mixed / "metadata").mkdir(parents=True)
@@ -238,7 +247,12 @@ def assay_router_test(base: Path) -> None:
     assert "MIXED" in mixed_run.stdout
     mixed_rows = read_tsv(mixed / "metadata/assay_routing.tsv")
     assert len(mixed_rows) == 2
-    assert {row["workflow"] for row in mixed_rows} == {"affymetrix", "sra"}
+    assert {row["workflow"] for row in mixed_rows} == {
+        "raw_or_explicit_conversion", "convert"
+    }
+    assert {row["capability_reference"] for row in mixed_rows} == {
+        "references/assays/array.md", "references/assays/bulk-rnaseq.md"
+    }
 
     serve = base / "cel_serve"
     project = base / "cel_project"
@@ -1281,7 +1295,15 @@ def storage_lifecycle_test(base: Path) -> None:
         text=True,
         check=False,
     )
-    assert missing.returncode != 0
+    assert missing.returncode == 0
+    pending_project = base / "scaffold_missing/GEO/GSE111111"
+    assert not (pending_project / "metadata/storage_policy.tsv").exists()
+    pending_config = {
+        row["key"]: row["value"]
+        for row in read_tsv(pending_project / "metadata/acquisition_config.tsv")
+    }
+    assert pending_config["retain_raw_files"] == "pending"
+    assert pending_config["auto_restart"] == "false"
     mode_b_fastq = subprocess.run(
         [
             sys.executable,
@@ -1397,6 +1419,9 @@ def storage_lifecycle_test(base: Path) -> None:
             str(HERE / "apply_storage_policy.py"),
             "--root",
             str(mode_b),
+            "--gsm",
+            gsm_b,
+            "--confirm-delete",
         ],
         capture_output=True,
         text=True,
@@ -1404,8 +1429,8 @@ def storage_lifecycle_test(base: Path) -> None:
     )
     assert blocked.returncode != 0
     assert tmp_r1.is_file()
-    policy = read_tsv(mode_b / "metadata/storage_policy.tsv")[0]
-    assert policy["deletion_status"] == "blocked"
+    release = read_tsv(mode_b / "reports/storage_release.tsv")[0]
+    assert release["release_status"] == "blocked"
     run(
         sys.executable,
         str(HERE / "record_storage_policy.py"),
@@ -1425,6 +1450,11 @@ def storage_lifecycle_test(base: Path) -> None:
         str(mode_b),
     )
     final_outputs(mode_b, gsm_b)
+    write_tsv(
+        mode_b / "metadata/assay_routing.tsv",
+        ["gse", "gsm", "assay_type", "modality", "raw_file_type"],
+        [{"gse": "GSE800000", "gsm": gsm_b, "assay_type": "RNA-seq", "modality": "scRNAseq", "raw_file_type": "FASTQ"}],
+    )
     run(
         sys.executable,
         str(HERE / "audit_processed_outputs.py"),
@@ -1464,11 +1494,19 @@ def storage_lifecycle_test(base: Path) -> None:
             }
         ],
     )
+    write_tsv(
+        mode_b / "reports/download_integrity_audit.tsv",
+        ["gse", "gsm", "srr", "status"],
+        [{"gse": "GSE800000", "gsm": gsm_b, "srr": srr_b, "status": "PASS"}],
+    )
     run(
         sys.executable,
         str(HERE / "apply_storage_policy.py"),
         "--root",
         str(mode_b),
+        "--gsm",
+        gsm_b,
+        "--confirm-delete",
     )
     assert not tmp_r1.exists()
     assert not (mode_b / "raw" / gsm_b / "fastq").exists()
@@ -1491,8 +1529,8 @@ def conversion_and_policy_test(base: Path) -> None:
     skill_root = HERE.parent
     capability = (skill_root / "assay_capability.yaml").read_text()
     assert "bulk_rnaseq:" in capability
-    assert "scRNAseq:" in capability
-    assert "velocity: false" in capability
+    assert "scrnaseq:" in capability
+    assert "workflow: raw_only" in capability
 
     project = base / "policy_multi"
     (project / "metadata").mkdir(parents=True)
@@ -1530,6 +1568,8 @@ def conversion_and_policy_test(base: Path) -> None:
         "CEL",
         "--retain-raw-files",
         "false",
+        "--final-product",
+        "intensity",
     )
     policies = read_tsv(project / "metadata/storage_policy.tsv")
     assert len(policies) == 2
@@ -1567,6 +1607,338 @@ def conversion_and_policy_test(base: Path) -> None:
     assert by_gene["ENSG1"]["GSM1"] == "10"
     assert by_gene["ENSG1"]["GSM2"] == "20"
     assert by_gene["ENSG2"]["GSM2"] == "7"
+    run(
+        sys.executable,
+        str(HERE / "merge_star_counts.py"),
+        "--root",
+        str(counts),
+    )
+    all_strands = read_tsv(counts / "processed/star_gene_counts_all_strands.tsv")
+    assert {"GSM1__unstranded", "GSM1__forward", "GSM1__reverse"}.issubset(all_strands[0])
+    write_tsv(
+        counts / "metadata/expected_runs.tsv",
+        ["gse", "gsm", "srr", "read_structure"],
+        [{"gse": "GSE1", "gsm": "GSM1", "srr": "SRR1", "read_structure": "R1:150,R2:150"}],
+    )
+    pilot = counts / "temporary/GSM1/fastq/SRR1_R1.fastq.gz"
+    write_fastq(pilot, 2, 150)
+    run(
+        sys.executable,
+        str(HERE / "derive_star_parameters.py"),
+        "--root",
+        str(counts),
+        "--gsm",
+        "GSM1",
+        "--pilot-fastq",
+        str(pilot),
+    )
+    star_parameter = read_tsv(counts / "metadata/reference_parameters.tsv")[0]
+    assert star_parameter["value"] == "149"
+
+
+def behavior_contract_test(base: Path) -> None:
+    """Forward tests for the structural revision's non-negotiable decisions."""
+
+    # Explicit NCBI intent must override an otherwise available NGDC mirror.
+    preferred = base / "explicit_ncbi"
+    (preferred / "metadata").mkdir(parents=True)
+    expected_fields = [
+        "gse", "gsm", "srx", "srr", "run_alias", "lane", "library_layout",
+        "read_structure", "expected_spots", "cb_length", "umi_length",
+    ]
+    expected_row = {
+        "gse": "GSE920000", "gsm": "GSM920001", "srx": "SRX920001",
+        "srr": "SRR92000001", "library_layout": "SINGLE", "expected_spots": "2",
+    }
+    write_tsv(preferred / "metadata/expected_runs.tsv", expected_fields, [expected_row])
+    write_tsv(
+        preferred / "metadata/ngdc.tsv",
+        ["srr", "ngdc_status", "ngdc_url", "ngdc_file_type", "ngdc_bytes"],
+        [{
+            "srr": "SRR92000001", "ngdc_status": "available",
+            "ngdc_url": "https://example.invalid/SRR92000001.sra",
+            "ngdc_file_type": "sra", "ngdc_bytes": "100",
+        }],
+    )
+    write_tsv(preferred / "metadata/ena.tsv", ["run_accession"], [{"run_accession": "SRR92000001"}])
+    run(
+        sys.executable, str(HERE / "record_storage_policy.py"),
+        "--root", str(preferred), "--gse", "GSE920000", "--retain-raw-files", "true",
+        "--assay-type", "RNA-seq", "--modality", "bulk_rnaseq", "--raw-file-type", "SRA",
+        "--final-product", "sra", "--source-preference", "ncbi",
+    )
+    run(
+        sys.executable, str(HERE / "select_sources.py"),
+        "--expected", str(preferred / "metadata/expected_runs.tsv"),
+        "--ngdc", str(preferred / "metadata/ngdc.tsv"),
+        "--ena", str(preferred / "metadata/ena.tsv"),
+        "--output", str(preferred / "metadata/source_manifest.tsv"),
+    )
+    selected = read_tsv(preferred / "metadata/source_manifest.tsv")[0]
+    assert selected["selected_source"] == "ncbi_sra"
+    assert selected["selection_reason"] == "explicit source preference=ncbi"
+    assert selected["object_class"] == "FULL_QUALITY_ARCHIVE"
+    assert selected["quality_class"] == "FULL"
+    assert selected["final_product"] == "sra"
+
+    # ENA submitted and generated files retain distinct provenance/object classes.
+    provenance_project = base / "provenance_classes"
+    (provenance_project / "metadata").mkdir(parents=True)
+    expected = [
+        {**expected_row, "srr": "SRR92000002", "gsm": "GSM920002"},
+        {**expected_row, "srr": "SRR92000003", "gsm": "GSM920003"},
+    ]
+    write_tsv(provenance_project / "metadata/expected.tsv", expected_fields, expected)
+    write_tsv(
+        provenance_project / "metadata/ngdc.tsv",
+        ["srr", "ngdc_status"],
+        [{"srr": row["srr"], "ngdc_status": "missing"} for row in expected],
+    )
+    ena_fields = [
+        "run_accession", "submitted_ftp", "submitted_bytes", "submitted_md5",
+        "fastq_ftp", "fastq_bytes", "fastq_md5", "fastq_file_role",
+    ]
+    write_tsv(
+        provenance_project / "metadata/ena.tsv",
+        ena_fields,
+        [
+            {
+                "run_accession": "SRR92000002",
+                "submitted_ftp": "ftp.sra.ebi.ac.uk/SRR92000002_R1.fastq.gz",
+                "submitted_bytes": "100", "submitted_md5": "a" * 32,
+            },
+            {
+                "run_accession": "SRR92000003",
+                "fastq_ftp": "ftp.sra.ebi.ac.uk/SRR92000003_R1.fastq.gz",
+                "fastq_bytes": "100", "fastq_md5": "b" * 32,
+                "fastq_file_role": "GENERATED_FILE",
+            },
+        ],
+    )
+    run(
+        sys.executable, str(HERE / "select_sources.py"),
+        "--expected", str(provenance_project / "metadata/expected.tsv"),
+        "--ngdc", str(provenance_project / "metadata/ngdc.tsv"),
+        "--ena", str(provenance_project / "metadata/ena.tsv"),
+        "--output", str(provenance_project / "metadata/source_manifest.tsv"),
+    )
+    classified = {row["srr"]: row for row in read_tsv(provenance_project / "metadata/source_manifest.tsv")}
+    assert classified["SRR92000002"]["object_class"] == "AUTHOR_SUBMITTED_READS"
+    assert classified["SRR92000002"]["selected_provenance"] == "AUTHOR_SUBMITTED"
+    assert classified["SRR92000003"]["object_class"] == "ARCHIVE_GENERATED_FASTQ"
+    assert classified["SRR92000003"]["selected_provenance"] == "ARCHIVE_GENERATED_FASTQ"
+
+    # Source buckets are selective; both can miss while the full ODP object exists.
+    fixture = preferred / "metadata/ncbi_fixture.json"
+    fixture.write_text(json.dumps({
+        "SRR92000001": {"sra-pub-src-1": [], "sra-pub-src-2": [], "odp_bytes": 321}
+    }))
+    run(
+        sys.executable, str(HERE / "probe_ncbi.py"),
+        "--expected", str(preferred / "metadata/expected_runs.tsv"),
+        "--fixture", str(fixture),
+        "--output", str(preferred / "metadata/ncbi.tsv"),
+    )
+    ncbi_rows = read_tsv(preferred / "metadata/ncbi.tsv")
+    assert sum(row["source"] == "ncbi_source" and row["status"] == "missing" for row in ncbi_rows) == 2
+    assert any(row["source"] == "ncbi_ondemand" and row["status"] == "available" for row in ncbi_rows)
+
+    # Lite is a simplified quality class and is rejected until explicitly allowed.
+    lite = base / "lite_policy"
+    (lite / "metadata").mkdir(parents=True)
+    write_tsv(
+        lite / "metadata/acquisition_config.tsv", ["key", "value"],
+        [
+            {"key": "max_project_bytes", "value": str(100 * 1024**3)},
+            {"key": "max_temporary_bytes", "value": str(100 * 1024**3)},
+            {"key": "min_headroom_bytes", "value": "1"},
+            {"key": "allow_sra_lite", "value": "false"},
+        ],
+    )
+    lite_fields = [
+        "gse", "gsm", "srx", "srr", "library_layout", "expected_spots",
+        "ngdc_status", "selected_source", "selected_provenance", "object_class",
+        "quality_class", "transport_endpoint", "selected_urls", "selected_bytes",
+        "selected_md5", "read_roles", "final_product", "selection_reason",
+    ]
+    write_tsv(
+        lite / "metadata/source_manifest.tsv", lite_fields,
+        [{
+            "gse": "GSE930000", "gsm": "GSM930001", "srx": "SRX930001",
+            "srr": "SRR93000001", "library_layout": "SINGLE", "expected_spots": "2",
+            "ngdc_status": "missing", "selected_source": "ncbi_sra",
+            "selected_provenance": "SRA_LITE", "object_class": "SRA_LITE",
+            "quality_class": "SIMPLIFIED", "transport_endpoint": "prefetch",
+            "selected_urls": "SRR93000001", "selected_bytes": "100",
+            "read_roles": "SRA", "final_product": "sra", "selection_reason": "fixture",
+        }],
+    )
+    run(
+        sys.executable, str(HERE / "audit_manifest.py"), "--root", str(lite),
+        "--manifest", "metadata/source_manifest.tsv", expect=1,
+    )
+    run(
+        sys.executable, str(HERE / "record_storage_policy.py"),
+        "--root", str(lite), "--gse", "GSE930000", "--retain-raw-files", "true",
+        "--assay-type", "RNA-seq", "--modality", "bulk_rnaseq", "--raw-file-type", "SRA",
+        "--final-product", "sra", "--allow-sra-lite", "true",
+    )
+    run(
+        sys.executable, str(HERE / "audit_manifest.py"), "--root", str(lite),
+        "--manifest", "metadata/source_manifest.tsv",
+    )
+    # The strictest quota blocks the unit before transfer starts.
+    write_tsv(
+        lite / "metadata/acquisition_config.tsv", ["key", "value"],
+        [
+            {"key": "max_project_bytes", "value": "1"},
+            {"key": "max_temporary_bytes", "value": "1"},
+            {"key": "min_headroom_bytes", "value": "1"},
+            {"key": "allow_sra_lite", "value": "true"},
+        ],
+    )
+    run(
+        sys.executable, str(HERE / "audit_manifest.py"), "--root", str(lite),
+        "--manifest", "metadata/source_manifest.tsv", expect=1,
+    )
+    assert any(
+        row["check"] == "space_guard" and row["level"] == "ERROR"
+        for row in read_tsv(lite / "reports/preflight_audit.tsv")
+    )
+
+    # Raw-only capability refuses a deletion policy even when a fake matrix is requested.
+    raw_only = base / "raw_only"
+    (raw_only / "metadata").mkdir(parents=True)
+    run(
+        sys.executable, str(HERE / "record_storage_policy.py"),
+        "--root", str(raw_only), "--gse", "GSE940000", "--retain-raw-files", "false",
+        "--assay-type", "ATAC-seq", "--modality", "atac", "--raw-file-type", "FASTQ",
+        "--final-product", "gene_count_matrix", expect=1,
+    )
+    assert not (raw_only / "metadata/storage_policy.tsv").exists()
+
+    # A two-run GSM is released only after both runs are represented in provenance.
+    multi = base / "multi_run_release"
+    (multi / "metadata").mkdir(parents=True)
+    write_policy(multi, "GSE950000", retain=False)
+    gsm = "GSM950001"
+    runs = ["SRR95000001", "SRR95000002"]
+    write_tsv(
+        multi / "metadata/assay_routing.tsv",
+        ["gse", "gsm", "assay_type", "modality", "raw_file_type"],
+        [{"gse": "GSE950000", "gsm": gsm, "assay_type": "RNA-seq", "modality": "scRNAseq", "raw_file_type": "FASTQ"}],
+    )
+    write_tsv(
+        multi / "metadata/source_manifest.tsv", ["gse", "gsm", "srr", "final_product"],
+        [{"gse": "GSE950000", "gsm": gsm, "srr": run_id, "final_product": "matrix_velocity"} for run_id in runs],
+    )
+    raw_files: list[Path] = []
+    for run_id in runs:
+        for role, length in (("R1", 28), ("R2", 91)):
+            path = multi / "temporary" / gsm / "fastq" / f"{run_id}_{role}.fastq.gz"
+            write_fastq(path, 2, length)
+            raw_files.append(path)
+    final_outputs(multi, gsm)
+    run(
+        sys.executable, str(HERE / "audit_processed_outputs.py"),
+        "--root", str(multi), "--gsm", gsm, "--skip-full-gzip",
+    )
+    write_tsv(
+        multi / "reports/download_integrity_audit.tsv", ["gse", "gsm", "srr", "status"],
+        [{"gse": "GSE950000", "gsm": gsm, "srr": run_id, "status": "PASS"} for run_id in runs],
+    )
+    matrix = multi / "processed" / gsm / "matrix_10x/raw_feature_bc_matrix/matrix.mtx.gz"
+    provenance_fields = ["gse", "gsm", "tool", "tool_version", "input_fastq", "output_matrix", "validated_at"]
+    provenance = {
+        "gse": "GSE950000", "gsm": gsm, "tool": "STARsolo", "tool_version": "2.7.11b",
+        "input_fastq": ";".join(path.relative_to(multi).as_posix() for path in raw_files[:2]),
+        "output_matrix": matrix.relative_to(multi).as_posix(), "validated_at": "2026-01-01",
+    }
+    write_tsv(multi / "reports/conversion_provenance.tsv", provenance_fields, [provenance])
+    run(
+        sys.executable, str(HERE / "apply_storage_policy.py"), "--root", str(multi),
+        "--gsm", gsm, "--confirm-delete", expect=1,
+    )
+    assert all(path.is_file() for path in raw_files)
+    provenance["input_fastq"] = ";".join(path.relative_to(multi).as_posix() for path in raw_files)
+    write_tsv(multi / "reports/conversion_provenance.tsv", provenance_fields, [provenance])
+    run(
+        sys.executable, str(HERE / "apply_storage_policy.py"), "--root", str(multi),
+        "--unit", gsm, "--confirm-delete",
+    )
+    assert all(not path.exists() for path in raw_files)
+    release = read_tsv(multi / "reports/storage_release.tsv")[0]
+    assert release["release_status"] == "released"
+    assert set(release["member_runs"].split(";")) == set(runs)
+
+    # A missing GSM column fails processed audit and raw remains untouched.
+    bulk = base / "bulk_missing_column"
+    (bulk / "metadata").mkdir(parents=True)
+    run(
+        sys.executable, str(HERE / "record_storage_policy.py"),
+        "--root", str(bulk), "--gse", "GSE960000", "--retain-raw-files", "false",
+        "--assay-type", "RNA-seq", "--modality", "bulk_rnaseq", "--raw-file-type", "FASTQ",
+        "--final-product", "gene_count_matrix",
+    )
+    write_tsv(
+        bulk / "metadata/assay_routing.tsv",
+        ["gse", "gsm", "assay_type", "modality", "raw_file_type"],
+        [{"gse": "GSE960000", "gsm": "GSM960001", "assay_type": "RNA-seq", "modality": "bulk_rnaseq", "raw_file_type": "FASTQ"}],
+    )
+    write_tsv(
+        bulk / "metadata/source_manifest.tsv", ["gse", "gsm", "srr", "final_product"],
+        [{"gse": "GSE960000", "gsm": "GSM960001", "srr": "SRR96000001", "final_product": "gene_count_matrix"}],
+    )
+    bulk_raw = bulk / "temporary/GSM960001/fastq/SRR96000001_R1.fastq.gz"
+    write_fastq(bulk_raw, 2)
+    write_tsv(
+        bulk / "processed/gene_count_matrix.tsv", ["gene_id", "GSM_OTHER"],
+        [{"gene_id": "ENSG1", "GSM_OTHER": "1"}],
+    )
+    run(
+        sys.executable, str(HERE / "audit_processed_outputs.py"),
+        "--root", str(bulk), "--gsm", "GSM960001", expect=1,
+    )
+    assert bulk_raw.is_file()
+
+    # Snapshot mode does not start a missing pipeline, even with an old error log.
+    watch = base / "watchdog_snapshot"
+    (watch / "metadata").mkdir(parents=True)
+    (watch / "reports/logs").mkdir(parents=True)
+    (watch / "reports/status").mkdir(parents=True)
+    write_tsv(
+        watch / "metadata/source_manifest.tsv", ["gse", "gsm", "srr"],
+        [{"gse": "GSE970000", "gsm": "GSM970001", "srr": "SRR97000001"}],
+    )
+    (watch / "reports/logs/old.log").write_text("ERROR historical failure\n")
+    snapshot = subprocess.run(
+        ["timeout", "2", "bash", str(HERE / "watchdog.sh"), str(watch), "60"],
+        text=True, capture_output=True, check=False,
+    )
+    assert snapshot.returncode == 124, (
+        f"watchdog snapshot rc={snapshot.returncode}\nstdout={snapshot.stdout}\nstderr={snapshot.stderr}"
+    )
+    watchdog_log = (watch / "reports/logs/watchdog.log").read_text()
+    assert "RESTART" not in watchdog_log
+
+    # A bad minimal GPL response automatically falls back to an official family file.
+    platform = base / "platform_fallback"
+    primary = base / "platform_error.html"
+    family = base / "GSE980000_family.soft"
+    primary.write_text("<html><body>temporary error</body></html>")
+    family.write_text("^DATABASE = GeoMiame\n^PLATFORM = GPL570\n!Platform_title = fixture\n")
+    run(
+        sys.executable, str(HERE / "download_geo_platform.py"),
+        "--root", str(platform), "--gpl", "GPL570",
+        "--primary-url", primary.resolve().as_uri(),
+        "--fallback-url", family.resolve().as_uri(),
+    )
+    platform_rows = read_tsv(platform / "reports/platform_download.tsv")
+    assert [row["status"] for row in platform_rows] == ["FAIL", "PASS"]
+    assert platform_rows[-1]["scope"] == "official-family-fallback"
+    extracted_platform = (platform / "annotation/platform_annotation/GPL570.soft").read_text()
+    assert extracted_platform.startswith("^PLATFORM = GPL570")
+    assert "^DATABASE" not in extracted_platform
 
 
 def main() -> None:
@@ -1580,6 +1952,7 @@ def main() -> None:
         assay_router_test(base)
         storage_lifecycle_test(base)
         conversion_and_policy_test(base)
+        behavior_contract_test(base)
         run(
             sys.executable,
             str(HERE / "scaffold_project.py"),
@@ -1594,6 +1967,8 @@ def main() -> None:
         )
         project = base / "GEO/GSE123456"
         assert (project / "pixi.toml").is_file()
+        assert (project / "config/assay_capability.yaml").is_file()
+        assert (project / "config/source_capability.yaml").is_file()
         assert (project / "scripts/run_all.sh").is_file()
         assert (project / "reports/report.html").is_file()
         assert (project / "metadata/storage_policy.tsv").is_file()
@@ -1611,6 +1986,7 @@ def main() -> None:
         with (project / "pixi.toml").open("rb") as handle:
             pixi_manifest = tomllib.load(handle)
         assert "sra-tools" in pixi_manifest["dependencies"]
+        assert "pyyaml" in pixi_manifest["dependencies"]
         assert "check-env" in pixi_manifest["tasks"]
 
         expected_fields = [

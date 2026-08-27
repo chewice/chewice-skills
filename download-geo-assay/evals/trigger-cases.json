@@ -18,7 +18,7 @@
     "kind": "trigger",
     "prompt": "GSE 的 SRR 下载断了，优先用 NGDC 镜像续传并校验 FASTQ。",
     "should_trigger": true,
-    "expected_reason": "测序 run 的 NGDC 优先路由、续传和校验。"
+    "expected_reason": "测序 run 的显式 NGDC 来源偏好、续传和校验。"
   },
   {
     "id": "trigger-geo-soft-metadata",
@@ -26,6 +26,20 @@
     "prompt": "先别下数据，把这个 GSE 的 SOFT 和 ENA filereport 解析成 sample/run 表。",
     "should_trigger": true,
     "expected_reason": "GEO/ENA 官方元数据发现属于本 Skill 下载前关卡。"
+  },
+  {
+    "id": "trigger-gsm-release",
+    "kind": "trigger",
+    "prompt": "这个多-run GSM 已转成 10x matrix，审核通过后按之前授权释放对应 FASTQ。",
+    "should_trigger": true,
+    "expected_reason": "逐 GSM 标准产物审计与授权后 raw release 属于本 Skill。"
+  },
+  {
+    "id": "trigger-sra-lite-choice",
+    "kind": "trigger",
+    "prompt": "这个 SRR 只能拿到 SRA Lite，帮我判断能不能接受并记录质量类别。",
+    "should_trigger": true,
+    "expected_reason": "来源对象、provenance、quality class 与 Lite opt-in 属于获取决策。"
   },
   {
     "id": "nontrigger-deseq2-enrichment",

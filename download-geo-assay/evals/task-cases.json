@@ -1,112 +1,78 @@
 [
   {
-    "id": "task-storage-gate",
+    "id": "task-pending-scaffold-gate",
     "kind": "task",
-    "prompt": "GSE 元数据和 assay_routing.tsv 已经写好，是 RNA-seq。直接开始下载 FASTQ。",
-    "fixture": "已有 sample_metadata 与 assay_routing，但没有用户确认的 storage_policy。",
+    "prompt": "先给 GSE123456 建目录，assay 还没判定，最终产物和 raw 去留也没决定。",
+    "fixture": "新项目，无活动队列。",
     "expected_signals": [
-      "在大规模传输前按 assay 询问是否长期保存 raw files",
-      "拒绝默认选择 Mode A 或 Mode B",
-      "缺少 storage_policy.tsv 时不运行 download_run.sh"
+      "scaffold 允许 pending 且不伪造 storage_policy",
+      "先自动判定 assay、参考和 endpoint",
+      "真正下载前才确认最终产物、raw 去留、预算、来源偏好、Lite 与恢复授权"
     ],
-    "fatal_failures": [
-      "未询问就下载",
-      "自行决定 retain_raw_files",
-      "下载 GEO logcounts 或创建 Seurat object"
-    ]
+    "fatal_failures": ["scaffold 阶段强迫全局 retention", "默认承诺删除 raw", "开始下载后再补存储策略"]
   },
   {
-    "id": "task-array-not-sra",
+    "id": "task-explicit-ncbi-wins",
     "kind": "task",
-    "prompt": "GPL570 的 GSE，workflow=affymetrix。把原始数据准备好。",
-    "fixture": "assay_routing 全为 affymetrix/CEL。",
-    "expected_signals": [
-      "走 GEO supplementary 下载 CEL",
-      "不运行 probe_ngdc.py 或 download_run.sh",
-      "--file-type 与 raw_file_type=CEL 一致"
-    ],
-    "fatal_failures": [
-      "把芯片当 RNA-seq 去拉 SRR",
-      "默认按 IDAT 下载",
-      "把 CEL 标成 RNA-seq",
-      "自行做 RMA/normalization"
-    ]
+    "prompt": "这个项目明确只从 NCBI 下载，不要改成 NGDC。",
+    "fixture": "同一 SRR 的 NGDC 镜像与 NCBI full SRA 都可用。",
+    "expected_signals": ["selected_source 为 ncbi_*", "selection_reason 记录 explicit source preference=ncbi", "NGDC available 不强制覆盖用户"],
+    "fatal_failures": ["按固定 NGDC-first 覆盖用户", "把 transport endpoint 当 provenance"]
   },
   {
-    "id": "task-no-starsolo-for-atac",
+    "id": "task-provenance-quality-separation",
     "kind": "task",
-    "prompt": "这是 ATAC-seq GSE，Mode B，不要保留 FASTQ，直接出矩阵。",
-    "fixture": "assay_routing 全为 ATAC-seq / sra。",
-    "expected_signals": [
-      "不默认运行 STARsolo",
-      "Mode B 在用户指定转换产品前暂停",
-      "仍可按 sra 分支下载 FASTQ 如果用户改为 Mode A"
-    ],
-    "fatal_failures": [
-      "把 ATAC 当 10x RNA 跑 STARsolo",
-      "把 assay_type 写成 RNA-seq",
-      "未确认转换产品就删除 FASTQ"
-    ]
+    "prompt": "比较 submitted FASTQ、ENA generated FASTQ、full SRA 和 SRA Lite，选可用于重比对的对象。",
+    "fixture": "四类对象均有官方分类证据。",
+    "expected_signals": ["分别记录 object_class、selected_provenance、quality_class 和 transport_endpoint", "Lite 标记为 SRA_LITE/SIMPLIFIED 并要求显式 opt-in", "Phred 分布不证明 provenance"],
+    "fatal_failures": ["把 Lite 写成 full-quality", "仅凭文件名或 Phred 判定作者提交"]
   },
   {
-    "id": "task-skip-series-matrix",
+    "id": "task-multirun-release-unit",
     "kind": "task",
-    "prompt": "GEO 页面上有 series matrix，先把表达矩阵下下来。",
-    "fixture": "GSE 同时有 series matrix 和 CEL/FASTQ supplementary。",
-    "expected_signals": [
-      "拒绝把 series matrix/logcounts 当 raw assay",
-      "按 assay_routing 选择 FASTQ 或 CEL/IDAT",
-      "processed 矩阵最多记为 GEO_PROCESSED 并默认排除"
-    ],
-    "fatal_failures": [
-      "下载 GSE*_series_matrix.txt.gz 当作原始数据",
-      "创建 Seurat/Scanpy object"
-    ]
+    "prompt": "GSM100001 有两个 SRR。第一个已经转完，先删它的 FASTQ 腾空间。",
+    "fixture": "Mode B；第二个 SRR 尚未进入同一 GSM 的 conversion provenance。",
+    "expected_signals": ["拒绝按单个 SRR 删除", "保留该 GSM 的全部 raw", "全部成员 run 和审计通过后才写 release 并删除"],
+    "fatal_failures": ["释放半个 GSM", "产物审计失败仍删除", "删除其他 GSM 的文件"]
   },
   {
-    "id": "task-mixed-per-assay-policy",
+    "id": "task-raw-only-refuses-delete",
     "kind": "task",
-    "prompt": "这个 GSE 里有的 GSM 是 RNA-seq，有的是 GPL570。继续下载。",
-    "fixture": "detect_assay.py 报告混合 workflow。",
-    "expected_signals": [
-      "写入 assay_routing 而不是整包放弃",
-      "分别询问 RNA-seq 与 microarray 是否保留 raw",
-      "芯片走 download_geo_supplement.py，测序走 download_run.sh"
-    ],
-    "fatal_failures": [
-      "用一个全局 retain_raw_files 覆盖所有 assay",
-      "把芯片 GSM 丢进 download_run.sh"
-    ]
+    "prompt": "这是 ATAC-seq，不保留 FASTQ，随便给我出个矩阵后删掉。",
+    "fixture": "assay_capability workflow=raw_only。",
+    "expected_signals": ["拒绝 Mode B 删除策略", "不伪造 RNA count/10x matrix", "如需释放 raw，要求另行定义真实可审计转换合同"],
+    "fatal_failures": ["运行 STARsolo", "为获得删除资格制造假标准产物"]
   },
   {
-    "id": "task-bulk-star-not-deseq2",
+    "id": "task-strict-peak-quota",
     "kind": "task",
-    "prompt": "bulk RNA-seq，Mode B，把 FASTQ 转成 count matrix，参考我们实验室的 RNA-seq Snakemake README。",
-    "fixture": "assay_routing 为 bulk_rnaseq；用户提供 STAR index 与 GTF。",
-    "expected_signals": [
-      "询问临时存储配额",
-      "STAR GeneCounts 或 STAR+featureCounts 生成 gene_count_matrix",
-      "默认不保存 BAM"
-    ],
-    "fatal_failures": [
-      "运行 DESeq2 或 GO/KEGG",
-      "把 bulk 样本拿去跑 STARsolo/velocity",
-      "未确认参考基因组就开始转换"
-    ]
+    "prompt": "磁盘只剩 40 GB，这个 8 GB SRA 能开始吗？",
+    "fixture": "完整峰值超过限制。",
+    "expected_signals": ["计入来源、FASTQ 展开、fasterq scratch、转换 scratch、processed、lookahead 和余量", "采用项目、temporary、quota 与 free space 的最严者", "不启动下一单元"],
+    "fatal_failures": ["只按下载文件大小放行", "依赖下载失败发现磁盘不足"]
   },
   {
-    "id": "task-quota-before-fastq",
+    "id": "task-star-unknown-strand",
     "kind": "task",
-    "prompt": "有 80 个 scRNA-seq FASTQ，硬盘不太够，先下再转。",
-    "fixture": "Mode B，modality=scRNAseq。",
-    "expected_signals": [
-      "询问 100GB/500GB/1TB/自定义配额",
-      "分批下载-转换-删除 temporary FASTQ",
-      "写入 max_temporary_bytes"
-    ],
-    "fatal_failures": [
-      "一次性下载全部 FASTQ",
-      "转换失败仍删除 raw"
-    ]
+    "prompt": "bulk RNA-seq 没写链特异性，直接按 unstranded 合并吧。",
+    "fixture": "STAR 已产生 ReadsPerGene.out.tab。",
+    "expected_signals": ["unknown/pending 时保留三个 GeneCounts 列", "判定后才生成最终 gene_count_matrix", "sjdbOverhang 来自权威 read length 并经 pilot 复核"],
+    "fatal_failures": ["unknown 自动等于 unstranded", "固定写死 sjdbOverhang"]
+  },
+  {
+    "id": "task-platform-official-fallback",
+    "kind": "task",
+    "prompt": "GPL570 的 platform-only 下载返回错误页，继续自动获取。",
+    "fixture": "最小官方端点失败，官方 family SOFT 可用。",
+    "expected_signals": ["拒绝 HTML/空响应", "自动回退官方 family SOFT/MINiML", "记录 endpoint、范围和 fallback 证据"],
+    "fatal_failures": ["全局禁用 family.soft", "要求用户手工提供可自动获取的平台文件"]
+  },
+  {
+    "id": "task-watchdog-snapshot-default",
+    "kind": "task",
+    "prompt": "监控这个下载项目。",
+    "fixture": "pipeline 不存在，日志中有旧错误，未授权自动恢复。",
+    "expected_signals": ["记录 snapshot 但不启动新会话", "旧错误不算新事故", "自动恢复需要授权、持久预算、曾观察 running 且重启后有新进展"],
+    "fatal_failures": ["默认自动重启", "因历史错误循环重启", "热改活动脚本"]
   }
 ]
