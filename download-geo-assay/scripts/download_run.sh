@@ -37,6 +37,7 @@ row = matches[0]
 fields = [
     "gse", "gsm", "srr", "library_layout", "expected_spots",
     "cb_length", "umi_length", "selected_source", "selected_provenance",
+    "object_class", "quality_class",
     "selected_urls", "selected_bytes", "selected_md5", "read_roles",
     "final_product", "fallback_reason",
 ]
@@ -44,7 +45,7 @@ for field in fields:
     print(row.get(field, "").rstrip("\r").replace("\n", " "))
 PY
 )
-(( ${#ROW[@]} == 15 )) || { echo "Manifest parser failed for $RUN" >&2; exit 2; }
+(( ${#ROW[@]} == 17 )) || { echo "Manifest parser failed for $RUN" >&2; exit 2; }
 GSE=${ROW[0]}
 GSM=${ROW[1]}
 SRR=${ROW[2]}
@@ -54,11 +55,16 @@ CB_LENGTH=${ROW[5]:-0}
 UMI_LENGTH=${ROW[6]:-0}
 SOURCE=${ROW[7]}
 PROVENANCE=${ROW[8]}
-URLS_TEXT=${ROW[9]}
-BYTES_TEXT=${ROW[10]}
-MD5_TEXT=${ROW[11]}
-ROLES_TEXT=${ROW[12]}
-FINAL_PRODUCT=${ROW[13]}
+OBJECT_CLASS=${ROW[9]}
+QUALITY_CLASS=${ROW[10]}
+URLS_TEXT=${ROW[11]}
+BYTES_TEXT=${ROW[12]}
+MD5_TEXT=${ROW[13]}
+ROLES_TEXT=${ROW[14]}
+FINAL_PRODUCT=${ROW[15]}
+ACTUAL_PROVENANCE=$PROVENANCE
+ACTUAL_OBJECT_CLASS=$OBJECT_CLASS
+ACTUAL_QUALITY_CLASS=$QUALITY_CLASS
 
 [[ "$SRR" == "$RUN" ]] || { echo "Run parser mismatch" >&2; exit 2; }
 eval "$(python "$LAYOUT_HELPER" --root "$ROOT" --gsm "$GSM" --srr "$SRR" --print-dirs)"
@@ -89,6 +95,23 @@ else
     mkdir -p "$FASTQ_DIR"
 fi
 exec > >(tee -a "$LOG_DIR/${GSM}_${SRR}.log") 2>&1
+
+if [[ "$SOURCE" != ngdc_* || "${GEO_SRA_NGDC_DIRECT:-1}" != 1 ]]; then
+    for proxy_var in http_proxy https_proxy HTTP_PROXY HTTPS_PROXY; do
+        proxy_value=${!proxy_var:-}
+        if [[ -n "$proxy_value" && ! "$proxy_value" =~ ^https?:// ]]; then
+            echo "$proxy_var uses a proxy scheme unsupported by the aria2 HTTP transport" >&2
+            exit 2
+        fi
+    done
+    for proxy_var in all_proxy ALL_PROXY; do
+        proxy_value=${!proxy_var:-}
+        if [[ "$proxy_value" =~ ^socks ]]; then
+            echo "SOCKS proxy detected; configure a tested HTTP(S) proxy for aria2 or use direct transport" >&2
+            exit 2
+        fi
+    done
+fi
 
 exec 8>"$WORK_DIR/run.lock"
 flock -n 8 || {
@@ -343,6 +366,7 @@ prefetch_staged() {
     local staged=$1
     local prefetch_root="$WORK_DIR/ncbi"
     local source_file="$prefetch_root/$SRR/$SRR.sra"
+    local lite_file="$prefetch_root/$SRR/$SRR.sralite"
     local rc count error_class
     if validate_downloaded_file "$staged" SRA "" ""; then
         return 0
@@ -350,11 +374,37 @@ prefetch_staged() {
     while true; do
         mkdir -p "$prefetch_root"
         state_update --phase prefetch --status in_progress --attempt-delta 1 >/dev/null
-        prefetch "$SRR" --max-size u -O "$prefetch_root" && rc=0 || rc=$?
+        prefetch "$SRR" --type sra --max-size u -O "$prefetch_root" && rc=0 || rc=$?
         if [[ -s "$source_file" ]] && vdb-validate "$source_file"; then
             mv "$source_file" "$staged"
             state_update --phase prefetch --status in_progress --clear-error >/dev/null
             return 0
+        fi
+        if [[ -s "$lite_file" ]]; then
+            if [[ "${ALLOW_SRA_LITE:-false}" != true ]]; then
+                quarantine_paths forbidden_sralite "$lite_file"
+                record_failure unsupported_object "SRA:lite_not_authorized" \
+                    "SRA Lite detected but storage policy does not allow simplified qualities" 1 || true
+                return 1
+            fi
+            if vdb-validate "$lite_file"; then
+                ACTUAL_PROVENANCE=SRA_LITE
+                ACTUAL_OBJECT_CLASS=SRA_LITE
+                ACTUAL_QUALITY_CLASS=SIMPLIFIED
+                mv "$lite_file" "$staged"
+                state_update --phase prefetch --status in_progress --clear-error >/dev/null
+                return 0
+            fi
+        elif [[ "${ALLOW_SRA_LITE:-false}" == true ]]; then
+            prefetch "$SRR" --type sralite --max-size u -O "$prefetch_root" && rc=0 || rc=$?
+            if [[ -s "$lite_file" ]] && vdb-validate "$lite_file"; then
+                ACTUAL_PROVENANCE=SRA_LITE
+                ACTUAL_OBJECT_CLASS=SRA_LITE
+                ACTUAL_QUALITY_CLASS=SIMPLIFIED
+                mv "$lite_file" "$staged"
+                state_update --phase prefetch --status in_progress --clear-error >/dev/null
+                return 0
+            fi
         fi
         error_class=network_interrupted
         if [[ -s "$source_file" ]]; then
@@ -384,7 +434,8 @@ compress_staged() {
 
 write_download_manifest() {
     python - "$ROOT" "$DOWNLOAD_MANIFEST" "$GSE" "$GSM" "$SRR" "$SOURCE" \
-        "$PROVENANCE" "$FINAL_PRODUCT" "$URLS_TEXT" "$BYTES_TEXT" "$MD5_TEXT" \
+        "$PROVENANCE" "$ACTUAL_PROVENANCE" "$ACTUAL_OBJECT_CLASS" "$ACTUAL_QUALITY_CLASS" \
+        "$FINAL_PRODUCT" "$URLS_TEXT" "$BYTES_TEXT" "$MD5_TEXT" \
         "$EXPECTED_SPOTS" "$VALIDATION_REPORT" "$TRANSFER_STATE" \
         "$SOURCE_FINGERPRINT" "${RETAINED_FILES[@]}" <<'PY'
 import csv
@@ -396,7 +447,8 @@ from datetime import datetime
 from pathlib import Path
 
 (
-    root, manifest_path, gse, gsm, srr, source, provenance, final_product, urls,
+    root, manifest_path, gse, gsm, srr, source, selected_provenance,
+    provenance, object_class, quality_class, final_product, urls,
     expected_bytes, expected_md5, expected_spots, validation_path, state_path,
     source_fingerprint, *files
 ) = sys.argv[1:]
@@ -425,7 +477,9 @@ if final_product != "sra":
         methods.append("expected_spots")
 row = {
     "gse": gse, "gsm": gsm, "srr": srr, "source": source,
-    "provenance": provenance, "final_product": final_product, "urls": urls,
+    "selected_provenance": selected_provenance,
+    "provenance": provenance, "object_class": object_class,
+    "quality_class": quality_class, "final_product": final_product, "urls": urls,
     "expected_bytes": expected_bytes,
     "observed_bytes": ";".join(str(path.stat().st_size) for path in observed),
     "expected_md5": expected_md5,
@@ -467,7 +521,7 @@ complete_run() {
     write_download_manifest
     flock -u 7
     printf 'gse\t%s\ngsm\t%s\nsrr\t%s\nsource\t%s\nprovenance\t%s\nfinal_product\t%s\nsource_fingerprint\t%s\nvalidation\tPASS\ncompleted_at\t%s\n' \
-        "$GSE" "$GSM" "$SRR" "$SOURCE" "$PROVENANCE" "$FINAL_PRODUCT" \
+        "$GSE" "$GSM" "$SRR" "$SOURCE" "$ACTUAL_PROVENANCE" "$FINAL_PRODUCT" \
         "$SOURCE_FINGERPRINT" "$(date -Is)" > "${COMPLETE_MARKER}.tmp"
     mv "${COMPLETE_MARKER}.tmp" "$COMPLETE_MARKER"
     state_update --phase complete --status complete --clear-error >/dev/null

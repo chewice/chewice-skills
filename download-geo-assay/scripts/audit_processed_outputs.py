@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import csv
 import gzip
+import math
 import subprocess
 import sys
 from pathlib import Path
@@ -14,7 +15,13 @@ HERE = Path(__file__).resolve().parent
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 
-from project_layout import locate_outputs, processed_audit_path, read_tsv
+from project_layout import (
+    locate_outputs,
+    policy_for_gsm,
+    processed_audit_path,
+    read_tsv,
+    write_tsv_atomic,
+)
 
 import h5py
 from scipy.io import mminfo
@@ -80,6 +87,66 @@ def audit_gene_matrix(root: Path, gsm: str, errors: list[str]) -> None:
         rows = list(reader)
     if not rows:
         errors.append("empty gene_count_matrix")
+        return
+    seen: set[str] = set()
+    for line_number, row in enumerate(rows, start=2):
+        gene_id = row.get("gene_id", "")
+        if not gene_id:
+            errors.append(f"gene_count_matrix line {line_number} 缺少 gene_id")
+        elif gene_id in seen:
+            errors.append(f"gene_count_matrix duplicate gene_id={gene_id}")
+        seen.add(gene_id)
+        value = row.get(gsm, "")
+        if not value.isdigit():
+            errors.append(f"gene_count_matrix {gsm} 包含非负整数以外的值 {value!r}")
+
+
+def audit_array_product(root: Path, gsm: str, errors: list[str]) -> None:
+    provenance = [
+        row
+        for row in read_tsv(root / "reports/conversion_provenance.tsv")
+        if row.get("gsm") == gsm
+    ]
+    outputs = [
+        root / item
+        for row in provenance
+        for item in row.get("output_matrix", "").split(";")
+        if item
+    ]
+    if not outputs:
+        errors.append(f"{gsm} 缺少 array conversion provenance/output")
+        return
+    for path in outputs:
+        if not path.is_file() or path.stat().st_size == 0:
+            errors.append(f"{gsm} 缺少非空 array product {path}")
+            continue
+        if path.suffix.lower() not in {".tsv", ".txt"}:
+            errors.append(f"{gsm} array product 必须是可审计文本矩阵: {path.name}")
+            continue
+        with path.open(newline="") as handle:
+            reader = csv.DictReader(handle, delimiter="\t")
+            fields = reader.fieldnames or []
+            identifier = next((field for field in ("feature_id", "probe_id", "cpg_id") if field in fields), "")
+            if not identifier or gsm not in fields:
+                errors.append(f"{gsm} array product 缺少 feature/probe/CpG ID 或样本列")
+                continue
+            rows = list(reader)
+        if not rows:
+            errors.append(f"{gsm} array product 为空")
+            continue
+        identifiers: set[str] = set()
+        for row in rows:
+            feature = row.get(identifier, "")
+            if not feature or feature in identifiers:
+                errors.append(f"{gsm} array product feature ID 缺失或重复")
+                break
+            identifiers.add(feature)
+            try:
+                if not math.isfinite(float(row.get(gsm, ""))):
+                    raise ValueError
+            except (TypeError, ValueError):
+                errors.append(f"{gsm} array product 含非数值或非有限值")
+                break
 
 
 def audit_10x(
@@ -190,6 +257,9 @@ def main() -> int:
     parser.add_argument("--manifest", type=Path)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--skip-full-gzip", action="store_true")
+    scope = parser.add_mutually_exclusive_group()
+    scope.add_argument("--gsm")
+    scope.add_argument("--unit", dest="gsm", help="转换原子单元；当前等价于 --gsm")
     args = parser.parse_args()
     root = args.root.resolve()
     if args.manifest:
@@ -199,6 +269,10 @@ def main() -> int:
     else:
         manifest = root / "metadata/sample_processing_manifest.tsv"
     rows = read_tsv(manifest)
+    if args.gsm:
+        rows = [row for row in rows if row.get("gsm") == args.gsm]
+        if not rows:
+            raise SystemExit(f"manifest 中找不到 {args.gsm}")
     samples = sorted({(row["gse"], row["gsm"]) for row in rows})
     output = args.output or processed_audit_path(root)
     if output.name == "final_output_audit.tsv" and args.output is None:
@@ -214,12 +288,20 @@ def main() -> int:
         sample = routing.get(gsm, {})
         modality = sample.get("modality", "")
         product = product_for_gsm(rows, gsm)
+        policy = policy_for_gsm(root, gsm, required=False)
+        if policy and policy.get("final_product") not in {"", "pending"}:
+            product = policy["final_product"]
         raw_shape = filtered_shape = loom_shape = ""
-        if modality in {"microarray", "methylation"} or sample.get("raw_file_type") in {
+        if modality in {"atac", "chip", "mirna", "sequencing"}:
+            errors.append("raw-only assay 在本 Skill 中没有可审计转换产物")
+        elif modality in {"microarray", "methylation"} or sample.get("raw_file_type") in {
             "CEL",
             "IDAT",
         }:
-            raw_shape = filtered_shape = loom_shape = ""
+            if product in {"", "pending", "CEL", "IDAT", "fastq", "sra"}:
+                errors.append("CEL/IDAT 未指定可审计转换产物")
+            else:
+                audit_array_product(root, gsm, errors)
         elif modality == "bulk_rnaseq" or product == "gene_count_matrix":
             audit_gene_matrix(root, gsm, errors)
         else:
@@ -242,18 +324,11 @@ def main() -> int:
             }
         )
 
-    output.parent.mkdir(parents=True, exist_ok=True)
-    temp = output.with_suffix(output.suffix + ".tmp")
-    with temp.open("w", newline="") as handle:
-        writer = csv.DictWriter(
-            handle,
-            fieldnames=("gse", "gsm", "raw_shape", "filtered_shape", "loom_shape", "status", "message"),
-            delimiter="\t",
-            lineterminator="\n",
-        )
-        writer.writeheader()
-        writer.writerows(report_rows)
-    temp.replace(output)
+    fields = ["gse", "gsm", "raw_shape", "filtered_shape", "loom_shape", "status", "message"]
+    if args.gsm:
+        prior = [row for row in read_tsv(output) if row.get("gsm") != args.gsm]
+        report_rows = prior + report_rows
+    write_tsv_atomic(output, fields, report_rows)
     passed = sum(row["status"] == "PASS" for row in report_rows)
     print(
         f"AUDIT samples={len(samples)} passed={passed} errors={len(all_errors)} report={output}"

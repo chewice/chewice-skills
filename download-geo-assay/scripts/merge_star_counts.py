@@ -45,8 +45,8 @@ def main() -> int:
     parser.add_argument("--root", required=True, type=Path)
     parser.add_argument(
         "--strandedness",
-        choices=tuple(STRAND_COLUMN),
-        default="unstranded",
+        choices=("unknown", *STRAND_COLUMN),
+        default="unknown",
     )
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
@@ -54,20 +54,47 @@ def main() -> int:
     files = find_reads_per_gene(root)
     if not files:
         raise SystemExit("未找到 processed/GSM*/counts/ReadsPerGene.out.tab")
-    column = STRAND_COLUMN[args.strandedness]
-    by_gsm = {gsm: read_counts(path, column) for gsm, path in files}
-    genes = sorted(set().union(*by_gsm.values()))
-    fields = ["gene_id", *[gsm for gsm, _ in files]]
-    rows = [
-        {
-            "gene_id": gene,
-            **{gsm: str(by_gsm[gsm].get(gene, 0)) for gsm, _ in files},
+    if args.strandedness == "unknown":
+        by_sample_strand = {
+            (gsm, strand): read_counts(path, column)
+            for gsm, path in files
+            for strand, column in STRAND_COLUMN.items()
         }
-        for gene in genes
-    ]
-    output = args.output or root / "processed/gene_count_matrix.tsv"
+        genes = sorted(set().union(*by_sample_strand.values()))
+        fields = [
+            "gene_id",
+            *[f"{gsm}__{strand}" for gsm, _ in files for strand in STRAND_COLUMN],
+        ]
+        rows = [
+            {
+                "gene_id": gene,
+                **{
+                    f"{gsm}__{strand}": str(by_sample_strand[(gsm, strand)].get(gene, 0))
+                    for gsm, _ in files
+                    for strand in STRAND_COLUMN
+                },
+            }
+            for gene in genes
+        ]
+        output = args.output or root / "processed/star_gene_counts_all_strands.tsv"
+    else:
+        column = STRAND_COLUMN[args.strandedness]
+        by_gsm = {gsm: read_counts(path, column) for gsm, path in files}
+        genes = sorted(set().union(*by_gsm.values()))
+        fields = ["gene_id", *[gsm for gsm, _ in files]]
+        rows = [
+            {
+                "gene_id": gene,
+                **{gsm: str(by_gsm[gsm].get(gene, 0)) for gsm, _ in files},
+            }
+            for gene in genes
+        ]
+        output = args.output or root / "processed/gene_count_matrix.tsv"
     write_tsv_atomic(output, fields, rows)
-    print(f"GENE_COUNT_MATRIX genes={len(genes)} samples={len(files)} output={output}")
+    print(
+        f"GENE_COUNT_MATRIX genes={len(genes)} samples={len(files)} "
+        f"strandedness={args.strandedness} output={output}"
+    )
     return 0
 
 

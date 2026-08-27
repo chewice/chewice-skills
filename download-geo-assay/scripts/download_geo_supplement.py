@@ -186,6 +186,10 @@ def main() -> int:
         download(row["url"], destination)
         if destination.stat().st_size == 0:
             raise SystemExit(f"empty download {destination}")
+        with destination.open("rb") as handle:
+            prefix = handle.read(2048).lower()
+        if b"<html" in prefix or b"<!doctype html" in prefix:
+            raise SystemExit(f"HTML/error page instead of raw supplement: {destination.name}")
         verify_expected(row, destination)
         if name.lower().endswith(".gz") and not name.lower().endswith(".tar.gz"):
             import gzip

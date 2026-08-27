@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import csv
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -13,7 +14,9 @@ if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 
 from project_layout import (  # noqa: E402
+    FINAL_PRODUCTS,
     MODALITIES,
+    SOURCE_PREFERENCES,
     STORAGE_POLICY_FIELDS,
     StoragePolicyError,
     default_policy,
@@ -21,6 +24,7 @@ from project_layout import (  # noqa: E402
     read_storage_policies,
     write_storage_policy,
 )
+from capabilities import CapabilityError, assay_capability  # noqa: E402
 
 
 def parse_retain(args: argparse.Namespace) -> bool:
@@ -30,20 +34,20 @@ def parse_retain(args: argparse.Namespace) -> bool:
     return retain == "true"
 
 
-def update_quota(root: Path, gib: int) -> None:
+def update_config(root: Path, updates: dict[str, str]) -> None:
     path = root / "metadata/acquisition_config.tsv"
     rows: list[dict[str, str]] = []
     if path.is_file():
         with path.open(newline="") as handle:
             rows = list(csv.DictReader(handle, delimiter="\t"))
-    updated = False
-    value = str(gib * 1024**3)
-    for row in rows:
-        if row.get("key") == "max_temporary_bytes":
-            row["value"] = value
-            updated = True
-    if not updated:
-        rows.append({"key": "max_temporary_bytes", "value": value})
+    existing = {row.get("key", ""): row for row in rows}
+    for key, value in updates.items():
+        if key in existing:
+            existing[key]["value"] = value
+        else:
+            row = {"key": key, "value": value}
+            rows.append(row)
+            existing[key] = row
     fields = ["key", "value"]
     temp = path.with_name(path.name + ".tmp")
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -68,6 +72,8 @@ def matching_existing(
         if row["gse"] == gse and row["assay_type"] == assay_type and not modality:
             return row
     if len(policies) == 1 and policies[0]["gse"] == gse and not policies[0]["assay_type"]:
+        return policies[0]
+    if len(policies) == 1 and policies[0]["gse"] == gse and not assay_type and not modality:
         return policies[0]
     return None
 
@@ -102,6 +108,10 @@ def main() -> int:
         "CEL",
         "IDAT",
     ))
+    parser.add_argument("--final-product", choices=tuple(sorted(FINAL_PRODUCTS)))
+    parser.add_argument("--source-preference", choices=tuple(sorted(SOURCE_PREFERENCES)))
+    parser.add_argument("--allow-sra-lite", choices=("true", "false"))
+    parser.add_argument("--authorize-auto-recovery", choices=("true", "false"))
     parser.add_argument("--validation-status", choices=(
         "pending",
         "conversion_pending",
@@ -117,14 +127,22 @@ def main() -> int:
     ))
     parser.add_argument("--deletion-time", default="")
     parser.add_argument("--max-temporary-gib", type=int)
+    parser.add_argument("--max-project-gib", type=int)
     args = parser.parse_args()
     root = args.root.resolve()
     gse = args.gse.upper()
     retain = parse_retain(args)
-    if args.max_temporary_gib is not None:
-        if args.max_temporary_gib <= 0:
-            raise SystemExit("--max-temporary-gib 必须为正整数")
-        update_quota(root, args.max_temporary_gib)
+    config_updates: dict[str, str] = {}
+    for value, key, flag in (
+        (args.max_temporary_gib, "max_temporary_bytes", "--max-temporary-gib"),
+        (args.max_project_gib, "max_project_bytes", "--max-project-gib"),
+    ):
+        if value is not None:
+            if value <= 0:
+                raise SystemExit(f"{flag} 必须为正整数")
+            config_updates[key] = str(value * 1024**3)
+    if args.authorize_auto_recovery is not None:
+        config_updates["auto_restart"] = args.authorize_auto_recovery
     try:
         policies = read_storage_policies(root, required=False)
     except StoragePolicyError as exc:
@@ -133,12 +151,41 @@ def main() -> int:
     assay_type = args.assay_type or (existing["assay_type"] if existing else "")
     raw_file_type = args.raw_file_type or (existing["raw_file_type"] if existing else "")
     modality = args.modality or (existing["modality"] if existing else "")
+    final_product = args.final_product or (existing["final_product"] if existing else "pending")
+    source_preference = args.source_preference or (
+        existing["source_preference"] if existing else "auto"
+    )
+    allow_sra_lite = (
+        args.allow_sra_lite
+        if args.allow_sra_lite is not None
+        else (existing["allow_sra_lite"] if existing else "false")
+    )
+    if not retain:
+        if final_product in {"pending", "fastq", "sra", "CEL", "IDAT"}:
+            raise SystemExit("删除 raw 需要明确的可审计转换产品，不能使用 pending/raw 产品")
+        if modality and modality != "pending":
+            try:
+                _, capability = assay_capability(modality, root)
+            except CapabilityError as exc:
+                raise SystemExit(str(exc)) from exc
+            allowed = set(capability.get("standard_products", [])) | set(
+                capability.get("optional_products", [])
+            )
+            if capability.get("workflow") == "raw_only" or final_product not in allowed:
+                raise SystemExit(
+                    f"modality={modality} 不允许以 final_product={final_product} 删除 raw"
+                )
+    confirmed_at = datetime.now(timezone.utc).isoformat()
     row = default_policy(
         gse,
         retain,
         assay_type=assay_type,
         raw_file_type=raw_file_type,
         modality=modality,
+        final_product=final_product,
+        source_preference=source_preference,
+        allow_sra_lite=allow_sra_lite == "true",
+        confirmed_at=confirmed_at,
     )
     if existing and existing["gse"] == gse:
         row["validation_status"] = existing["validation_status"]
@@ -159,6 +206,16 @@ def main() -> int:
         row["deletion_time"] = ""
         if not args.validation_status:
             row["validation_status"] = existing["validation_status"] if existing else "not_applicable"
+    config_updates.update(
+        {
+            "final_product": final_product,
+            "retain_raw_files": "true" if retain else "false",
+            "source_preference": source_preference,
+            "allow_sra_lite": allow_sra_lite,
+        }
+    )
+    if config_updates:
+        update_config(root, config_updates)
     try:
         written = write_storage_policy(root, row)
     except StoragePolicyError as exc:

@@ -14,6 +14,7 @@ HERE = Path(__file__).resolve().parent
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 
+from capabilities import CapabilityError, assay_capability  # noqa: E402
 from project_layout import write_tsv_atomic  # noqa: E402
 
 FIELDS = [
@@ -24,6 +25,7 @@ FIELDS = [
     "modality",
     "raw_file_type",
     "workflow",
+    "capability_reference",
     "evidence",
 ]
 AFFYMETRIX_GPL = {
@@ -233,6 +235,12 @@ def main() -> int:
             merged.setdefault("platform_title", platform.get("title", ""))
             merged.setdefault("technology", platform.get("technology", ""))
         classified = classify(merged)
+        try:
+            _, capability = assay_capability(classified["modality"], root)
+        except CapabilityError as exc:
+            raise SystemExit(str(exc)) from exc
+        classified["workflow"] = str(capability.get("workflow", ""))
+        classified["capability_reference"] = str(capability.get("reference", ""))
         output_rows.append(
             {
                 "gse": row.get("gse", ""),

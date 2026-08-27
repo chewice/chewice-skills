@@ -68,6 +68,7 @@ CHECK_ZH = {
     "multi_lane": "多 lane",
     "size_outlier": "大小异常",
     "space_guard": "空间预算",
+    "quota_detection": "用户配额探测",
     "summary": "预检汇总",
 }
 
@@ -88,6 +89,10 @@ LABELS = {
     "library_layout": "文库布局",
     "selected_source": "最终数据源",
     "selected_provenance": "Provenance",
+    "object_class": "对象类别",
+    "quality_class": "质量类别",
+    "transport_endpoint": "传输端点",
+    "selection_reason": "选择原因",
     "final_product": "最终产品",
     "expected_spots": "预期 spots",
     "ngdc_status": "NGDC 状态",
@@ -131,6 +136,10 @@ LABELS = {
     "median_genefull_per_cell": "Median GeneFull/cell",
     "deletion_time": "删除时间",
     "storage_mode": "存储模式",
+    "source_preference": "来源偏好",
+    "allow_sra_lite": "允许 SRA Lite",
+    "confirmed_at": "确认时间",
+    "release_status": "释放状态",
     "retain_raw_files": "保留 raw files",
     "retain_raw_fastq": "保留 FASTQ",
     "assay_type": "Assay",
@@ -560,6 +569,7 @@ def build(args: argparse.Namespace) -> tuple[str, Path | None]:
         "storage": root / "metadata/storage_policy.tsv",
         "storage_audit": root / "reports/storage_policy_audit.tsv",
         "deletion_log": root / "reports/storage_deletion_log.tsv",
+        "release": root / "reports/storage_release.tsv",
         "conversion": root / "reports/conversion_provenance.tsv",
         "assay": root / "metadata/assay_routing.tsv",
         "platforms": root / "metadata/platform_metadata.tsv",
@@ -752,6 +762,10 @@ def build(args: argparse.Namespace) -> tuple[str, Path | None]:
                 "raw_file_type",
                 "retain_raw_files",
                 "storage_mode",
+                "final_product",
+                "source_preference",
+                "allow_sra_lite",
+                "confirmed_at",
                 "validation_status",
                 "deletion_status",
                 "deletion_time",
@@ -764,6 +778,16 @@ def build(args: argparse.Namespace) -> tuple[str, Path | None]:
             ["gse", "gsm", "check", "status", "message"],
             root,
             "尚未运行 storage policy audit。",
+        )
+        + table(
+            data["release"],
+            [
+                "gse", "gsm", "member_runs", "final_product", "download_status",
+                "conversion_status", "processed_audit", "release_status",
+                "candidate_bytes", "released_at", "message",
+            ],
+            root,
+            "尚无逐 GSM release 证据。",
         )
         + table(
             data["conversion"],
@@ -795,6 +819,7 @@ def build(args: argparse.Namespace) -> tuple[str, Path | None]:
             [
                 paths["storage"],
                 paths["storage_audit"],
+                paths["release"],
                 paths["conversion"],
                 paths["deletion_log"],
             ],
@@ -879,9 +904,11 @@ def build(args: argparse.Namespace) -> tuple[str, Path | None]:
     ]
     provenance_answer = (
         "<p><strong>作者原始上传还是数据库转换：</strong>"
-        "按每个 run 的 <code>selected_provenance</code> 判定；"
+        "按每个 run 的官方对象分类与 <code>selected_provenance</code> 判定，"
+        "transport endpoint 与 provenance 分开；Phred 分布不用于证明 provenance。"
         "<code>NGDC_MIRROR_SRA</code> 不是作者原始 FASTQ，"
-        "<code>ARCHIVE_GENERATED_FASTQ</code> 是数据库归档内容转换得到的 FASTQ。</p>"
+        "<code>ARCHIVE_GENERATED_FASTQ</code> 是数据库归档内容转换得到的 FASTQ，"
+        "<code>SRA_LITE</code> 是显式 opt-in 的简化质量对象。</p>"
     )
     routing_detail = table(
         data["sources"],
@@ -892,8 +919,11 @@ def build(args: argparse.Namespace) -> tuple[str, Path | None]:
             "ngdc_status",
             "selected_source",
             "selected_provenance",
+            "object_class",
+            "quality_class",
+            "transport_endpoint",
             "final_product",
-            "fallback_reason",
+            "selection_reason",
         ],
         root,
         "尚未生成 source manifest。",
@@ -924,7 +954,10 @@ def build(args: argparse.Namespace) -> tuple[str, Path | None]:
             "gsm",
             "srr",
             "source",
+            "selected_provenance",
             "provenance",
+            "object_class",
+            "quality_class",
             "final_product",
             "expected_spots",
             "observed_r1",
@@ -942,6 +975,8 @@ def build(args: argparse.Namespace) -> tuple[str, Path | None]:
             "srr",
             "source",
             "provenance",
+            "object_class",
+            "quality_class",
             "final_product",
             "observed_r1",
             "observed_r2",
@@ -1041,6 +1076,18 @@ def build(args: argparse.Namespace) -> tuple[str, Path | None]:
         )
     )
 
+    multiqc = locate_multiqc(root, args.multiqc_html)
+    if multiqc is not None:
+        multiqc_payload = base64.b64encode(multiqc.read_bytes()).decode("ascii")
+    else:
+        multiqc_payload = existing_multiqc_payload(output)
+    multiqc_data = (
+        '<script type="application/octet-stream" id="multiqc-data">'
+        + multiqc_payload
+        + "</script>"
+        if multiqc_payload
+        else ""
+    )
     generated = datetime.now().astimezone().isoformat(timespec="seconds")
     document = f"""<!doctype html>
 <html lang="zh-CN">
@@ -1082,6 +1129,7 @@ footer{{color:var(--muted);text-align:center;padding:1.5rem}} a{{color:#086d91}}
 {''.join(sections)}
 </main>
 <footer>由 <code>download-geo-assay/scripts/build_report.py</code> 原子生成。</footer>
+{multiqc_data}
 <script>
 const filter=document.getElementById("report-filter");
 filter.addEventListener("input",()=>{{const q=filter.value.toLowerCase();document.querySelectorAll("table.filterable tbody tr").forEach(r=>r.hidden=!r.textContent.toLowerCase().includes(q));}});
@@ -1090,7 +1138,7 @@ const multiqcButton=document.getElementById("load-multiqc");if(multiqcButton){{m
 </script>
 </body></html>
 """
-    return document, args.multiqc_html
+    return document, multiqc
 
 
 def main() -> int:

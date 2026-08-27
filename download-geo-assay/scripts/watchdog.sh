@@ -16,8 +16,20 @@ MANIFEST="$ROOT/metadata/source_manifest.tsv"
 GSE=$(awk -F '\t' 'NR==2 {gsub(/\r/,"",$1); print $1}' "$MANIFEST")
 SESSION=${GEO_SRA_PIPELINE_SESSION:-"geo_${GSE}"}
 RUNNER=${GEO_SRA_RUNNER:-"$ROOT/scripts/run_all.sh"}
-AUTO_RESTART=${GEO_SRA_AUTO_RESTART:-1}
-MAX_RESTARTS=${GEO_SRA_MAX_RESTARTS:-3}
+CONFIG="$ROOT/metadata/acquisition_config.tsv"
+config_value() {
+    local key=$1 fallback=$2 value
+    value=$(awk -F '\t' -v key="$key" '$1==key {gsub(/\r/,"",$2); print $2}' "$CONFIG" 2>/dev/null | tail -n 1)
+    printf '%s' "${value:-$fallback}"
+}
+AUTO_RESTART=${GEO_SRA_AUTO_RESTART:-$(config_value auto_restart false)}
+MAX_RESTARTS=${GEO_SRA_MAX_RESTARTS:-$(config_value max_auto_restarts 0)}
+[[ "$AUTO_RESTART" == true || "$AUTO_RESTART" == 1 ]] && AUTO_RESTART=1 || AUTO_RESTART=0
+[[ "$MAX_RESTARTS" =~ ^[0-9]+$ ]] || { echo "max_auto_restarts must be an integer" >&2; exit 2; }
+if (( AUTO_RESTART == 1 && MAX_RESTARTS == 0 )); then
+    echo "Auto recovery requires a persistent positive max_auto_restarts budget" >&2
+    exit 2
+fi
 LOG_DIR="$ROOT/reports/logs"
 STATE_DIR="$ROOT/reports/watchdog"
 TRANSFER_STATUS_DIR="$ROOT/reports/status"
@@ -38,11 +50,17 @@ flock -n 9 || { echo "Another watchdog is already active" >&2; exit 2; }
 expected=$(awk 'END {print NR-1}' "$MANIFEST")
 restart_streak=0
 last_completed=0
+last_restart_completed=-1
+seen_running=0
 if [[ -s "$STATE" ]]; then
     restart_streak=$(awk -F '\t' '$1=="restart_streak" {print $2}' "$STATE")
     [[ "$restart_streak" =~ ^[0-9]+$ ]] || restart_streak=0
     last_completed=$(awk -F '\t' '$1=="last_completed" {print $2}' "$STATE")
     [[ "$last_completed" =~ ^[0-9]+$ ]] || last_completed=0
+    last_restart_completed=$(awk -F '\t' '$1=="last_restart_completed" {print $2}' "$STATE")
+    [[ "$last_restart_completed" =~ ^-?[0-9]+$ ]] || last_restart_completed=-1
+    seen_running=$(awk -F '\t' '$1=="seen_running" {print $2}' "$STATE")
+    [[ "$seen_running" =~ ^[01]$ ]] || seen_running=0
 fi
 
 phase() {
@@ -90,6 +108,7 @@ while true; do
     current_phase=$(phase)
     if tmux has-session -t "$SESSION" 2>/dev/null; then
         pipeline=running
+        seen_running=1
     else
         pipeline=missing
     fi
@@ -113,7 +132,8 @@ while true; do
     if (( completed == expected )); then
         printf '[%s] COMPLETE all %s runs finished; watchdog exiting\n' \
             "$(date -Is)" "$expected" | tee -a "$LOG"
-        printf 'last_completed\t%s\nrestart_streak\t0\n' "$completed" > "${STATE}.tmp"
+        printf 'last_completed\t%s\nrestart_streak\t0\nlast_restart_completed\t%s\nseen_running\t%s\n' \
+            "$completed" "$last_restart_completed" "$seen_running" > "${STATE}.tmp"
         mv "${STATE}.tmp" "$STATE"
         exit 0
     fi
@@ -121,20 +141,27 @@ while true; do
     if [[ -n "$terminal_runs" ]]; then
         printf '[%s] STOP terminal transfer failure requires review: %s\n' \
             "$(date -Is)" "$terminal_runs" | tee -a "$LOG"
-        printf 'last_completed\t%s\nrestart_streak\t%s\nterminal_runs\t%s\n' \
-            "$completed" "$restart_streak" "$terminal_runs" > "${STATE}.tmp"
+        printf 'last_completed\t%s\nrestart_streak\t%s\nlast_restart_completed\t%s\nseen_running\t%s\nterminal_runs\t%s\n' \
+            "$completed" "$restart_streak" "$last_restart_completed" "$seen_running" "$terminal_runs" > "${STATE}.tmp"
         mv "${STATE}.tmp" "$STATE"
         exit 1
     fi
 
     if [[ "$pipeline" == missing && "$AUTO_RESTART" == 1 ]]; then
-        if (( restart_streak >= MAX_RESTARTS )); then
+        if (( seen_running == 0 )); then
+            printf '[%s] SNAPSHOT missing pipeline; no prior running state, not starting a new session\n' \
+                "$(date -Is)" | tee -a "$LOG"
+        elif (( restart_streak > 0 && completed <= last_restart_completed )); then
+            printf '[%s] STOP no new progress after authorized restart; manual review required\n' \
+                "$(date -Is)" | tee -a "$LOG"
+            exit 1
+        elif (( restart_streak >= MAX_RESTARTS )); then
             printf '[%s] STOP restart limit reached (%s)\n' \
                 "$(date -Is)" "$MAX_RESTARTS" | tee -a "$LOG"
             exit 1
-        fi
-        if [[ -x "$RUNNER" ]]; then
+        elif [[ -x "$RUNNER" ]]; then
             restart_streak=$((restart_streak + 1))
+            last_restart_completed=$completed
             tmux new-session -d -s "$SESSION" \
                 "cd '$ROOT' && pixi run --locked bash '$RUNNER'"
             printf '[%s] RESTART session=%s attempt=%s\n' \
@@ -145,8 +172,8 @@ while true; do
             exit 1
         fi
     fi
-    printf 'last_completed\t%s\nrestart_streak\t%s\n' \
-        "$completed" "$restart_streak" > "${STATE}.tmp"
+    printf 'last_completed\t%s\nrestart_streak\t%s\nlast_restart_completed\t%s\nseen_running\t%s\n' \
+        "$completed" "$restart_streak" "$last_restart_completed" "$seen_running" > "${STATE}.tmp"
     mv "${STATE}.tmp" "$STATE"
     sleep "$INTERVAL"
 done

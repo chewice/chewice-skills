@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Select a per-run source using fixed NGDC -> ENA -> NCBI priority."""
+"""Select object class first, then a transport endpoint, per run."""
 
 from __future__ import annotations
 
@@ -11,30 +11,25 @@ import sys
 from pathlib import Path
 from urllib.parse import urlparse
 
+HERE = Path(__file__).resolve().parent
+if str(HERE) not in sys.path:
+    sys.path.insert(0, str(HERE))
+
+from capabilities import (  # noqa: E402
+    CapabilityError,
+    classify_source,
+    load_source_capabilities,
+    source_capability,
+)
+from project_layout import policy_for_gsm, read_config  # noqa: E402
 
 FIELDS = [
-    "gse",
-    "gsm",
-    "srx",
-    "srr",
-    "run_alias",
-    "lane",
-    "library_layout",
-    "read_structure",
-    "expected_spots",
-    "cb_length",
-    "umi_length",
-    "ngdc_status",
-    "ngdc_run_page",
-    "ngdc_url",
-    "ngdc_bytes",
-    "selected_source",
-    "selected_provenance",
-    "selected_urls",
-    "selected_bytes",
-    "selected_md5",
-    "read_roles",
-    "final_product",
+    "gse", "gsm", "srx", "srr", "run_alias", "lane", "library_layout",
+    "read_structure", "expected_spots", "cb_length", "umi_length",
+    "ngdc_status", "ngdc_run_page", "ngdc_url", "ngdc_bytes",
+    "selected_source", "selected_provenance", "object_class", "quality_class",
+    "transport_endpoint", "selected_urls", "selected_bytes", "selected_md5",
+    "read_roles", "final_product", "selection_evidence", "selection_reason",
     "fallback_reason",
 ]
 
@@ -43,13 +38,12 @@ def refresh_report_from_output(output: Path) -> None:
     reporter = Path(__file__).with_name("build_report.py")
     root = output.resolve().parent.parent
     if output.parent.name == "metadata" and reporter.is_file():
-        subprocess.run(
-            [sys.executable, str(reporter), "--root", str(root)],
-            check=False,
-        )
+        subprocess.run([sys.executable, str(reporter), "--root", str(root)], check=False)
 
 
-def read_tsv(path: Path) -> list[dict[str, str]]:
+def read_tsv(path: Path | None) -> list[dict[str, str]]:
+    if path is None or not path.is_file():
+        return []
     with path.open(newline="") as handle:
         return list(csv.DictReader(handle, delimiter="\t"))
 
@@ -85,13 +79,83 @@ def infer_roles(urls: list[str], layout: str) -> list[str]:
     return roles
 
 
-def fallback_reason(status: str) -> str:
+def provider(source: str) -> str:
+    return source.split("_", 1)[0]
+
+
+def make_candidate(
+    source: str,
+    provenance: str,
+    urls: list[str],
+    sizes: list[str],
+    md5s: list[str],
+    roles: list[str],
+    evidence: str,
+    root: Path,
+) -> dict[str, object]:
+    object_class, quality_class, object_info = classify_source(source, provenance, root)
+    source_info = source_capability(source, root)
     return {
-        "missing": "ngdc_missing",
-        "invalid": "ngdc_size_invalid",
-        "unreachable": "ngdc_unreachable_after_3_attempts",
-        "not_probed": "ngdc_metadata_conflict",
-    }.get(status, "ngdc_no_file_endpoint")
+        "source": source,
+        "provenance": provenance,
+        "object_class": object_class,
+        "quality_class": quality_class,
+        "urls": urls,
+        "sizes": sizes,
+        "md5s": md5s,
+        "roles": roles,
+        "evidence": evidence,
+        "fidelity_rank": int(object_info.get("fidelity_rank", 999)),
+        "transport_rank": int(source_info.get("auto_transport_rank", 999)),
+        "transport": str(source_info.get("transport", "")),
+    }
+
+
+def ena_candidates(row: dict[str, str], expected: dict[str, str], root: Path) -> list[dict[str, object]]:
+    candidates: list[dict[str, object]] = []
+    layout = expected.get("library_layout", "")
+    submitted_urls = split(row.get("submitted_ftp", ""))
+    submitted_roles = infer_roles(submitted_urls, layout)
+    submitted_fastq = bool(submitted_urls) and all(
+        re.search(r"\.F(?:AST)?Q(?:\.GZ)?$", Path(urlparse(url).path).name.upper())
+        for url in submitted_urls
+    )
+    if submitted_fastq and "OTHER" not in submitted_roles:
+        candidates.append(
+            make_candidate(
+                "ena_submitted", "AUTHOR_SUBMITTED",
+                [https_url(url) for url in submitted_urls],
+                split(row.get("submitted_bytes", "")), split(row.get("submitted_md5", "")),
+                submitted_roles, "ENA submitted file metadata", root,
+            )
+        )
+    fastq_urls = split(row.get("fastq_ftp", ""))
+    if fastq_urls:
+        file_roles = split(row.get("fastq_file_role", ""))
+        source = (
+            "ena_submitted"
+            if file_roles and all(role == "SUBMITTED_FILE" for role in file_roles)
+            else "ena_fastq"
+        )
+        provenance = "AUTHOR_SUBMITTED" if source == "ena_submitted" else "ARCHIVE_GENERATED_FASTQ"
+        candidate = make_candidate(
+            source, provenance, [https_url(url) for url in fastq_urls],
+            split(row.get("fastq_bytes", "")), split(row.get("fastq_md5", "")),
+            infer_roles(fastq_urls, layout), f"ENA {'submitted' if source == 'ena_submitted' else 'generated'} FASTQ metadata", root,
+        )
+        signature = (candidate["source"], tuple(candidate["urls"]))
+        if all((item["source"], tuple(item["urls"])) != signature for item in candidates):
+            candidates.append(candidate)
+    return candidates
+
+
+def preference_for_gsm(root: Path, gsm: str, explicit: str | None) -> str:
+    if explicit:
+        return explicit
+    policy = policy_for_gsm(root, gsm, required=False)
+    if policy:
+        return policy.get("source_preference", "auto")
+    return read_config(root).get("source_preference", "auto") or "auto"
 
 
 def main() -> None:
@@ -99,137 +163,137 @@ def main() -> None:
     parser.add_argument("--expected", required=True, type=Path)
     parser.add_argument("--ngdc", required=True, type=Path)
     parser.add_argument("--ena", required=True, type=Path)
+    parser.add_argument("--ncbi", type=Path)
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--root", type=Path)
+    parser.add_argument("--source-preference", choices=("auto", "ngdc", "ena", "ncbi"))
+    parser.add_argument("--allow-sra-lite", action="store_true")
     parser.add_argument(
         "--final-product",
-        choices=("fastq", "sra", "matrix_velocity", "matrix_10x", "gene_count_matrix"),
-        default="fastq",
+        choices=("pending", "fastq", "sra", "matrix_velocity", "matrix_10x", "gene_count_matrix"),
     )
     args = parser.parse_args()
+    root = (args.root or args.output.resolve().parent.parent).resolve()
+    load_source_capabilities(root)  # fail before producing a manifest
 
     expected = read_tsv(args.expected)
     coverage = {row["srr"]: row for row in read_tsv(args.ngdc)}
     ena = {row["run_accession"].rstrip("\r"): row for row in read_tsv(args.ena)}
+    ncbi: dict[str, list[dict[str, str]]] = {}
+    for row in read_tsv(args.ncbi):
+        ncbi.setdefault(row.get("srr", ""), []).append(row)
     records: list[dict[str, str]] = []
     failures: list[str] = []
 
     for row in expected:
         run = row["srr"]
         ngdc = coverage.get(run, {"ngdc_status": "not_probed"})
-        status = ngdc["ngdc_status"]
-        selected_source = ""
-        provenance = ""
-        urls: list[str] = []
-        sizes: list[str] = []
-        md5s: list[str] = []
-        roles: list[str] = []
-        reason = ""
-
+        status = ngdc.get("ngdc_status", "not_probed")
+        candidates: list[dict[str, object]] = []
         if status == "available" and ngdc.get("ngdc_url"):
             url = ngdc["ngdc_url"]
-            urls = [url]
-            sizes = [ngdc.get("ngdc_bytes", "")]
-            md5s = [ngdc.get("ngdc_md5", "")]
             if run.startswith("CRR") or ngdc.get("ngdc_file_type") != "sra":
-                selected_source = "ngdc_gsa"
-                provenance = "GSA_AUTHOR_SUBMITTED"
-                roles = infer_roles(urls, row.get("library_layout", ""))
-            else:
-                selected_source = "ngdc_insdc"
-                provenance = "NGDC_MIRROR_SRA"
-                roles = ["SRA"]
-        else:
-            reason = fallback_reason(status)
-            ena_row = ena.get(run, {})
-            submitted_urls = split(ena_row.get("submitted_ftp", ""))
-            submitted_roles = infer_roles(
-                submitted_urls, row.get("library_layout", "")
-            )
-            submitted_fastq = bool(submitted_urls) and all(
-                re.search(r"\.F(?:AST)?Q(?:\.GZ)?$", Path(urlparse(url).path).name.upper())
-                for url in submitted_urls
-            )
-            submitted_usable = submitted_fastq and "OTHER" not in submitted_roles
-
-            if submitted_usable:
-                selected_source = "ena_submitted"
-                provenance = "AUTHOR_SUBMITTED"
-                urls = [https_url(url) for url in submitted_urls]
-                sizes = split(ena_row.get("submitted_bytes", ""))
-                md5s = split(ena_row.get("submitted_md5", ""))
-                roles = submitted_roles
-            else:
-                fastq_urls = split(ena_row.get("fastq_ftp", ""))
-                if fastq_urls:
-                    file_roles = split(ena_row.get("fastq_file_role", ""))
-                    selected_source = (
-                        "ena_submitted"
-                        if file_roles and all(role == "SUBMITTED_FILE" for role in file_roles)
-                        else "ena_fastq"
+                candidates.append(
+                    make_candidate(
+                        "ngdc_gsa", "GSA_AUTHOR_SUBMITTED", [url],
+                        [ngdc.get("ngdc_bytes", "")], [ngdc.get("ngdc_md5", "")],
+                        infer_roles([url], row.get("library_layout", "")),
+                        "NGDC run/file probe", root,
                     )
-                    provenance = (
-                        "AUTHOR_SUBMITTED"
-                        if selected_source == "ena_submitted"
-                        else "ARCHIVE_GENERATED_FASTQ"
+                )
+            else:
+                candidates.append(
+                    make_candidate(
+                        "ngdc_insdc", "NGDC_MIRROR_SRA", [url],
+                        [ngdc.get("ngdc_bytes", "")], [ngdc.get("ngdc_md5", "")],
+                        ["SRA"], "NGDC INSDC mirror probe", root,
                     )
-                    urls = [https_url(url) for url in fastq_urls]
-                    sizes = split(ena_row.get("fastq_bytes", ""))
-                    md5s = split(ena_row.get("fastq_md5", ""))
-                    roles = infer_roles(urls, row.get("library_layout", ""))
-                else:
-                    selected_source = "ncbi_sra"
-                    provenance = "ARCHIVE_NORMALIZED_SRA"
-                    urls = [run]
-                    sizes = split(ena_row.get("sra_bytes", ""))
-                    md5s = split(ena_row.get("sra_md5", ""))
-                    roles = ["SRA"]
+                )
+        candidates.extend(ena_candidates(ena.get(run, {}), row, root))
+        for ncbi_row in ncbi.get(run, []):
+            if ncbi_row.get("status") != "available":
+                continue
+            candidates.append(
+                make_candidate(
+                    ncbi_row["source"], ncbi_row["provenance"],
+                    split(ncbi_row.get("url", "")), split(ncbi_row.get("bytes", "")),
+                    split(ncbi_row.get("md5", "")), split(ncbi_row.get("roles", "SRA")),
+                    ncbi_row.get("evidence", "NCBI object probe"), root,
+                )
+            )
+        # Resolver access is always a candidate, but actual Lite discovery is reclassified at download.
+        candidates.append(
+            make_candidate(
+                "ncbi_sra", "ARCHIVE_NORMALIZED_SRA", [run],
+                split(ena.get(run, {}).get("sra_bytes", "")),
+                split(ena.get(run, {}).get("sra_md5", "")), ["SRA"],
+                "NCBI SRA resolver; actual object class verified after prefetch", root,
+            )
+        )
 
-        if not selected_source or not urls:
-            failures.append(f"{run}: no usable source")
+        preference = preference_for_gsm(root, row["gsm"], args.source_preference)
+        policy = policy_for_gsm(root, row["gsm"], required=False)
+        final_product = (
+            args.final_product
+            or (policy.get("final_product") if policy else "")
+            or read_config(root).get("final_product", "")
+            or "pending"
+        )
+        eligible = [item for item in candidates if preference == "auto" or provider(str(item["source"])) == preference]
+        allow_lite = args.allow_sra_lite or bool(
+            policy and policy.get("allow_sra_lite") == "true"
+        ) or read_config(root).get("allow_sra_lite") == "true"
+        if not allow_lite:
+            eligible = [item for item in eligible if item["object_class"] != "SRA_LITE"]
+        if not eligible:
+            failures.append(f"{run}: no usable source for explicit preference={preference}")
             continue
-        if len(roles) != len(urls) or "OTHER" in roles:
-            failures.append(f"{run}: ambiguous read roles {roles}")
+        selected = min(eligible, key=lambda item: (item["fidelity_rank"], item["transport_rank"]))
+        urls = list(selected["urls"])
+        sizes = list(selected["sizes"])
+        md5s = list(selected["md5s"])
+        roles = list(selected["roles"])
+        source = str(selected["source"])
+        if not urls or len(roles) != len(urls) or "OTHER" in roles:
+            failures.append(f"{run}: ambiguous URL/read roles {roles}")
             continue
         for values, name in ((sizes, "bytes"), (md5s, "md5")):
             if values and len(values) != len(urls):
-                failures.append(
-                    f"{run}: {name} array length {len(values)} != URLs {len(urls)}"
-                )
-        if selected_source in {"ena_submitted", "ena_fastq"}:
+                failures.append(f"{run}: {name} array length {len(values)} != URLs {len(urls)}")
+        if source in {"ena_submitted", "ena_fastq"}:
             if len(sizes) != len(urls) or len(md5s) != len(urls):
-                failures.append(
-                    f"{run}: ENA FASTQ selection requires bytes and MD5 for every file"
-                )
+                failures.append(f"{run}: ENA FASTQ requires bytes and MD5 for every file")
             if any(not re.fullmatch(r"[0-9a-fA-F]{32}", value) for value in md5s):
-                failures.append(f"{run}: ENA FASTQ contains an invalid/missing MD5")
-        if selected_source.startswith("ngdc_") and len(sizes) != len(urls):
+                failures.append(f"{run}: ENA FASTQ contains invalid/missing MD5")
+        if source.startswith("ngdc_") and len(sizes) != len(urls):
             failures.append(f"{run}: NGDC selection requires Content-Length")
 
+        reason = (
+            f"explicit source preference={preference}"
+            if preference != "auto"
+            else f"best fidelity rank={selected['fidelity_rank']}; transport rank={selected['transport_rank']}"
+        )
+        legacy_fallback = "" if source.startswith("ngdc_") else f"ngdc_{status}"
         records.append(
             {
-                "gse": row["gse"],
-                "gsm": row["gsm"],
-                "srx": row.get("srx", ""),
-                "srr": run,
-                "run_alias": row.get("run_alias", ""),
-                "lane": row.get("lane", ""),
-                "library_layout": row.get("library_layout", ""),
-                "read_structure": row.get("read_structure", ""),
-                "expected_spots": row.get("expected_spots", ""),
-                "cb_length": row.get("cb_length", ""),
-                "umi_length": row.get("umi_length", ""),
+                **{field: row.get(field, "") for field in FIELDS},
                 "ngdc_status": status,
                 "ngdc_run_page": ngdc.get("ngdc_run_page", ""),
                 "ngdc_url": ngdc.get("ngdc_url", ""),
                 "ngdc_bytes": ngdc.get("ngdc_bytes", ""),
-                "selected_source": selected_source,
-                "selected_provenance": provenance,
+                "selected_source": source,
+                "selected_provenance": str(selected["provenance"]),
+                "object_class": str(selected["object_class"]),
+                "quality_class": str(selected["quality_class"]),
+                "transport_endpoint": str(selected["transport"]),
                 "selected_urls": ";".join(urls),
                 "selected_bytes": ";".join(sizes),
                 "selected_md5": ";".join(md5s),
                 "read_roles": ";".join(roles),
-                "final_product": args.final_product,
-                "fallback_reason": reason,
+                "final_product": final_product,
+                "selection_evidence": str(selected["evidence"]),
+                "selection_reason": reason,
+                "fallback_reason": legacy_fallback,
             }
         )
 

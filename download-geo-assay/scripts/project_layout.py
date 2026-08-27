@@ -16,6 +16,10 @@ STORAGE_POLICY_FIELDS = [
     "raw_file_type",
     "retain_raw_files",
     "storage_mode",
+    "final_product",
+    "source_preference",
+    "allow_sra_lite",
+    "confirmed_at",
     "validation_status",
     "deletion_status",
     "deletion_time",
@@ -60,6 +64,25 @@ CONVERSION_PROVENANCE_FIELDS = [
     "output_matrix",
     "validated_at",
 ]
+RELEASE_FIELDS = [
+    "gse",
+    "gsm",
+    "unit_id",
+    "assay_type",
+    "modality",
+    "member_runs",
+    "final_product",
+    "policy_confirmed_at",
+    "download_status",
+    "conversion_status",
+    "processed_audit",
+    "release_status",
+    "candidate_paths",
+    "candidate_bytes",
+    "candidate_md5",
+    "released_at",
+    "message",
+]
 DELETION_LOG_FIELDS = [
     "gse",
     "gsm",
@@ -72,6 +95,21 @@ DELETION_LOG_FIELDS = [
 ]
 RETAIN_VALUES = {"true", "false"}
 STORAGE_MODES = {"retain", "delete_after_validation"}
+FINAL_PRODUCTS = {
+    "pending",
+    "fastq",
+    "sra",
+    "matrix_velocity",
+    "matrix_10x",
+    "gene_count_matrix",
+    "CEL",
+    "IDAT",
+    "intensity",
+    "intensity_matrix",
+    "methylation_matrix",
+    "processed",
+}
+SOURCE_PREFERENCES = {"auto", "ngdc", "ena", "ncbi", "geo"}
 VALIDATION_STATUSES = {
     "pending",
     "conversion_pending",
@@ -125,6 +163,37 @@ def deletion_log_path(root: Path) -> Path:
     return root / "reports/storage_deletion_log.tsv"
 
 
+def release_state_path(root: Path) -> Path:
+    return root / "reports/storage_release.tsv"
+
+
+def read_release_states(root: Path) -> list[dict[str, str]]:
+    return [
+        {field: row.get(field, "").rstrip("\r") for field in RELEASE_FIELDS}
+        for row in read_tsv(release_state_path(root))
+    ]
+
+
+def write_release_state(root: Path, row: dict[str, str]) -> dict[str, str]:
+    normalized = {field: row.get(field, "").rstrip("\r") for field in RELEASE_FIELDS}
+    if not GSM_RE.fullmatch(normalized["gsm"]):
+        raise StoragePolicyError(f"invalid release GSM: {normalized['gsm']!r}")
+    normalized["unit_id"] = normalized["unit_id"] or normalized["gsm"]
+    rows = read_release_states(root)
+    updated = [item for item in rows if item["unit_id"] != normalized["unit_id"]]
+    updated.append(normalized)
+    write_tsv_atomic(release_state_path(root), RELEASE_FIELDS, updated)
+    return normalized
+
+
+def read_config(root: Path) -> dict[str, str]:
+    return {
+        row.get("key", ""): row.get("value", "").rstrip("\r")
+        for row in read_tsv(root / "metadata/acquisition_config.tsv")
+        if row.get("key")
+    }
+
+
 def coerce_retain_flag(row: dict[str, str]) -> str:
     raw = (
         row.get("retain_raw_files")
@@ -143,6 +212,9 @@ def coerce_retain_flag(row: dict[str, str]) -> str:
 def normalize_policy(row: dict[str, str]) -> dict[str, str]:
     normalized = {field: row.get(field, "").rstrip("\r").strip() for field in STORAGE_POLICY_FIELDS}
     normalized["retain_raw_files"] = coerce_retain_flag(row)
+    normalized["final_product"] = normalized["final_product"] or "pending"
+    normalized["source_preference"] = normalized["source_preference"] or "auto"
+    normalized["allow_sra_lite"] = normalized["allow_sra_lite"].lower() or "false"
     if not normalized["gse"]:
         raise StoragePolicyError("storage_policy.tsv 缺少 gse")
     assay = normalized["assay_type"]
@@ -154,6 +226,16 @@ def normalize_policy(row: dict[str, str]) -> dict[str, str]:
         raise StoragePolicyError(f"invalid modality={modality!r}")
     if raw_type not in RAW_FILE_TYPES:
         raise StoragePolicyError(f"invalid raw_file_type={raw_type!r}")
+    if normalized["final_product"] not in FINAL_PRODUCTS:
+        raise StoragePolicyError(f"invalid final_product={normalized['final_product']!r}")
+    if normalized["source_preference"] not in SOURCE_PREFERENCES:
+        raise StoragePolicyError(
+            f"invalid source_preference={normalized['source_preference']!r}"
+        )
+    if normalized["allow_sra_lite"] not in RETAIN_VALUES:
+        raise StoragePolicyError(
+            f"invalid allow_sra_lite={normalized['allow_sra_lite']!r}"
+        )
     expected_mode = (
         "retain" if normalized["retain_raw_files"] == "true" else "delete_after_validation"
     )
@@ -195,6 +277,10 @@ def default_policy(
     assay_type: str = "",
     raw_file_type: str = "",
     modality: str = "",
+    final_product: str = "pending",
+    source_preference: str = "auto",
+    allow_sra_lite: bool = False,
+    confirmed_at: str = "",
 ) -> dict[str, str]:
     if assay_type not in ASSAY_TYPES:
         raise StoragePolicyError(f"invalid assay_type={assay_type!r}")
@@ -202,23 +288,29 @@ def default_policy(
         raise StoragePolicyError(f"invalid modality={modality!r}")
     if raw_file_type not in RAW_FILE_TYPES:
         raise StoragePolicyError(f"invalid raw_file_type={raw_file_type!r}")
+    if final_product not in FINAL_PRODUCTS:
+        raise StoragePolicyError(f"invalid final_product={final_product!r}")
+    if source_preference not in SOURCE_PREFERENCES:
+        raise StoragePolicyError(f"invalid source_preference={source_preference!r}")
+    shared = {
+        "gse": gse,
+        "assay_type": assay_type,
+        "modality": modality,
+        "raw_file_type": raw_file_type,
+        "final_product": final_product,
+        "source_preference": source_preference,
+        "allow_sra_lite": "true" if allow_sra_lite else "false",
+        "confirmed_at": confirmed_at,
+    }
     if retain_raw_files:
-        return {
-            "gse": gse,
-            "assay_type": assay_type,
-            "modality": modality,
-            "raw_file_type": raw_file_type,
+        return shared | {
             "retain_raw_files": "true",
             "storage_mode": "retain",
             "validation_status": "not_applicable",
             "deletion_status": "not_applicable",
             "deletion_time": "",
         }
-    return {
-        "gse": gse,
-        "assay_type": assay_type,
-        "modality": modality,
-        "raw_file_type": raw_file_type,
+    return shared | {
         "retain_raw_files": "false",
         "storage_mode": "delete_after_validation",
         "validation_status": "conversion_pending",
@@ -521,6 +613,21 @@ def list_temporary_raw(root: Path) -> list[Path]:
     return files
 
 
+def list_temporary_raw_for_gsm(root: Path, gsm: str) -> list[Path]:
+    if not GSM_RE.fullmatch(gsm):
+        raise StoragePolicyError(f"invalid GSM accession: {gsm!r}")
+    base = (root / "temporary" / gsm).resolve()
+    files = [path for path in list_temporary_raw(root) if base in path.resolve().parents]
+    return sorted(files)
+
+
+def allow_sra_lite_for_gsm(root: Path, gsm: str) -> bool:
+    policy = policy_for_gsm(root, gsm, required=False)
+    if policy is not None:
+        return policy.get("allow_sra_lite", "false") == "true"
+    return read_config(root).get("allow_sra_lite", "false").lower() == "true"
+
+
 def list_temporary_fastq(root: Path) -> list[Path]:
     return [
         path
@@ -567,6 +674,7 @@ def print_dirs(root: Path, gsm: str, srr: str) -> None:
     mapping = {
         "RETAIN_RAW": "true" if retain else "false",
         "STORAGE_MODE": policy["storage_mode"],
+        "ALLOW_SRA_LITE": policy.get("allow_sra_lite", "false"),
         "FASTQ_DIR": str(published_fastq_dir(root, gsm, retain)),
         "SRA_DIR": str(published_sra_dir(root, gsm)),
         "WORK_DIR": str(work_dir(root, gsm, srr)),

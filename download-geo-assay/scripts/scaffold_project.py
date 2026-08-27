@@ -9,6 +9,7 @@ import re
 import shutil
 import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -71,7 +72,7 @@ def main() -> None:
             "intensity",
             "processed",
         ),
-        default="fastq",
+        default="pending",
     )
     parser.add_argument("--retain-raw-files", choices=("true", "false"))
     parser.add_argument(
@@ -108,9 +109,7 @@ def main() -> None:
         raise SystemExit(f"Invalid GSE accession: {args.gse}")
     if args.max_project_gib <= 0 or args.monitor_interval < 60:
         raise SystemExit("Storage cap must be positive and monitor interval >= 60")
-    retain_flag = args.retain_raw_files or args.retain_raw_fastq
-    if retain_flag is None:
-        raise SystemExit("必须指定 --retain-raw-files true|false，不允许默认")
+    retain_flag = args.retain_raw_files or args.retain_raw_fastq or "pending"
     retain_raw = retain_flag == "true"
     mode_b_products = {
         "matrix_velocity",
@@ -119,7 +118,7 @@ def main() -> None:
         "intensity",
         "processed",
     }
-    if not retain_raw and args.final_product not in mode_b_products:
+    if retain_flag == "false" and args.final_product not in mode_b_products:
         raise SystemExit(
             "Mode B (--retain-raw-files false) 需要 --final-product "
             "matrix_velocity|matrix_10x|gene_count_matrix|intensity|processed"
@@ -130,6 +129,7 @@ def main() -> None:
     project = geo_root / gse
     for directory in (
         project / "metadata",
+        project / "config",
         project / "metadata/download_manifests",
         project / "raw",
         project / "temporary",
@@ -177,12 +177,17 @@ def main() -> None:
         f"raw_file_type\t{args.raw_file_type}\n"
         f"max_project_bytes\t{args.max_project_gib * 1024**3}\n"
         f"max_temporary_bytes\t{args.max_project_gib * 1024**3}\n"
+        f"min_headroom_bytes\t{10 * 1024**3}\n"
         f"monitor_interval_seconds\t{args.monitor_interval}\n"
+        "source_preference\tauto\n"
+        "allow_sra_lite\tfalse\n"
+        "auto_restart\tfalse\n"
+        "max_auto_restarts\t0\n"
         "max_same_error_attempts\t3\n"
         "retry_delays_seconds\t0;30;120\n"
         "provider_priority\tngdc_gsa;ngdc_insdc;ena_submitted;ena_fastq;ncbi_sra\n",
     )
-    if not (project / "metadata/storage_policy.tsv").exists():
+    if retain_flag != "pending" and not (project / "metadata/storage_policy.tsv").exists():
         write_storage_policy(
             project,
             default_policy(
@@ -190,6 +195,8 @@ def main() -> None:
                 retain_raw,
                 assay_type=args.assay_type,
                 raw_file_type=args.raw_file_type,
+                final_product=args.final_product,
+                confirmed_at=datetime.now(timezone.utc).isoformat(),
             ),
         )
     write_new(
@@ -211,6 +218,7 @@ def main() -> None:
         'curl = "*"\n'
         'scipy = "*"\n'
         'h5py = "*"\n\n'
+        'pyyaml = "*"\n'
         'numpy = "*"\n'
         'loompy = "*"\n'
         'tmux = "*"\n\n'
@@ -231,12 +239,15 @@ def main() -> None:
         '}\n'
         "trap refresh_report EXIT\n"
         '[[ -s "$MANIFEST" ]] || { echo "Missing $MANIFEST" >&2; exit 2; }\n'
+        'python "$ROOT/scripts/audit_manifest.py" --root "$ROOT" --manifest "$MANIFEST"\n'
         "while IFS= read -r run; do\n"
         '  [[ -n "$run" ]] || continue\n'
         '  "$ROOT/scripts/download_run.sh" "$ROOT" "$run"\n'
         "done < <(awk -F '\\t' 'NR>1 {gsub(/\\r/,\"\",$4); print $4}' \"$MANIFEST\")\n"
         'python "$ROOT/scripts/audit_download_evidence.py" --root "$ROOT"\n'
-        'python "$ROOT/scripts/audit_storage_policy.py" --root "$ROOT"\n'
+        'if [[ -s "$ROOT/metadata/storage_policy.tsv" ]]; then\n'
+        '  python "$ROOT/scripts/audit_storage_policy.py" --root "$ROOT"\n'
+        'fi\n'
         "refresh_report\n"
         "trap - EXIT\n",
     )
@@ -248,6 +259,11 @@ def main() -> None:
         target = project / "scripts" / source.name
         if not target.exists():
             shutil.copy2(source, target)
+    skill_root = skill_scripts.parent
+    for name in ("assay_capability.yaml", "source_capability.yaml"):
+        target = project / "config" / name
+        if not target.exists():
+            shutil.copy2(skill_root / name, target)
     for script in (project / "scripts").iterdir():
         if script.is_file() and script.suffix in {".py", ".sh"}:
             script.chmod(script.stat().st_mode | 0o111)

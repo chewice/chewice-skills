@@ -26,6 +26,8 @@ from project_layout import (
     published_fastq_files,
     published_sra_dir,
     read_storage_policy,
+    policy_for_gsm,
+    read_release_states,
 )
 
 
@@ -198,6 +200,11 @@ def main() -> int:
     errors: list[str] = []
     report_rows: list[dict[str, str]] = []
     observed: dict[str, dict[str, str]] = {}
+    released_gsms = {
+        row.get("gsm", "")
+        for row in read_release_states(root)
+        if row.get("release_status") == "released"
+    }
 
     for path in iter_download_manifests(root):
         for row in read_tsv(path):
@@ -226,13 +233,29 @@ def main() -> int:
             ("gse", "gse"),
             ("gsm", "gsm"),
             ("selected_source", "source"),
-            ("selected_provenance", "provenance"),
             ("final_product", "final_product"),
         ):
             if source.get(source_key, "") != evidence.get(evidence_key, ""):
                 row_errors.append(
                     f"{evidence_key}={evidence.get(evidence_key)!r} "
                     f"expected={source.get(source_key)!r}"
+                )
+        selected_provenance = source.get("selected_provenance", "")
+        actual_provenance = evidence.get("provenance", "")
+        policy_for_sample = policy_for_gsm(root, gsm, required=False)
+        lite_allowed = bool(
+            policy_for_sample
+            and policy_for_sample.get("allow_sra_lite") == "true"
+        )
+        if actual_provenance != selected_provenance:
+            if not (
+                actual_provenance == "SRA_LITE"
+                and evidence.get("object_class") == "SRA_LITE"
+                and evidence.get("quality_class") == "SIMPLIFIED"
+                and lite_allowed
+            ):
+                row_errors.append(
+                    f"provenance={actual_provenance!r} expected={selected_provenance!r}"
                 )
         expected_spots = source.get("expected_spots", "").rstrip("\r")
         if expected_spots and evidence.get("expected_spots") != expected_spots:
@@ -250,9 +273,9 @@ def main() -> int:
                     f"R2={evidence.get('observed_r2')} expected={expected_spots}"
                 )
 
-        policy = read_storage_policy(root, required=False)
+        policy = policy_for_sample
         retain = True if policy is None else policy["retain_raw_files"] == "true"
-        deleted = deletion_completed(root)
+        deleted = gsm in released_gsms or deletion_completed(root)
         product = source["final_product"]
         mandatory_files: list[Path] = []
         if product == "fastq":
@@ -365,7 +388,10 @@ def main() -> int:
                 "gsm": gsm,
                 "srr": run,
                 "source": source["selected_source"],
-                "provenance": source["selected_provenance"],
+                "selected_provenance": source["selected_provenance"],
+                "provenance": evidence.get("provenance", source["selected_provenance"]),
+                "object_class": evidence.get("object_class", source.get("object_class", "")),
+                "quality_class": evidence.get("quality_class", source.get("quality_class", "")),
                 "final_product": product,
                 "expected_spots": expected_spots,
                 "observed_r1": evidence.get("observed_r1", ""),
@@ -401,7 +427,10 @@ def main() -> int:
         "gsm",
         "srr",
         "source",
+        "selected_provenance",
         "provenance",
+        "object_class",
+        "quality_class",
         "final_product",
         "expected_spots",
         "observed_r1",
