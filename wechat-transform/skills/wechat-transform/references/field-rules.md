@@ -2,6 +2,12 @@
 
 When multiple WeChat message blocks are supplied, merge all normal assessment records into one normal table. If any record is a follow-up, create one separate follow-up table containing only follow-up rows. Records containing "瑞美特" are also extracted to a third 瑞美特 sheet.
 
+A single paste may contain several forwarded WeChat blocks separated by blank lines. Each block typically starts with:
+
+1. Sender nickname (e.g. `Howl`) — ignore; not 姓名 or 评估员.
+2. Timestamp (e.g. `2026年08月27日 18:28`) — this date belongs **only** to the following `姓名` in the same block, and formats to `2026.8.27`.
+3. Record body (`脑计划HWn-...`, labeled fields, sample notes).
+
 ## Normal Assessment Table
 
 Use these columns, in this exact order:
@@ -12,9 +18,9 @@ Use these columns, in this exact order:
 
 Rules:
 
-- Extract `序号` from `HWn-0687`, `HWn0687`, or similar by removing leading zeros. Example: `HWn-0687` -> `687`.
-- Fill `其他编号` only when an explicit `HWt-...` style identifier appears.
-- `评估日期` 支持两种格式：数字格式（`2026-07-09`/`2026/07/09`/`2026.07.09`）和中文格式（`2026年07月09日`，可带时间如 `16：22`），均转为 `2026.7.9`。Leave `院号` and `是否评估ADHD量表` blank unless the source explicitly provides them.
+- Extract `序号` from `HWn-0687`, `HWn0687`, `HWbd-0004` or similar project IDs, **preserving the original format including prefix, separator, and leading zeros**. Examples: `HWn-0687` -> `HWn-0687`, `HWbd-0004` -> `HWbd-0004`. `HWt-...` 编号归入 `其他编号`，不进 `序号`。
+- Fill `其他编号` only when an explicit `HWt-...` style identifier appears; preserve its original format including leading zeros (e.g. `HWt-0621` -> `HWt-0621`).
+- `评估日期` 来源：优先取**本消息块**微信转发头第二行时间戳（发送者昵称下一行，如 `2026年08月27日 18:28`），其次取块内正文中的日期。支持数字格式（`2026-07-09`/`2026/07/09`/`2026.07.09`）和中文格式（`2026年07月09日`，可带时间），均转为 `2026.8.27`（点分隔，月日去掉前导零，丢弃时分）。一条记录只用自己块内的日期，禁止用其他块的日期补空。Leave `院号` and `是否评估ADHD量表` blank unless the source explicitly provides them.
 - Extract `姓名`, `推荐医生`, `评估员`, `诊断`, and `HAMD评分` from matching labels.
 - Set `是否为简化版` to `否` unless the source explicitly says simplified/简化版.
 - Set `是否随访` to `是` for normal assessment rows; set to `否` when the source says 拒绝随访.
@@ -34,7 +40,7 @@ Rules:
 
 - Records with `V2`/`V3`/`随访` in the header are classified as follow-up records, **unless** the record says 拒绝随访 (which stays in the normal table with 是否随访=否).
 - Extract `姓名` from matching labels in the source block.
-- `日期` 来源与格式同正常表的 `评估日期`：支持数字和中文两种日期格式，转为 `2026.7.9`。Leave blank unless the source explicitly provides it.
+- `日期` 来源与格式同正常表的 `评估日期`：本块微信转发头时间戳或块内日期，转为 `2026.8.27`。Leave blank unless the source explicitly provides it. 写入 xlsx 后按日期先后排序（较早的日期在前）。
 - Set `CRF` to `电子版他评+自评` when both follow-up other-rating and self-rating are done or self-rating is being followed up.
 - Set `评估员` from the matching label.
 - Set `留取样本类型` from the sample rules below.
@@ -90,7 +96,7 @@ If the source says refused sample, refused 留样, or no sample, set sample avai
 ## Privacy And Missing Data
 
 - Do not include raw source messages in the final answer unless the user asks.
-- Do not derive missing dates from surrounding headings or conversation date unless explicitly instructed.
+- Do not fill dates from the chat/session/system clock. WeChat forward-header timestamps inside each message block **must** be extracted and bound to that block's `姓名`. Do not copy another block's date.
 - Do not guess clinical values. Empty cells are preferable to invented data.
 - If a field is ambiguous, leave the cell blank and add a short note after the TSV block.
 
