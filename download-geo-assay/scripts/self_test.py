@@ -980,6 +980,9 @@ def prefetch_resume_test(base: Path) -> None:
         "@r2\\nAAAAAAAAAAAAAAAAAAAAAAAAAAAA\\n+\\nIIIIIIIIIIIIIIIIIIIIIIIIIIII\\n' "
         "> \"$outdir/$run.fastq\"\n"
     )
+    curl = stubs / "curl"
+    curl.write_text("#!/usr/bin/env bash\nprintf 404\n")
+    curl.chmod(0o755)
     prefetch.chmod(0o755)
     validator.chmod(0o755)
     fasterq.chmod(0o755)
@@ -1255,6 +1258,8 @@ def interrupted_resume_test(base: Path) -> None:
         assert (work / "SRR30000001_R1.fastq.gz.part").is_file()
         assert (work / "SRR30000001_R1.fastq.gz.part.aria2").is_file()
         assert (work / "SRR30000001_R1.fastq.gz.part.resume.json").is_file()
+        state_path = project / "reports/status/SRR30000001.transfer.json"
+        state_path.rename(state_path.with_suffix(".reviewed.json"))
         run(
             "bash",
             str(HERE / "download_run.sh"),
@@ -1277,6 +1282,43 @@ def interrupted_resume_test(base: Path) -> None:
     finally:
         server.shutdown()
         server.server_close()
+
+
+def prepare_delivery_evidence(project, gsm):
+    """Upgrade old synthetic fixtures to the current exact-input receipt contract."""
+    from artifact_integrity import capture_inputs
+    from publish_sample import publish
+    from audit_processed_outputs import main as audit_main
+    from unittest.mock import patch
+    sources = read_tsv(project / "metadata/source_manifest.tsv")
+    downloads = []
+    for row in sources:
+        if row["gsm"] != gsm:
+            continue
+        run_id = row["srr"]
+        files = sorted((project / "temporary" / gsm / "fastq").glob(f"{run_id}_*.fastq.gz"))
+        row.update(library_layout="PAIRED", selected_source="ena_fastq", selected_provenance="ARCHIVE_GENERATED_FASTQ",
+                   selected_urls=";".join(f"https://example.invalid/{path.name}" for path in files),
+                   selected_bytes=";".join(str(path.stat().st_size) for path in files),
+                   selected_md5=";".join(digest(path) for path in files), read_roles="R1;R2")
+        payload = {key: row[col] for key, col in [("source","selected_source"),("urls","selected_urls"),("bytes","selected_bytes"),("md5","selected_md5"),("roles","read_roles"),("final_product","final_product")]}
+        fp = hashlib.sha256(json.dumps(payload,sort_keys=True,separators=(",",":")).encode()).hexdigest()
+        record = {**row,"validation":"PASS","source_fingerprint":fp,
+                  "retained_files":";".join(path.relative_to(project).as_posix() for path in files),
+                  "retained_bytes":row["selected_bytes"],"retained_md5":row["selected_md5"]}
+        downloads.append(record)
+        marker=project/f"reports/status/{run_id}.complete"; marker.parent.mkdir(parents=True,exist_ok=True)
+        marker.write_text(f"validation\tPASS\nsource_fingerprint\t{fp}\n")
+    write_tsv(project/"metadata/source_manifest.tsv",list(dict.fromkeys(key for row in sources for key in row)),sources)
+    write_tsv(project/f"metadata/download_manifests/{gsm}.tsv",list(downloads[0]),downloads)
+    provenance=read_tsv(project/"reports/conversion_provenance.tsv")
+    for row in provenance:
+        row.update(reference="fixture genome/annotation",counting_strategy="UMI exon counts")
+    write_tsv(project/"reports/conversion_provenance.tsv",list(provenance[0]),provenance)
+    capture_inputs(project,gsm)
+    with patch("sys.argv",["audit","--root",str(project),"--gsm",gsm]),patch("audit_processed_outputs.refresh_report"):
+        assert audit_main()==0
+    publish(project,gsm)
 
 
 def storage_lifecycle_test(base: Path) -> None:
@@ -1457,7 +1499,7 @@ def storage_lifecycle_test(base: Path) -> None:
     )
     run(
         sys.executable,
-        str(HERE / "audit_processed_outputs.py"),
+        str(HERE / "audit_processed_outputs.py"), "--structure-only",
         "--root",
         str(mode_b),
         "--skip-full-gzip",
@@ -1499,6 +1541,7 @@ def storage_lifecycle_test(base: Path) -> None:
         ["gse", "gsm", "srr", "status"],
         [{"gse": "GSE800000", "gsm": gsm_b, "srr": srr_b, "status": "PASS"}],
     )
+    prepare_delivery_evidence(mode_b, gsm_b)
     run(
         sys.executable,
         str(HERE / "apply_storage_policy.py"),
@@ -1840,7 +1883,7 @@ def behavior_contract_test(base: Path) -> None:
             raw_files.append(path)
     final_outputs(multi, gsm)
     run(
-        sys.executable, str(HERE / "audit_processed_outputs.py"),
+        sys.executable, str(HERE / "audit_processed_outputs.py"), "--structure-only",
         "--root", str(multi), "--gsm", gsm, "--skip-full-gzip",
     )
     write_tsv(
@@ -1860,13 +1903,21 @@ def behavior_contract_test(base: Path) -> None:
         "--gsm", gsm, "--confirm-delete", expect=1,
     )
     assert all(path.is_file() for path in raw_files)
+    cache_file = multi / "temporary/prefetch_cache" / runs[0] / (runs[0] + ".sralite")
+    cache_file.parent.mkdir(parents=True)
+    cache_file.write_text("validated cached archive")
+    other_cache = multi / "temporary/prefetch_cache/SRR999999/SRR999999.sra"
+    other_cache.parent.mkdir(parents=True)
+    other_cache.write_text("another GSM cache must survive")
     provenance["input_fastq"] = ";".join(path.relative_to(multi).as_posix() for path in raw_files)
     write_tsv(multi / "reports/conversion_provenance.tsv", provenance_fields, [provenance])
+    prepare_delivery_evidence(multi, gsm)
     run(
         sys.executable, str(HERE / "apply_storage_policy.py"), "--root", str(multi),
         "--unit", gsm, "--confirm-delete",
     )
     assert all(not path.exists() for path in raw_files)
+    assert not cache_file.exists() and other_cache.exists()
     release = read_tsv(multi / "reports/storage_release.tsv")[0]
     assert release["release_status"] == "released"
     assert set(release["member_runs"].split(";")) == set(runs)
@@ -1896,7 +1947,7 @@ def behavior_contract_test(base: Path) -> None:
         [{"gene_id": "ENSG1", "GSM_OTHER": "1"}],
     )
     run(
-        sys.executable, str(HERE / "audit_processed_outputs.py"),
+        sys.executable, str(HERE / "audit_processed_outputs.py"), "--structure-only",
         "--root", str(bulk), "--gsm", "GSM960001", expect=1,
     )
     assert bulk_raw.is_file()
@@ -1945,8 +1996,9 @@ def main() -> None:
     with tempfile.TemporaryDirectory(prefix="geo-sra-skill-test-") as temporary:
         base = Path(temporary)
         transfer_state_test(base)
-        if shutil.which("aria2c"):
-            interrupted_resume_test(base)
+        if not shutil.which("aria2c"):
+            raise RuntimeError("aria2c is required: use the locked Pixi test environment")
+        interrupted_resume_test(base)
         prefetch_resume_test(base)
         watchdog_terminal_test(base)
         assay_router_test(base)
@@ -1970,6 +2022,8 @@ def main() -> None:
         assert (project / "config/assay_capability.yaml").is_file()
         assert (project / "config/source_capability.yaml").is_file()
         assert (project / "scripts/run_all.sh").is_file()
+        assert (project / "scripts/run_queue.py").is_file()
+        assert (project / "scripts/prefetch_ahead.py").is_file()
         assert (project / "reports/report.html").is_file()
         assert (project / "metadata/storage_policy.tsv").is_file()
         assert (project / "README.md").is_file()
@@ -2321,13 +2375,17 @@ def main() -> None:
             final_outputs(project, gsm)
         run(
             sys.executable,
-            str(HERE / "audit_processed_outputs.py"),
+            str(HERE / "audit_processed_outputs.py"), "--structure-only",
             "--root",
             str(project),
         )
         unified_report_test(base, project)
         downloader_smoke_test(base)
 
+    run(sys.executable, str(HERE / "regression_test.py"))
+    for name in ("integrity_test.py", "delivery_test.py", "fault_test.py"):
+        result = run(sys.executable, str(HERE / name))
+        print(f"PASS {name}")
     print("SELF_TEST_PASS")
 
 
