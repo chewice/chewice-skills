@@ -67,7 +67,7 @@ def unit_peak(source_bytes: int, has_sra: bool, converted: bool, lookahead: int,
     conversion_scratch = fastq_expansion if converted else 0
     processed = max(1024**3, fastq_expansion // 4) if converted else 0
     working = source_bytes + fastq_expansion + fasterq_scratch + conversion_scratch + lookahead
-    return working, working + processed + headroom
+    return working, working + 2 * processed + headroom
 
 
 def detect_user_quota_remaining() -> int | None:
@@ -103,6 +103,7 @@ def main() -> int:
     parser.add_argument("--expected-samples", type=int)
     parser.add_argument("--expected-runs", type=int)
     parser.add_argument("--max-project-bytes", type=int)
+    parser.add_argument("--gsm", help="Audit metadata globally, but budget only this next unit")
     args = parser.parse_args()
     root = args.root.resolve()
     manifest = args.manifest if args.manifest.is_absolute() else root / args.manifest
@@ -236,11 +237,9 @@ def main() -> int:
     ):
         if label not in caps and config.get(key, "").isdigit():
             caps[label] = int(config[key])
-    detected_quota = None
-    if "quota" not in caps:
-        detected_quota = detect_user_quota_remaining()
-        if detected_quota is not None:
-            caps["quota"] = detected_quota
+    detected_quota = detect_user_quota_remaining()
+    if detected_quota is not None:
+        caps["filesystem_quota_remaining"] = detected_quota
     headroom = int(config.get("min_headroom_bytes", 10 * 1024**3))
     current = directory_bytes(root)
     free = shutil.disk_usage(root).free
@@ -248,9 +247,21 @@ def main() -> int:
         gsm: sum(int(value) for row in unit_rows for value in split(row["selected_bytes"]) if value.isdigit())
         for gsm, unit_rows in sample_runs.items()
     }
-    lookahead = max(unit_sources.values(), default=0)
+    ahead = config.get("prefetch_ahead_runs", "0")
+    if not ahead.isdigit() or not 0 <= int(ahead) <= 3:
+        raise SystemExit("prefetch_ahead_runs must be 0..3")
+    lookahead = max(unit_sources.values(), default=0) * int(ahead)
+    if args.gsm and args.gsm not in sample_runs:
+        raise SystemExit(f"Unknown GSM: {args.gsm}")
+    if args.gsm and int(ahead) and any(not split(row["selected_bytes"]) for row in rows):
+        add("ERROR", summary_row, "space_guard", "Unknown lookahead source bytes; probe sizes before enabling prefetch")
+    temporary_current = directory_bytes(root / "temporary")
     for gsm, unit_rows in sorted(sample_runs.items()):
+        if args.gsm and gsm != args.gsm:
+            continue
         source_bytes = unit_sources[gsm]
+        if args.gsm and any(not split(row["selected_bytes"]) for row in unit_rows):
+            add("ERROR", unit_rows[0], "space_guard", "Unknown source bytes; probe size before starting this unit")
         has_sra = any("SRA" in split(row["read_roles"]) for row in unit_rows)
         converted = any(row["final_product"] not in {"pending", "fastq", "sra"} for row in unit_rows)
         working, addition = unit_peak(source_bytes, has_sra, converted, lookahead, headroom)
@@ -258,7 +269,12 @@ def main() -> int:
         limits = {"free_space": free, **caps}
         violated: list[str] = []
         for label, limit in limits.items():
-            needed = current + addition if label in {"project", "quota"} else working + headroom
+            if label in {"project", "quota"}:
+                needed = current + addition
+            elif label == "working":
+                needed = temporary_current + working + headroom
+            else:
+                needed = addition
             if needed > limit:
                 violated.append(f"{label}: needed={needed} limit={limit}")
         if violated:
@@ -275,8 +291,8 @@ def main() -> int:
         summary_row,
         "quota_detection",
         (
-            f"remaining_bytes={caps['quota']} source={'quota(1)' if detected_quota is not None else 'config'}"
-            if "quota" in caps
+            f"filesystem_remaining_bytes={detected_quota}; configured_total_bytes={caps.get('quota', 'none')}"
+            if detected_quota is not None or "quota" in caps
             else "quota(1) did not expose a finite user quota; free-space and configured caps still apply"
         ),
     )

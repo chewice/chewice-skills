@@ -96,18 +96,18 @@ else
 fi
 exec > >(tee -a "$LOG_DIR/${GSM}_${SRR}.log") 2>&1
 
+# Load only an explicitly selected, trusted local environment file.
+if [[ -n "${GEO_SRA_PROXY_ENV:-}" ]]; then
+    source "$GEO_SRA_PROXY_ENV"
+fi
+unset all_proxy ALL_PROXY
+export no_proxy="${no_proxy:+$no_proxy,}localhost,127.0.0.1"
+export NO_PROXY="${NO_PROXY:+$NO_PROXY,}localhost,127.0.0.1"
 if [[ "$SOURCE" != ngdc_* || "${GEO_SRA_NGDC_DIRECT:-1}" != 1 ]]; then
     for proxy_var in http_proxy https_proxy HTTP_PROXY HTTPS_PROXY; do
         proxy_value=${!proxy_var:-}
         if [[ -n "$proxy_value" && ! "$proxy_value" =~ ^https?:// ]]; then
-            echo "$proxy_var uses a proxy scheme unsupported by the aria2 HTTP transport" >&2
-            exit 2
-        fi
-    done
-    for proxy_var in all_proxy ALL_PROXY; do
-        proxy_value=${!proxy_var:-}
-        if [[ "$proxy_value" =~ ^socks ]]; then
-            echo "SOCKS proxy detected; configure a tested HTTP(S) proxy for aria2 or use direct transport" >&2
+            echo "$proxy_var requires an HTTP(S) proxy URL" >&2
             exit 2
         fi
     done
@@ -157,6 +157,19 @@ state_get() {
         --default "${2:-}"
 }
 
+if [[ "$(state_get status)" == terminal_failed && "$(state_get source_fingerprint)" == "$SOURCE_FINGERPRINT" ]]; then
+    echo "Terminal failure already recorded for $SRR; review and archive state before manual retry" >&2
+    exit 1
+fi
+if [[ -s "$PUBLISH_JOURNAL" ]] && ! python - "$PUBLISH_JOURNAL" "$SOURCE_FINGERPRINT" <<'PYJ'
+import json, sys
+journal = json.load(open(sys.argv[1]))
+raise SystemExit(0 if journal.get("source_fingerprint") == sys.argv[2] else 1)
+PYJ
+then
+    echo "Publish journal source fingerprint mismatch; local recovery required; preserve validated objects" >&2
+    exit 2
+fi
 state_update --phase preflight --status in_progress --clear-error
 
 array_value() {
@@ -200,7 +213,10 @@ validate_downloaded_file() {
         printf '%s  %s\n' "$expected_md5" "$path" | md5sum -c - || return 1
     fi
     case "$role" in
-        R1|R2|I1|I2) gzip -t "$path" || return 1 ;;
+        R1|R2|I1|I2)
+            # CRC alone cannot establish equivalence to the provider object.
+            [[ -n "$expected_md5" || ( -n "$expected_size" && -n "$EXPECTED_SPOTS" ) ]] || return 1
+            gzip -t "$path" || return 1 ;;
         SRA) vdb-validate "$path" || return 1 ;;
         BAM) samtools quickcheck "$path" || return 1 ;;
         *) return 1 ;;
@@ -275,40 +291,38 @@ download_staged() {
     if [[ ! -f "$part" && ( -f "$control" || -f "$resume_meta" ) ]]; then
         quarantine_paths orphan_resume "$control" "$resume_meta"
     fi
-    if probe_remote "$url" "$headers"; then
-        etag=$(header_value "$headers" etag)
-        modified=$(header_value "$headers" last-modified)
-        remote_size=$(header_value "$headers" content-length)
-    fi
-    unlink "$headers" 2>/dev/null || true
-    if [[ -n "$expected_size" && -n "$remote_size" && "$remote_size" =~ ^[0-9]+$ ]] \
-        && (( remote_size != expected_size )); then
-        record_failure remote_changed "${role}:remote_changed" \
-            "Content-Length $remote_size differs from expected $expected_size" 1 || true
-        return 1
-    fi
-    if [[ -f "$part" ]]; then
-        set +e
+    while true; do
+        etag=""; modified=""; remote_size=""
+        if probe_remote "$url" "$headers"; then
+            etag=$(header_value "$headers" etag)
+            modified=$(header_value "$headers" last-modified)
+            remote_size=$(header_value "$headers" content-length)
+        elif [[ -z "$expected_md5" ]]; then
+            unlink "$headers" 2>/dev/null || true
+            if ! record_failure network_interrupted "${role}:identity_probe" "Cannot verify remote identity before transfer"; then return 1; fi
+            continue
+        fi
+        unlink "$headers" 2>/dev/null || true
+        if [[ -n "$expected_size" && -n "$remote_size" && "$remote_size" =~ ^[0-9]+$ ]] \
+            && (( remote_size != expected_size )); then
+            record_failure remote_changed "${role}:remote_changed" "Remote Content-Length changed; review source" 1 || true
+            return 1
+        fi
+        if [[ -f "$part" && -z "$expected_md5" && -z "$etag" && -z "$modified" ]]; then
+            record_failure remote_changed "${role}:identity_unknown" "No provider digest or remote version validator for partial" 1 || true
+            return 1
+        fi
         python "$STATE_HELPER" resume-check --path "$resume_meta" \
             --fingerprint "$SOURCE_FINGERPRINT" --url "$url" --role "$role" \
             --expected-bytes "$expected_size" --expected-md5 "$expected_md5" \
-            --etag "$etag" --last-modified "$modified" --remote-bytes "$remote_size"
-        rc=$?
-        set -e
-        if (( rc != 0 )); then
-            if (( rc == 10 )); then
-                quarantine_paths stale_partial "$part" "$control" "$resume_meta"
-            else
-                return "$rc"
-            fi
+            --etag "$etag" --last-modified "$modified" --remote-bytes "$remote_size" && rc=0 || rc=$?
+        if (( rc == 10 )); then
+            quarantine_paths changed_remote "$part" "$control" "$resume_meta"
+            record_failure remote_changed "${role}:remote_changed" "Remote object changed; old partial quarantined" 1 || true
+            return 1
+        elif (( rc != 0 )); then
+            return "$rc"
         fi
-    fi
-    python "$STATE_HELPER" resume-check --path "$resume_meta" \
-        --fingerprint "$SOURCE_FINGERPRINT" --url "$url" --role "$role" \
-        --expected-bytes "$expected_size" --expected-md5 "$expected_md5" \
-        --etag "$etag" --last-modified "$modified" --remote-bytes "$remote_size"
-
-    while true; do
         offset=0
         [[ -f "$part" ]] && offset=$(stat -c %s "$part")
         state_update --phase transfer --status in_progress --attempt-delta 1 \
@@ -316,7 +330,8 @@ download_staged() {
         (( offset > 0 )) && state_update --resume-delta 1 >/dev/null
         echo "Downloading $(basename "$staged") offset=$offset"
         local -a aria=(
-            aria2c --allow-overwrite=true --auto-file-renaming=false
+            aria2c --no-conf=true --allow-overwrite=true --auto-file-renaming=false
+            --auto-save-interval=1
             --check-integrity=true --connect-timeout=30 --continue=true
             --console-log-level=notice --file-allocation=none
             --max-connection-per-server="$DOWNLOAD_CONNECTIONS" --max-tries=1
@@ -324,6 +339,11 @@ download_staged() {
             --summary-interval=30 --timeout=30
         )
         [[ -n "$expected_md5" ]] && aria+=(--checksum="md5=$expected_md5")
+        if [[ -n "$etag" && "$etag" != W/* ]]; then
+            aria+=(--header="If-Match: $etag")
+        elif [[ -n "$modified" ]]; then
+            aria+=(--header="If-Unmodified-Since: $modified")
+        fi
         if [[ "$SOURCE" == ngdc_* && "$NGDC_DIRECT" == 1 ]]; then
             env -u http_proxy -u https_proxy -u all_proxy \
                 -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY \
@@ -333,7 +353,11 @@ download_staged() {
             "${aria[@]}" --dir="$(dirname "$part")" \
                 --out="$(basename "$part")" "$url" && rc=0 || rc=$?
         fi
-        if validate_downloaded_file "$part" "$role" "$expected_size" "$expected_md5"; then
+        if (( rc == 9 || rc == 16 )); then
+            record_failure disk_or_conversion "${role}:disk_write" "aria2 cannot write output (exit=$rc); partial retained" 1 || true
+            return 1
+        fi
+        if (( rc == 0 )) && validate_downloaded_file "$part" "$role" "$expected_size" "$expected_md5"; then
             unlink "$control" 2>/dev/null || true
             unlink "$resume_meta" 2>/dev/null || true
             mv "$part" "$staged"
@@ -362,59 +386,136 @@ download_staged() {
     done
 }
 
+restore_archive_identity() {
+    local identity="$DOWNLOAD_DIR/${SRR}.object.tsv"
+    local object_fingerprint
+    if [[ -s "$identity" ]]; then
+        IFS=$'\t' read -r ACTUAL_PROVENANCE ACTUAL_OBJECT_CLASS ACTUAL_QUALITY_CLASS object_fingerprint < "$identity"
+        if [[ "$object_fingerprint" != "$SOURCE_FINGERPRINT" ]]; then
+            echo "Staged object identity mismatch; local review required" >&2
+            return 2
+        fi
+    elif [[ "$SOURCE" == ncbi_sra ]]; then
+        echo "Missing full/Lite identity for staged archive; local review required" >&2
+        return 2
+    fi
+    if [[ "$ACTUAL_OBJECT_CLASS" == SRA_LITE && "${ALLOW_SRA_LITE:-false}" != true ]]; then
+        record_failure unsupported_object "SRA:lite_not_authorized" "SRA Lite requires explicit authorization" 1 || true
+        return 1
+    fi
+}
+
+adopt_archive() {
+    local candidate=$1 staged=$2
+    vdb-validate "$candidate" || return 1
+    if [[ "$candidate" == *.sralite ]]; then
+        [[ "${ALLOW_SRA_LITE:-false}" == true ]] || return 1
+        ACTUAL_PROVENANCE=SRA_LITE
+        ACTUAL_OBJECT_CLASS=SRA_LITE
+        ACTUAL_QUALITY_CLASS=SIMPLIFIED
+    else
+        ACTUAL_PROVENANCE=ARCHIVE_NORMALIZED_SRA
+        ACTUAL_OBJECT_CLASS=FULL_QUALITY_ARCHIVE
+        ACTUAL_QUALITY_CLASS=FULL
+    fi
+    printf '%s\t%s\t%s\t%s\n' "$ACTUAL_PROVENANCE" "$ACTUAL_OBJECT_CLASS" "$ACTUAL_QUALITY_CLASS" "$SOURCE_FINGERPRINT" \
+        > "$DOWNLOAD_DIR/${SRR}.object.tsv.tmp" || return 2
+    mv "$DOWNLOAD_DIR/${SRR}.object.tsv.tmp" "$DOWNLOAD_DIR/${SRR}.object.tsv" || return 2
+    mv "$candidate" "$staged" || return 2
+    state_update --phase prefetch --status in_progress --clear-error >/dev/null
+}
+
+probe_odp() {
+    local result
+    while true; do
+        result=$(python "$SCRIPT_DIR/ncbi_odp.py" probe --run "$SRR" --evidence "$STATUS_DIR/${SRR}.odp.json") || return 2
+        IFS=$'\t' read -r ODP_STATUS ODP_METHOD <<< "$result"
+        [[ "$ODP_STATUS" != unreachable ]] && return 0
+        if ! record_failure network_interrupted "SRA:odp_probe" \
+            "ODP identity unresolved after HEAD/AWS listing; prefetch/Lite not permitted"; then return 1; fi
+    done
+}
+
+copy_odp() {
+    local destination=$1 expected_size=${2:-} expected_md5=${3:-} rc error_class
+    while true; do
+        state_update --phase transfer --status in_progress --attempt-delta 1 >/dev/null
+        python "$SCRIPT_DIR/ncbi_odp.py" copy --run "$SRR" --evidence "$STATUS_DIR/${SRR}.odp.json" \
+            --destination "$destination" --expected-bytes "$expected_size" --expected-md5 "$expected_md5" && rc=0 || rc=$?
+        (( rc == 0 )) && return 0
+        case "$rc" in
+            1) error_class=network_interrupted ;;
+            3) error_class=checksum_or_integrity ;;
+            4) record_failure remote_changed "SRA:aws_identity" "ODP object changed during AWS transfer" 1 || true; return 1 ;;
+            *) record_failure disk_or_conversion "SRA:aws_local" "AWS copy blocked by local error" 1 || true; return 2 ;;
+        esac
+        if ! record_failure "$error_class" "SRA:aws_copy:$error_class" "AWS copy failed; partial preserved, no completion"; then return 1; fi
+    done
+}
+
 prefetch_staged() {
     local staged=$1
     local prefetch_root="$WORK_DIR/ncbi"
+    local cache_root="$ROOT/temporary/prefetch_cache"
     local source_file="$prefetch_root/$SRR/$SRR.sra"
     local lite_file="$prefetch_root/$SRR/$SRR.sralite"
-    local rc count error_class
+    local odp_url="https://sra-pub-run-odp.s3.amazonaws.com/sra/$SRR/$SRR"
+    local odp_status rc count error_class candidate
+    mkdir -p "$cache_root" "$prefetch_root"
+    exec 6>"$cache_root/${SRR}.lock"
+    flock -n 6 || { echo "Prefetch cache busy for $SRR" >&2; return 75; }
     if validate_downloaded_file "$staged" SRA "" ""; then
-        return 0
+        if [[ ! -s "$DOWNLOAD_DIR/${SRR}.object.tsv" ]]; then
+            echo "Staged archive lacks object identity; inspect full/Lite before recovery" >&2
+            return 2
+        fi
+        restore_archive_identity
+        return
+    fi
+    # Reuse full archives before probing or transferring ODP again.
+    for candidate in "$source_file" "$cache_root/$SRR/$SRR.sra"; do
+        if [[ -s "$candidate" ]] && adopt_archive "$candidate" "$staged"; then return 0; fi
+    done
+    # Unknown HEAD status must resolve via the exact AWS key before selecting a transport.
+    probe_odp
+    odp_status=$ODP_STATUS
+    if [[ "$odp_status" == available ]]; then
+        if [[ "$ODP_METHOD" == aws_list ]]; then
+            copy_odp "$cache_root/$SRR/$SRR.sra"
+            adopt_archive "$cache_root/$SRR/$SRR.sra" "$staged"
+            return
+        fi
+        download_staged "$odp_url" "$source_file" SRA "" ""
+        adopt_archive "$source_file" "$staged"
+        return
+    fi
+    if [[ "$odp_status" == missing && "${ALLOW_SRA_LITE:-false}" == true ]]; then
+        for candidate in "$lite_file" "$cache_root/$SRR/$SRR.sralite"; do
+            if [[ -s "$candidate" ]] && adopt_archive "$candidate" "$staged"; then return 0; fi
+        done
     fi
     while true; do
-        mkdir -p "$prefetch_root"
         state_update --phase prefetch --status in_progress --attempt-delta 1 >/dev/null
         prefetch "$SRR" --type sra --max-size u -O "$prefetch_root" && rc=0 || rc=$?
-        if [[ -s "$source_file" ]] && vdb-validate "$source_file"; then
-            mv "$source_file" "$staged"
-            state_update --phase prefetch --status in_progress --clear-error >/dev/null
-            return 0
+        if [[ -s "$source_file" ]] && adopt_archive "$source_file" "$staged"; then return 0; fi
+        if [[ "$odp_status" == missing && "${ALLOW_SRA_LITE:-false}" == true ]]; then
+            for candidate in "$lite_file" "$cache_root/$SRR/$SRR.sralite"; do
+                if [[ -s "$candidate" ]] && adopt_archive "$candidate" "$staged"; then return 0; fi
+            done
         fi
         if [[ -s "$lite_file" ]]; then
-            if [[ "${ALLOW_SRA_LITE:-false}" != true ]]; then
-                quarantine_paths forbidden_sralite "$lite_file"
-                record_failure unsupported_object "SRA:lite_not_authorized" \
-                    "SRA Lite detected but storage policy does not allow simplified qualities" 1 || true
-                return 1
-            fi
-            if vdb-validate "$lite_file"; then
-                ACTUAL_PROVENANCE=SRA_LITE
-                ACTUAL_OBJECT_CLASS=SRA_LITE
-                ACTUAL_QUALITY_CLASS=SIMPLIFIED
-                mv "$lite_file" "$staged"
-                state_update --phase prefetch --status in_progress --clear-error >/dev/null
-                return 0
-            fi
-        elif [[ "${ALLOW_SRA_LITE:-false}" == true ]]; then
-            prefetch "$SRR" --type sralite --max-size u -O "$prefetch_root" && rc=0 || rc=$?
-            if [[ -s "$lite_file" ]] && vdb-validate "$lite_file"; then
-                ACTUAL_PROVENANCE=SRA_LITE
-                ACTUAL_OBJECT_CLASS=SRA_LITE
-                ACTUAL_QUALITY_CLASS=SIMPLIFIED
-                mv "$lite_file" "$staged"
-                state_update --phase prefetch --status in_progress --clear-error >/dev/null
-                return 0
-            fi
+            record_failure unsupported_object "SRA:lite_not_eligible" \
+                "Lite retained; requires authorization and ODP absence (ODP=$odp_status)" 1 || true
+            return 1
         fi
         error_class=network_interrupted
-        if [[ -s "$source_file" ]]; then
+        # Partial prefetch outputs can have .sra names; quarantine only after a successful transfer.
+        if (( rc == 0 )) && [[ -s "$source_file" ]]; then
             error_class=checksum_or_integrity
             quarantine_paths invalid_prefetch "$source_file"
         fi
         if ! record_failure "$error_class" "SRA:prefetch:${error_class}" \
-            "prefetch exit=$rc; cache retained for resume"; then
-            return 1
-        fi
+            "prefetch exit=$rc; cache retained for resume"; then return 1; fi
         count=$(state_get same_error_count 0)
         (( count < MAX_ATTEMPTS )) || return 1
     done
@@ -467,10 +568,12 @@ observed = [Path(path) for path in files]
 if not observed or any(not path.is_file() for path in observed):
     raise SystemExit("Cannot record missing retained files")
 methods = ["format_validation", "run_transaction"]
-if any(expected_bytes.split(";")):
+if source != "ncbi_sra" and all(expected_bytes.split(";")):
     methods.append("provider_bytes")
-if any(expected_md5.split(";")):
+if source != "ncbi_sra" and all(expected_md5.split(";")):
     methods.append("provider_md5")
+if source in {"ncbi_sra", "ncbi_ondemand", "ngdc_insdc"}:
+    methods.append("vdb_validate")
 if final_product != "sra":
     methods.append("paired_read_count")
     if expected_spots:
@@ -479,6 +582,7 @@ row = {
     "gse": gse, "gsm": gsm, "srr": srr, "source": source,
     "selected_provenance": selected_provenance,
     "provenance": provenance, "object_class": object_class,
+    "replacement_note": "Recheck recorded source-bucket probes for full-quality replacement" if object_class == "SRA_LITE" else "",
     "quality_class": quality_class, "final_product": final_product, "urls": urls,
     "expected_bytes": expected_bytes,
     "observed_bytes": ";".join(str(path.stat().st_size) for path in observed),
@@ -493,9 +597,13 @@ row = {
     "retained_bytes": ";".join(str(path.stat().st_size) for path in observed),
     "retained_md5": ";".join(md5(path) for path in observed),
     "integrity_methods": ";".join(methods),
+    "integrity_evidence": "provider_digest_verified" if "provider_md5" in methods else (
+        "native_archive_verified" if "vdb_validate" in methods else "format_size_read_count_verified"),
     "attempt_count": str(state.get("attempt_count", 0)),
     "resume_count": str(state.get("resume_count", 0)),
     "source_fingerprint": source_fingerprint,
+    "odp_evidence": json.dumps(json.loads((root / f'reports/status/{srr}.odp.json').read_text()), sort_keys=True)
+        if (root / f'reports/status/{srr}.odp.json').is_file() else "",
 }
 path = Path(manifest_path)
 existing = []
@@ -579,10 +687,10 @@ fi
 declare -a RETAINED_FILES=()
 if [[ -s "$PUBLISH_JOURNAL" ]]; then
     state_update --phase publishing --status in_progress >/dev/null
-    mapfile -t RETAINED_FILES < <(
-        python "$STATE_HELPER" publish --journal "$PUBLISH_JOURNAL" \
-            --fingerprint "$SOURCE_FINGERPRINT"
-    )
+    restore_archive_identity
+    published=$(python "$STATE_HELPER" publish --journal "$PUBLISH_JOURNAL" \
+        --fingerprint "$SOURCE_FINGERPRINT")
+    mapfile -t RETAINED_FILES <<< "$published"
     complete_run
     exit 0
 fi
@@ -608,6 +716,26 @@ else
             BAM) output="$DOWNLOAD_DIR/${SRR}.bam" ;;
             *) echo "Unsupported role: $role" >&2; exit 2 ;;
         esac
+        if [[ "$SOURCE" == ncbi_ondemand && "$role" == SRA ]]; then
+            cache="$ROOT/temporary/prefetch_cache/$SRR/$SRR.sra"
+            mkdir -p "$ROOT/temporary/prefetch_cache"
+            exec 6>"$ROOT/temporary/prefetch_cache/${SRR}.lock"
+            flock -n 6 || exit 75
+            if validate_downloaded_file "$cache" SRA "$expected_size" "$expected_md5"; then
+                adopt_archive "$cache" "$output"
+            fi
+            if ! validate_downloaded_file "$output" SRA "$expected_size" "$expected_md5"; then
+                probe_odp
+                if [[ "$ODP_STATUS" == missing ]]; then
+                    record_failure remote_changed "SRA:odp_missing" "Selected ODP object is absent; review manifest" 1 || true
+                    exit 1
+                fi
+                if [[ "$ODP_METHOD" == aws_list ]]; then
+                    copy_odp "$cache" "$expected_size" "$expected_md5"
+                    adopt_archive "$cache" "$output"
+                fi
+            fi
+        fi
         download_staged "$url" "$output" "$role" "$expected_size" "$expected_md5"
     done
 fi
@@ -762,8 +890,7 @@ os.replace(temp, path)
 PY
 
 state_update --phase publishing --status in_progress >/dev/null
-mapfile -t RETAINED_FILES < <(
-    python "$STATE_HELPER" publish --journal "$PUBLISH_JOURNAL" \
-        --fingerprint "$SOURCE_FINGERPRINT"
-)
+published=$(python "$STATE_HELPER" publish --journal "$PUBLISH_JOURNAL" \
+    --fingerprint "$SOURCE_FINGERPRINT")
+mapfile -t RETAINED_FILES <<< "$published"
 complete_run

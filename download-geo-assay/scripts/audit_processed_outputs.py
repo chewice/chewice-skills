@@ -23,8 +23,9 @@ from project_layout import (
     write_tsv_atomic,
 )
 
-import h5py
-from scipy.io import mminfo
+import numpy as np
+from scipy.io import mminfo, mmread
+from artifact_integrity import IntegrityError, atomic_json, conversion_receipt, check_receipt
 
 
 def refresh_report(root: Path) -> None:
@@ -53,9 +54,35 @@ def gzip_crc(path: Path) -> None:
             pass
 
 
+def read_matrix(path: Path):
+    rows, cols, nonzero, kind, field, symmetry = mminfo(path)
+    if kind != "coordinate" or field != "integer" or symmetry != "general":
+        raise ValueError("Count MEX must be coordinate integer general")
+    matrix = mmread(path, spmatrix=True).tocoo()
+    if matrix.shape != (rows, cols) or matrix.nnz != nonzero:
+        raise ValueError("Actual matrix dimensions/entry count differ from header")
+    if not np.all(np.isfinite(matrix.data)) or np.any(matrix.data < 0):
+        raise ValueError("Counts must be finite nonnegative integers")
+    compressed = matrix.tocsr()
+    if compressed.nnz != matrix.nnz:
+        raise ValueError("Duplicate matrix coordinates")
+    return compressed
+
+
 def shape(path: Path) -> tuple[int, int, int]:
-    rows, cols, nonzero, *_ = mminfo(path)
-    return int(rows), int(cols), int(nonzero)
+    matrix = read_matrix(path)
+    return (*matrix.shape, matrix.nnz)
+
+
+def identifiers(path: Path, features=False):
+    with gzip.open(path, "rt") as handle:
+        rows = [line.rstrip("\r\n").split("\t") for line in handle]
+    columns = 3 if features else 1
+    if (features and not rows) or any(len(row) != columns or any(not cell for cell in row) for row in rows):
+        raise ValueError(f"Invalid metadata columns: {path.name}")
+    if len({row[0] for row in rows}) != len(rows):
+        raise ValueError(f"Duplicate identifiers: {path.name}")
+    return rows
 
 
 def routing_by_gsm(root: Path) -> dict[str, dict[str, str]]:
@@ -74,31 +101,29 @@ def product_for_gsm(rows: list[dict[str, str]], gsm: str) -> str:
 
 
 def audit_gene_matrix(root: Path, gsm: str, errors: list[str]) -> None:
-    path = root / "processed/gene_count_matrix.tsv"
-    if not path.is_file() or path.stat().st_size == 0:
-        errors.append("missing processed/gene_count_matrix.tsv")
+    path = root / f"processed/{gsm}/counts/counts.tsv.gz"
+    if not path.is_file():
+        errors.append(f"missing per-sample counts: {path.relative_to(root)}")
         return
-    with path.open(newline="") as handle:
-        reader = csv.DictReader(handle, delimiter="\t")
-        fields = reader.fieldnames or []
-        if "gene_id" not in fields or gsm not in fields:
-            errors.append(f"gene_count_matrix 缺少列 {gsm}")
-            return
-        rows = list(reader)
-    if not rows:
-        errors.append("empty gene_count_matrix")
-        return
-    seen: set[str] = set()
-    for line_number, row in enumerate(rows, start=2):
-        gene_id = row.get("gene_id", "")
-        if not gene_id:
-            errors.append(f"gene_count_matrix line {line_number} 缺少 gene_id")
-        elif gene_id in seen:
-            errors.append(f"gene_count_matrix duplicate gene_id={gene_id}")
-        seen.add(gene_id)
-        value = row.get(gsm, "")
-        if not value.isdigit():
-            errors.append(f"gene_count_matrix {gsm} 包含非负整数以外的值 {value!r}")
+    try:
+        with gzip.open(path, "rt", newline="") as handle:
+            reader = csv.DictReader(handle, delimiter="\t")
+            fields = reader.fieldnames or []
+            counts = [key for key in fields if key != "gene_id"]
+            if not fields or fields[0] != "gene_id" or len(fields) != len(set(fields)) or not counts:
+                raise ValueError("counts TSV requires unique gene_id and count columns")
+            if not set(counts).issubset({"count", "unstranded", "forward", "reverse"}):
+                raise ValueError("Unknown counting column semantics")
+            seen = set()
+            for row in reader:
+                gene = row.get("gene_id")
+                if not gene or gene in seen or None in row or any(not (row.get(key) or "").isdigit() for key in counts):
+                    raise ValueError("Invalid/duplicate gene IDs or noninteger counts")
+                seen.add(gene)
+            if not seen:
+                raise ValueError("Empty count table")
+    except (OSError, ValueError, EOFError) as exc:
+        errors.append(f"count table: {exc}")
 
 
 def audit_array_product(root: Path, gsm: str, errors: list[str]) -> None:
@@ -120,14 +145,15 @@ def audit_array_product(root: Path, gsm: str, errors: list[str]) -> None:
         if not path.is_file() or path.stat().st_size == 0:
             errors.append(f"{gsm} 缺少非空 array product {path}")
             continue
-        if path.suffix.lower() not in {".tsv", ".txt"}:
+        if not path.name.lower().endswith((".tsv", ".txt", ".tsv.gz", ".txt.gz")):
             errors.append(f"{gsm} array product 必须是可审计文本矩阵: {path.name}")
             continue
-        with path.open(newline="") as handle:
+        opener = gzip.open if path.suffix.lower() == ".gz" else open
+        with opener(path, "rt", newline="") as handle:
             reader = csv.DictReader(handle, delimiter="\t")
             fields = reader.fieldnames or []
             identifier = next((field for field in ("feature_id", "probe_id", "cpg_id") if field in fields), "")
-            if not identifier or gsm not in fields:
+            if not identifier or gsm not in fields or len(fields) != len(set(fields)):
                 errors.append(f"{gsm} array product 缺少 feature/probe/CpG ID 或样本列")
                 continue
             rows = list(reader)
@@ -137,7 +163,7 @@ def audit_array_product(root: Path, gsm: str, errors: list[str]) -> None:
         identifiers: set[str] = set()
         for row in rows:
             feature = row.get(identifier, "")
-            if not feature or feature in identifiers:
+            if not feature or feature in identifiers or None in row:
                 errors.append(f"{gsm} array product feature ID 缺失或重复")
                 break
             identifiers.add(feature)
@@ -160,8 +186,11 @@ def audit_10x(
     matrix_dir, velocity_dir, loom_file = locate_outputs(root, gse, gsm)
     shapes: dict[str, tuple[int, int, int]] = {}
     gzip_paths: list[Path] = []
+    triplets = {}
     for subset in ("raw", "filtered"):
         directory = matrix_dir / f"{subset}_feature_bc_matrix"
+        if subset == "filtered" and not directory.exists():
+            continue
         paths = {
             "matrix": directory / "matrix.mtx.gz",
             "features": directory / "features.tsv.gz",
@@ -172,11 +201,15 @@ def audit_10x(
             continue
         gzip_paths.extend(paths.values())
         try:
-            matrix_shape = shape(paths["matrix"])
+            matrix = read_matrix(paths["matrix"])
+            features = identifiers(paths["features"], features=True)
+            barcodes = identifiers(paths["barcodes"])
+            triplets[subset] = (matrix, features, barcodes)
+            matrix_shape = (*matrix.shape, matrix.nnz)
             shapes[subset] = matrix_shape
-            if gzip_lines(paths["features"]) != matrix_shape[0]:
+            if len(features) != matrix_shape[0]:
                 errors.append(f"{subset} feature count mismatch")
-            if gzip_lines(paths["barcodes"]) != matrix_shape[1]:
+            if len(barcodes) != matrix_shape[1]:
                 errors.append(f"{subset} barcode count mismatch")
         except Exception as exc:
             errors.append(f"{subset} matrix error: {exc}")
@@ -184,6 +217,18 @@ def audit_10x(
     filtered = shapes.get("filtered")
     if raw and filtered and (raw[0] != filtered[0] or filtered[1] > raw[1]):
         errors.append(f"raw/filtered shapes inconsistent: {raw} vs {filtered}")
+
+    if "raw" in triplets and "filtered" in triplets:
+        raw_m, raw_f, raw_b = triplets["raw"]
+        fil_m, fil_f, fil_b = triplets["filtered"]
+        positions = {row[0]: index for index, row in enumerate(raw_b)}
+        if raw_f != fil_f:
+            errors.append("raw/filtered feature IDs or order differ")
+        elif any(row[0] not in positions for row in fil_b):
+            errors.append("filtered barcodes are not a subset of raw")
+        elif raw_m.shape[0] == fil_m.shape[0] and raw_m.shape[1] == len(raw_b) and fil_m.shape[1] == len(fil_b):
+            if (raw_m[:, [positions[row[0]] for row in fil_b]] != fil_m).nnz:
+                errors.append("filtered counts differ from matching raw columns")
 
     loom_shape: tuple[int, int] | None = None
     velocity_present = any(
@@ -195,7 +240,7 @@ def audit_10x(
             "features.tsv.gz",
             "barcodes.tsv.gz",
         )
-    ) or (loom_file.is_file() and loom_file.stat().st_size > 0)
+    )
     if require_velocity or velocity_present:
         velocity_paths = {
             name: velocity_dir / f"{name}.mtx.gz"
@@ -212,31 +257,18 @@ def audit_10x(
             gzip_paths.extend([*velocity_paths.values(), vf, vb])
             try:
                 velocity_shapes = {name: shape(path) for name, path in velocity_paths.items()}
-                if len(set(velocity_shapes.values())) != 1:
+                if len({value[:2] for value in velocity_shapes.values()}) != 1:
                     errors.append(f"velocity layer shapes differ: {velocity_shapes}")
                 first = next(iter(velocity_shapes.values()))
                 if raw and first[:2] != raw[:2]:
                     errors.append(f"velocity/raw shape mismatch: {first} vs {raw}")
-                if gzip_lines(vf) != first[0] or gzip_lines(vb) != first[1]:
+                vfeatures, vbarcodes = identifiers(vf, features=True), identifiers(vb)
+                if len(vfeatures) != first[0] or len(vbarcodes) != first[1]:
                     errors.append("velocity feature/barcode count mismatch")
+                if "raw" in triplets and (vfeatures != triplets["raw"][1] or vbarcodes != triplets["raw"][2]):
+                    errors.append("velocity/raw feature or barcode order differs")
             except Exception as exc:
                 errors.append(f"velocity error: {exc}")
-        if not loom_file.is_file() or loom_file.stat().st_size == 0:
-            errors.append("missing loom")
-        else:
-            try:
-                with h5py.File(loom_file, "r") as loom:
-                    loom_shape = tuple(int(value) for value in loom["matrix"].shape)
-                    layers = set(loom["layers"].keys())
-                    if layers != {"spliced", "unspliced", "ambiguous"}:
-                        errors.append(f"loom layers={sorted(layers)}")
-                    if filtered and loom_shape != filtered[:2]:
-                        errors.append(f"loom/filtered shape mismatch: {loom_shape} vs {filtered}")
-                    for layer in layers:
-                        if tuple(loom["layers"][layer].shape) != loom_shape:
-                            errors.append(f"loom layer {layer} shape mismatch")
-            except Exception as exc:
-                errors.append(f"loom error: {exc}")
 
     if not skip_full_gzip:
         for path in gzip_paths:
@@ -256,7 +288,8 @@ def main() -> int:
     parser.add_argument("--root", required=True, type=Path)
     parser.add_argument("--manifest", type=Path)
     parser.add_argument("--output", type=Path)
-    parser.add_argument("--skip-full-gzip", action="store_true")
+    parser.add_argument("--skip-full-gzip", action="store_true", help="Skip extra gzip scan only with --structure-only; formal audits always check CRC")
+    parser.add_argument("--structure-only", action="store_true", help="Diagnostic structural check; never authorizes release")
     scope = parser.add_mutually_exclusive_group()
     scope.add_argument("--gsm")
     scope.add_argument("--unit", dest="gsm", help="转换原子单元；当前等价于 --gsm")
@@ -301,7 +334,10 @@ def main() -> int:
             if product in {"", "pending", "CEL", "IDAT", "fastq", "sra"}:
                 errors.append("CEL/IDAT 未指定可审计转换产物")
             else:
-                audit_array_product(root, gsm, errors)
+                try:
+                    audit_array_product(root, gsm, errors)
+                except (OSError, ValueError, EOFError) as exc:
+                    errors.append(f"array product: {exc}")
         elif modality == "bulk_rnaseq" or product == "gene_count_matrix":
             audit_gene_matrix(root, gsm, errors)
         else:
@@ -309,8 +345,33 @@ def main() -> int:
                 not modality and product != "matrix_10x"
             )
             raw_shape, filtered_shape, loom_shape = audit_10x(
-                root, gse, gsm, require_velocity, args.skip_full_gzip, errors
+                root, gse, gsm, require_velocity, args.skip_full_gzip and args.structure_only, errors
             )
+        if not errors and not args.structure_only:
+            try:
+                receipt_path = root / f"reports/processed_receipts/{gsm}.json"
+                released = any(row.get("gsm") == gsm and row.get("release_status") == "released"
+                               for row in read_tsv(root / "reports/storage_release.tsv"))
+                if released:
+                    check_receipt(root, gsm, allow_missing_inputs=True)
+                else:
+                    if product == "gene_count_matrix" or modality == "bulk_rnaseq":
+                        output_names = [f"processed/{gsm}/counts/counts.tsv.gz"]
+                    elif modality in {"microarray", "methylation"} or sample.get("raw_file_type") in {"CEL", "IDAT"}:
+                        output_names = [name for row in read_tsv(root / "reports/conversion_provenance.tsv")
+                                        if row.get("gsm") == gsm for name in row.get("output_matrix", "").split(";") if name]
+                    else:
+                        matrix_dir, velocity_dir, loom = locate_outputs(root, gse, gsm)
+                        candidates = [matrix_dir / f"{subset}_feature_bc_matrix" / name
+                                      for subset in ("raw", "filtered")
+                                      for name in ("matrix.mtx.gz", "features.tsv.gz", "barcodes.tsv.gz")]
+                        candidates += [velocity_dir / name for name in
+                                       ("spliced.mtx.gz", "unspliced.mtx.gz", "ambiguous.mtx.gz", "features.tsv.gz", "barcodes.tsv.gz")]
+                        output_names = [path.relative_to(root).as_posix() for path in candidates if path.is_file()]
+                    receipt = conversion_receipt(root, gsm, output_names)
+                    atomic_json(receipt_path, receipt)
+            except (IntegrityError, OSError, ValueError, KeyError) as exc:
+                errors.append(f"content-bound audit: {exc}")
         all_errors.extend(f"{gse}/{gsm}: {message}" for message in errors)
         report_rows.append(
             {
@@ -319,7 +380,7 @@ def main() -> int:
                 "raw_shape": raw_shape,
                 "filtered_shape": filtered_shape,
                 "loom_shape": loom_shape,
-                "status": "FAIL" if errors else "PASS",
+                "status": "FAIL" if errors else ("STRUCTURE_ONLY" if args.structure_only else "PASS"),
                 "message": "; ".join(errors),
             }
         )

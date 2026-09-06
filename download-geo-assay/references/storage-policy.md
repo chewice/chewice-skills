@@ -6,7 +6,10 @@ Mode B 采用逐 GSM/文库 release：全部成员 runs 下载通过 → 标准�
 
 ```bash
 python scripts/audit_processed_outputs.py --root . --gsm GSM...
+python scripts/publish_sample.py --root . --gsm GSM...
 python scripts/apply_storage_policy.py --root . --gsm GSM... --confirm-delete
 ```
 
 任一门失败均保留 raw。raw-only assay，以及未指定可审计转换产品的 CEL/IDAT，不具备删除资格。完整不变量见 `gates.md`。
+
+转换前还须运行 `artifact_integrity.py` 保存输入指纹。历史 PASS、仅结构检查、缺正式样本包均不允许释放；逐文件删除 journal 支持中断恢复。

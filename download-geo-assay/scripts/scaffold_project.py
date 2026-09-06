@@ -134,6 +134,7 @@ def main() -> None:
         project / "raw",
         project / "temporary",
         project / "processed",
+        project / "deliverables",
         project / "annotation/platform_annotation",
         project / "qc",
         project / "reports/logs",
@@ -166,6 +167,7 @@ def main() -> None:
         CHARACTERISTICS_HEADER,
     )
     write_new(project / "metadata/srr_gsm_mapping.tsv", MAPPING_HEADER)
+    write_new(project / "metadata/sample_units.tsv", "gsm\tsample_id\tlibrary_id\tassignment_status\n")
     write_new(project / "metadata/expected_runs.tsv", EXPECTED_HEADER)
     write_new(
         project / "metadata/acquisition_config.tsv",
@@ -181,6 +183,7 @@ def main() -> None:
         f"monitor_interval_seconds\t{args.monitor_interval}\n"
         "source_preference\tauto\n"
         "allow_sra_lite\tfalse\n"
+        "prefetch_ahead_runs\t0\n"
         "auto_restart\tfalse\n"
         "max_auto_restarts\t0\n"
         "max_same_error_attempts\t3\n"
@@ -215,6 +218,7 @@ def main() -> None:
         'pigz = "*"\n'
         'seqkit = "*"\n'
         'aria2 = "*"\n'
+        'awscli = "*"\n'
         'curl = "*"\n'
         'scipy = "*"\n'
         'h5py = "*"\n\n'
@@ -225,36 +229,19 @@ def main() -> None:
         "[tasks]\n"
         'check-env = "python --version && fasterq-dump --version && '
         'STAR --version && samtools --version | head -n 1 && '
-        'fastqc --version && multiqc --version && aria2c --version | head -n 1"\n',
+        'fastqc --version && multiqc --version && aws --version && aria2c --version | head -n 1"\n',
     )
     write_new(
         project / "scripts/run_all.sh",
         "#!/usr/bin/env bash\n"
         "set -Eeuo pipefail\n"
         'ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)\n'
-        'MANIFEST="$ROOT/metadata/source_manifest.tsv"\n'
-        'REPORTER="$ROOT/scripts/build_report.py"\n'
-        'refresh_report() {\n'
-        '  python "$REPORTER" --root "$ROOT" || echo "WARNING: HTML 报告刷新失败" >&2\n'
-        '}\n'
-        "trap refresh_report EXIT\n"
-        '[[ -s "$MANIFEST" ]] || { echo "Missing $MANIFEST" >&2; exit 2; }\n'
-        'python "$ROOT/scripts/audit_manifest.py" --root "$ROOT" --manifest "$MANIFEST"\n'
-        "while IFS= read -r run; do\n"
-        '  [[ -n "$run" ]] || continue\n'
-        '  "$ROOT/scripts/download_run.sh" "$ROOT" "$run"\n'
-        "done < <(awk -F '\\t' 'NR>1 {gsub(/\\r/,\"\",$4); print $4}' \"$MANIFEST\")\n"
-        'python "$ROOT/scripts/audit_download_evidence.py" --root "$ROOT"\n'
-        'if [[ -s "$ROOT/metadata/storage_policy.tsv" ]]; then\n'
-        '  python "$ROOT/scripts/audit_storage_policy.py" --root "$ROOT"\n'
-        'fi\n'
-        "refresh_report\n"
-        "trap - EXIT\n",
+        'exec python "$ROOT/scripts/run_queue.py" --root "$ROOT" "$@"\n',
     )
 
     skill_scripts = Path(__file__).resolve().parent
     for source in skill_scripts.iterdir():
-        if source.name in {Path(__file__).name, "self_test.py"} or not source.is_file():
+        if source.name in {Path(__file__).name, "self_test.py", "regression_test.py", "integrity_test.py", "delivery_test.py", "fault_test.py"} or not source.is_file():
             continue
         target = project / "scripts" / source.name
         if not target.exists():

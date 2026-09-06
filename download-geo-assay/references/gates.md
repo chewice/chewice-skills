@@ -30,3 +30,14 @@
 ## 恢复边界
 
 watchdog 默认只写快照。历史日志中的旧错误不算新事故；只有上次快照后出现的新错误或持续无进展才能改变当前状态。获授权的自动恢复也必须启动新会话，禁止热改正在执行的脚本。
+
+## 六个执行关卡
+
+1. **路由与来源锁定**：先写 `assay_routing.tsv`，再读匹配的来源文档。混合 assay 按 `(workflow, modality)` 分开执行、记录存储策略与日志；CEL 不等待 STAR。来源选择须留探测证据与选择原因，用户明确指定 NCBI 时直接尊重该偏好，不强迫重走已拒绝的来源。
+2. **pilot 与剩余队列**：pilot 通过仅表示试点成功，日志须写 `pilot_done` 和“未开始剩余 N 个 GSM”。满足来源已锁定、pilot 校验通过、剩余队列实际启动、Mode B 已跑通逐 GSM release、当前峰值预算通过后，才可脱钩。tmux 可以用于保护 pilot 进程，但不能以空闲会话或退出码 0 宣布全集完成。运行入口见 [queue-execution.md](queue-execution.md)。不自动启动 watchdog。
+3. **磁盘与预取**：每个 GSM 前重新审计项目总量、temporary 总量、文件系统剩余空间及可探测硬配额；配置的用户配额不能覆盖更严的文件系统限制。可选预取默认关闭，启用后最多 3 个 run，完整、Lite 和 partial 都占用 slot；独立 cache、共享锁并跳过当前 run。转换失败保留原料，成功审计后立即释放当前 GSM。
+4. **代理与重启**：使用 HTTP(S) 代理时清除 `all_proxy/ALL_PROXY`，保留 localhost 的 no_proxy；不打印代理值。脚本仅显式加载 `GEO_SRA_PROXY_ENV` 指定的可信本地环境文件。更换代理或脚本先停对应会话，`bash -n` 后新开会话；旧 tmux 不会自动接收新环境。TLS 错误与 HTTP 403/5xx 属于未探明，不记为对象缺失；获准直连时可比较 HEAD 诊断，并记录实际 transport。
+5. **参考对象**：先盘点 FASTA、GTF、STAR 版本和 index 参数，核对组装、注释版本及染色体命名；例如 RefSeq `NC_*` 与 GENCODE `chr*` 不可直接混配。是否复用已有参考需结合用户已确认的版本选择；不默认复用 Cell Ranger index。缺少兼容 index 时可在独立新目录构建，不替换活动任务使用的目录。`versionGenome` 是 index 格式兼容信息，实际软件版本用 `STAR --version` 记录。
+6. **读长与方向**：用可靠 read length 推导 `sjdbOverhang=max(readLength)-1`，再由 pilot FASTQ 复核；测序平台和 RunInfo 的平均 spot 长度不能直接代替最大单 read 长度。未知链方向保留 GeneCounts 三列与 `unknown/pending`；可显式标记 unstranded 为临时比较列，但不能把暂用列写成已确认建库方向。
+
+人工进度日志与 `watchdog.log` 分开。默认快照字段：当前 GSM/SRR、阶段、审计通过的转换数、剩余数、parked 数、temporary bytes、文件系统剩余 bytes、最近错误类别。`prefetch err: no error`、`retrying` 和字节进度本身不是失败证据；以退出码、持久状态和产物审计联合判断。

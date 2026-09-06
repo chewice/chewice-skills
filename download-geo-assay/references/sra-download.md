@@ -12,7 +12,7 @@
 scripts/download_run.sh <project-root> <SRR>
 ```
 
-在 detached tmux 中启动 sample 循环。
+按 `queue-execution.md` 启动单 assay 的 pilot 与剩余 GSM 队列，通过关卡后再 tmux 脱钩。
 
 代理是可选配置：直连可用时不要求主备代理。aria2/curl 使用其支持的 HTTP(S)
 proxy URL；SOCKS 是否可用必须按当前工具实测，不能写成全局网络定律。任何含凭据的 proxy
@@ -39,6 +39,6 @@ proxy URL；SOCKS 是否可用必须按当前工具实测，不能写成全局�
 
 ## 监测
 
-在独立 detached tmux 会话中运行 `scripts/watchdog.sh <project-root> [interval-seconds]`。
+默认不启动 watchdog。用户要求监测时，才在独立会话运行 `scripts/watchdog.sh <project-root> [interval-seconds]`；快照不代表任务完成。
 
 对可重复出现的网络或完整性错误最多安全恢复三次，预算持久化到 `reports/status/<run>.transfer.json`。`terminal_failed` 出现后 watchdog 必须停止；不得通过重启 tmux 清零预算。不得热修改活动脚本；先停止任务、校验语法，再重新启动。统一 CRLF 换行，并校验 TSV 数值字段，避免格式问题伪装成 read count 错误。

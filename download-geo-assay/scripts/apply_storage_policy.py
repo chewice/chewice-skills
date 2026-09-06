@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import fcntl
 import hashlib
+import re
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -13,6 +14,8 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
+
+from artifact_integrity import IntegrityError, check_receipt, release_files, load
 
 from capabilities import CapabilityError, assay_capability  # noqa: E402
 from project_layout import (  # noqa: E402
@@ -82,6 +85,12 @@ def gate_errors(
     policy: dict[str, str],
 ) -> list[str]:
     errors: list[str] = []
+    try:
+        check_receipt(root, gsm)
+        from publish_sample import verify_delivery
+        verify_delivery(root, gsm)
+    except (IntegrityError, OSError, ValueError, KeyError) as exc:
+        errors.append(f"content-bound release audit: {exc}")
     modality = policy.get("modality", "")
     if not policy.get("confirmed_at"):
         errors.append("storage policy 缺少 confirmed_at")
@@ -158,8 +167,11 @@ def gate_errors(
         errors.append(f"{gsm}: 没有 temporary raw 候选")
     for path in candidates:
         resolved = path.resolve()
-        base = (root / "temporary" / gsm).resolve()
-        if base not in resolved.parents or not path.is_file():
+        base = root / "temporary" / gsm
+        cache_roots = {
+            root / "temporary/prefetch_cache" / run for run in runs if re.fullmatch(r"[SED]RR\d+", run)
+        }
+        if (base not in resolved.parents and not cache_roots.intersection(resolved.parents)) or not path.is_file() or path.is_symlink():
             errors.append(f"{gsm}: 非法或已变化的删除候选 {path}")
     return errors
 
@@ -208,8 +220,29 @@ def main() -> int:
     if policy["retain_raw_files"] == "true":
         raise SystemExit(f"{gsm}: Mode A forbids raw deletion")
 
+    # Hold the same locks as downloads/lookahead until the release transaction ends.
+    object_locks = []
+    for run in runs:
+        if not re.fullmatch(r"[SED]RR\d+", run):
+            continue
+        for path in (root / "temporary" / gsm / "work" / run / "run.lock", root / "temporary/prefetch_cache" / f"{run}.lock"):
+            path.parent.mkdir(parents=True, exist_ok=True)
+            handle = path.open("a+")
+            try:
+                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError as exc:
+                raise SystemExit(f"{run}: active download/prefetch; raw retained") from exc
+            object_locks.append(handle)
+
     candidates = list_temporary_raw_for_gsm(root, gsm)
-    errors = gate_errors(root, gsm, gse, runs, candidates, policy)
+    journal_path = root / f"reports/release_journals/{gsm}.json"
+    resuming = journal_path.is_file()
+    errors = [] if resuming else gate_errors(root, gsm, gse, runs, candidates, policy)
+    if resuming:
+        try:
+            check_receipt(root, gsm, allow_missing_inputs=True)
+        except (IntegrityError, OSError, ValueError, KeyError) as exc:
+            errors.append(f"release recovery: {exc}")
     base_state = {
         "gse": gse,
         "gsm": gsm,
@@ -233,48 +266,26 @@ def main() -> int:
         print("ERROR " + "; ".join(errors), file=sys.stderr)
         return 1
 
-    # Persist the exact preservation/release evidence before unlinking any file.
-    ready = write_release_state(root, base_state | {"release_status": "ready"})
-    current = list_temporary_raw_for_gsm(root, gsm)
-    fingerprints = [(relative(root, path), str(path.stat().st_size), md5(path)) for path in current]
-    expected = list(
-        zip(
-            split(ready["candidate_paths"]),
-            split(ready["candidate_bytes"]),
-            split(ready["candidate_md5"]),
-        )
-    )
-    if fingerprints != expected:
-        write_release_state(
-            root,
-            ready | {"release_status": "blocked", "message": "候选在 release 证据落盘后发生变化"},
-        )
-        raise SystemExit("删除候选在 release 证据落盘后发生变化；raw 已保留")
-
+    # The per-file JSON journal is authoritative across unlink/process interruptions.
+    previous = [row for row in read_release_states(root) if row.get("gsm") == gsm]
+    ready = previous[0] if resuming and previous else write_release_state(root, base_state | {"release_status": "ready"})
+    try:
+        journal = release_files(root, gsm, [relative(root, path) for path in candidates])
+    except (IntegrityError, OSError, ValueError) as exc:
+        raise SystemExit(f"Release paused with durable journal; {exc}") from exc
     now = datetime.now().astimezone().isoformat(timespec="seconds")
     log_rows = read_tsv(deletion_log_path(root))
-    for path, (name, size, checksum) in zip(current, fingerprints):
-        log_rows.append(
-            {
-                "gse": gse,
-                "gsm": gsm,
-                "srr": infer_srr(path),
-                "path": name,
-                "bytes": size,
-                "md5": checksum,
-                "validation_report": processed_audit_path(root).relative_to(root).as_posix(),
-                "deleted_at": now,
-            }
-        )
-        path.unlink()
-        parent = path.parent
-        if parent.is_dir() and not any(parent.iterdir()):
-            parent.rmdir()
+    logged = {(row.get("gsm"), row.get("path")) for row in log_rows}
+    old_md5 = dict(zip(split(ready.get("candidate_paths", "")), split(ready.get("candidate_md5", ""))))
+    for item in journal["files"]:
+        name = item["path"]
+        if (gsm, name) not in logged:
+            log_rows.append({"gse": gse, "gsm": gsm, "srr": infer_srr(Path(name)),
+                             "path": name, "bytes": str(item["bytes"]), "md5": old_md5.get(name, ""),
+                             "validation_report": processed_audit_path(root).relative_to(root).as_posix(),
+                             "deleted_at": now})
     write_tsv_atomic(deletion_log_path(root), DELETION_LOG_FIELDS, log_rows)
-    write_release_state(
-        root,
-        ready | {"release_status": "released", "released_at": now, "message": ""},
-    )
+    write_release_state(root, ready | {"release_status": "released", "released_at": now, "message": ""})
 
     released = {
         row["gsm"] for row in read_release_states(root) if row["release_status"] == "released"
@@ -286,7 +297,7 @@ def main() -> int:
         updated["deletion_time"] = now
         write_storage_policy(root, updated)
     print(
-        f"STORAGE_RELEASE gsm={gsm} runs={len(runs)} files={len(current)} "
+        f"STORAGE_RELEASE gsm={gsm} runs={len(runs)} files={len(journal['files'])} "
         f"log={deletion_log_path(root).relative_to(root).as_posix()}"
     )
     return 0

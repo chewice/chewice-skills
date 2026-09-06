@@ -705,7 +705,11 @@ def build(args: argparse.Namespace) -> tuple[str, Path | None]:
         {"level": "Mode B 临时 raw", "path": "temporary/GSM*/", "content": "仅供转换、验证后删除的 raw files"},
         {"level": "临时工作区", "path": "temporary/GSM*/work/", "content": "staging 与断点恢复"},
         {"level": "10x 矩阵", "path": "processed/GSM*/matrix_10x/", "content": "sc/snRNA 的 raw/filtered feature-barcode matrix"},
-        {"level": "bulk count matrix", "path": "processed/gene_count_matrix.tsv", "content": "bulk RNA-seq gene × sample counts"},
+        {"level": "bulk 样本计数", "path": "processed/GSM*/counts/counts.tsv.gz", "content": "各文库独立的未归一化计数；链方向须明确记录"},
+        {"level": "正式样本包", "path": "deliverables/<sample_id>/", "content": "开放 MEX/TSV、样本身份、provenance、validation 与 SHA256；.complete 验证后交付"},
+        {"level": "交付暂存", "path": "deliverables/.staging/", "content": "尚未原子发布，不可作为正式交付"},
+        {"level": "内容审计", "path": "reports/processed_receipts/", "content": "绑定转换前输入、来源合同与产物内容的审计证据"},
+        {"level": "释放日志", "path": "reports/release_journals/", "content": "逐文件记录 raw 释放；中断后复核并继续"},
         {"level": "RNA velocity（可选）", "path": "processed/GSM*/velocity/", "content": "仅 sc/snRNA 且用户要求时的 spliced/unspliced"},
         {"level": "平台注释", "path": "annotation/platform_annotation/", "content": "probe 到 gene 映射"},
         {"level": "QC", "path": "qc/", "content": "芯片或测序 QC 中间文件"},
@@ -826,6 +830,16 @@ def build(args: argparse.Namespace) -> tuple[str, Path | None]:
             "storage",
         )
     )
+
+    queue_paths = sorted((root / "reports").glob("queue_*.tsv"))
+    if queue_paths:
+        queue_rows = [row for path in queue_paths for row in read_tsv(path)]
+        sections.append(section(
+            "GSM 队列与待处理失败",
+            "<p>队列退出 0 仅表示本次遍历结束；parked、blocked、not_started 均表示全集尚未完成。</p>"
+            + table(queue_rows, ["gsm", "status", "failed_run", "message"], root),
+            root, output, queue_paths, "queue",
+        ))
 
     sample_columns = [
         "gse",

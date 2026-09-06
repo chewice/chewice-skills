@@ -4,9 +4,12 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import ExitStack
+import fcntl
 import hashlib
 import json
 import os
+import re
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -37,6 +40,8 @@ def write_json(path: Path, value: dict) -> None:
         handle.flush()
         os.fsync(handle.fileno())
     os.replace(temp, path)
+    from artifact_integrity import fsync_dir
+    fsync_dir(path.parent)
 
 
 def digest(path: Path) -> str:
@@ -110,6 +115,43 @@ def get_field(args: argparse.Namespace) -> int:
     return 0
 
 
+def archive_retry(args: argparse.Namespace) -> int:
+    """Explicit operator recovery; retain old counters and all raw/publish evidence."""
+    from project_layout import read_tsv
+    from artifact_integrity import safe_path, fsync_dir
+    root = args.root.resolve()
+    if not re.fullmatch(r'(?:[SED]RR|CRR)\d+',args.run) or not args.reason.strip():
+        raise SystemExit('Valid run and nonempty recovery reason required')
+    rows = [row for row in read_tsv(root/'metadata/source_manifest.tsv') if row.get('srr') == args.run]
+    if len(rows) != 1 or not re.fullmatch(r'GSM\d+',rows[0].get('gsm','')):
+        raise SystemExit('Manifest must identify exactly one run and GSM')
+    gsm = rows[0]['gsm']
+    with ExitStack() as stack:
+        for name in ['reports/status/queue.lock',f'temporary/{gsm}/work/{args.run}/run.lock',
+                     f'temporary/prefetch_cache/{args.run}.lock']:
+            path = safe_path(root,name,exists=False)
+            path.parent.mkdir(parents=True,exist_ok=True)
+            handle = stack.enter_context(path.open('a+'))
+            try:
+                fcntl.flock(handle,fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                raise SystemExit('Queue/run/cache is active; stop it before archiving retry state')
+        path = safe_path(root,f'reports/status/{args.run}.transfer.json')
+        state = read_json(path)
+        if state.get('run') != args.run or state.get('status') == 'complete' or (path.parent/f'{args.run}.complete').exists():
+            raise SystemExit('Refusing retry reset for mismatched/completed run')
+        archive = path.with_name(f'{args.run}.transfer.{datetime.now().strftime("%Y%m%dT%H%M%S%f")}.archived.json')
+        # Persist intent first, so even a crash between rename and fresh state is auditable.
+        write_json(archive.with_suffix('.reason.json'),{'run':args.run,'reason':args.reason,'at':now()})
+        os.replace(path,archive); fsync_dir(path.parent)
+        write_json(path,{'run':args.run,'source_fingerprint':state.get('source_fingerprint'),
+                         'status':'retryable_failed','phase':'manual_retry','error_counts':{},
+                         'same_error_count':0,'attempt_count':0,'resume_count':0,
+                         'retry_reason':args.reason,'previous_state':archive.name,'created_at':now()})
+        print(f'RETRY_READY {args.run} archived={archive}')
+    return 0
+
+
 def resume_check(args: argparse.Namespace) -> int:
     current = {
         "source_fingerprint": args.fingerprint,
@@ -165,7 +207,11 @@ def publish(args: argparse.Namespace) -> int:
                     raise SystemExit(f"Refusing to replace differing final file {final}")
                 staged.unlink()
             else:
+                with staged.open("rb") as handle:
+                    os.fsync(handle.fileno())
                 os.replace(staged, final)
+                from artifact_integrity import fsync_dir
+                fsync_dir(final.parent)
         print(final)
     journal["published_at"] = journal.get("published_at") or now()
     write_json(args.journal, journal)
@@ -193,7 +239,7 @@ def main() -> int:
     command.add_argument("--error-class")
     command.add_argument("--error-key")
     command.add_argument("--message")
-    command.add_argument("--clear-error", action="store_true")
+    command.add_argument("--clear-error", action="store_true", help="Clear current error display only; persistent error_counts and retry budget are preserved")
     command.add_argument("--print-field")
     command.set_defaults(function=update)
 
@@ -202,6 +248,12 @@ def main() -> int:
     command.add_argument("--field", required=True)
     command.add_argument("--default", default="")
     command.set_defaults(function=get_field)
+
+    command = commands.add_parser('archive-retry', help='After operator review, archive run state and start a fresh retry budget')
+    command.add_argument('--root',required=True,type=Path)
+    command.add_argument('--run',required=True)
+    command.add_argument('--reason',required=True)
+    command.set_defaults(function=archive_retry)
 
     command = commands.add_parser("resume-check")
     command.add_argument("--path", required=True, type=Path)

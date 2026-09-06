@@ -618,6 +618,14 @@ def list_temporary_raw_for_gsm(root: Path, gsm: str) -> list[Path]:
         raise StoragePolicyError(f"invalid GSM accession: {gsm!r}")
     base = (root / "temporary" / gsm).resolve()
     files = [path for path in list_temporary_raw(root) if base in path.resolve().parents]
+    runs = {row.get("srr", "") for row in read_tsv(root / "metadata/source_manifest.tsv") if row.get("gsm") == gsm}
+    for run in runs:
+        if not re.fullmatch(r"[SED]RR\d+", run):
+            continue
+        for directory in (base / "work" / run / "ncbi" / run, root / "temporary/prefetch_cache" / run):
+            for path in directory.rglob("*"):
+                if path.is_file():
+                    files.append(path)
     return sorted(files)
 
 

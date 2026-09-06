@@ -1,6 +1,6 @@
 ---
 name: download-geo-assay
-description: 按 GEO assay 和来源对象分流，规划、下载、续传、校验并转换公共组学原始数据；在逐 GSM/文库的标准产物与 provenance 审计通过后，按预先确认的存储策略释放对应 raw。用于 GSE/GSM/GPL、SRA/SRR、ENA、CNCB-NGDC、FASTQ/SRA、CEL、IDAT、配额恢复和有限存储下的滚动转换。不要用来下载 GEO series matrix/logcounts，或执行 DESeq2、RMA、GO/KEGG、Seurat/Scanpy、ATAC/ChIP 下游分析。
+description: 按 GEO assay 和来源对象分流，规划、下载、续传、校验并转换公共组学原始数据；在逐 GSM/文库的开放格式标准产物与 provenance 审计通过后，按预先确认的存储策略释放对应 raw。用于 GSE/GSM/GPL、SRA/SRR、ENA、CNCB-NGDC、FASTQ/SRA、CEL、IDAT、配额恢复和有限存储下的滚动转换。不要用来下载 GEO series matrix/logcounts，或执行 DESeq2、RMA、GO/KEGG、Seurat/Scanpy、ATAC/ChIP 下游分析。
 ---
 
 # Download GEO Assay
@@ -10,7 +10,8 @@ description: 按 GEO assay 和来源对象分流，规划、下载、续传、�
 ```text
 下载来源对象并校验
 → 转换为分析输入/标准产物
-→ 审计产物与 provenance
+→ 审计当前文件内容与 provenance
+→ 原子发布按样本独立的开放格式交付包
 → 按已授权策略删除对应 raw
 ```
 
@@ -21,6 +22,7 @@ SRR 是下载单元；GSM 或建库文库是转换、审计和释放 raw 的原�
 始终先读：
 
 - [references/gates.md](references/gates.md)：不变量、停止条件与人机决策边界。
+- [references/open-delivery.md](references/open-delivery.md)：软件无关格式、样本归属与交付验收。
 - [references/manifest-schema.md](references/manifest-schema.md)：状态文件和证据合同。
 
 根据已判定的 assay 只读一个匹配的 assay reference：
@@ -50,14 +52,17 @@ SRR 是下载单元；GSM 或建库文库是转换、审计和释放 raw 的原�
 3. 只询问无法可靠推导的选择：最终产物、raw 去留、可用预算、明确来源偏好、是否接受 SRA Lite、是否授权自动恢复。用 `record_storage_policy.py` 写入确认。
 4. 探测来源并运行 `select_sources.py`。先按保真度与下游需求选对象类别，再选传输 endpoint。用户明确指定来源时必须服从；NGDC 只是在 `auto` 模式下的有效镜像偏好。
 5. 先以一个 GSM/文库做 pilot，并运行 `audit_manifest.py` 做峰值预算。预算取项目上限、working/temporary 上限、用户 quota 和文件系统可用空间中的最严约束。
-6. 下载并校验该单元全部 runs，转换为该 assay 的标准产物；用带 `--gsm`/`--unit` 的 `audit_processed_outputs.py` 审计结构、样本覆盖、输入映射和 provenance。
-7. 仅当存储策略已确认且 release 证据原子写入后，才用 `apply_storage_policy.py --gsm ... --confirm-delete` 删除该单元 raw。随后处理下一个单元。
+6. 下载并校验该单元全部 runs，先用 `artifact_integrity.py --gsm` 保存精确输入与校验和，再执行转换；用 `audit_processed_outputs.py --gsm` 全量审计内容、样本覆盖、输入映射和 provenance，用 `publish_sample.py --gsm` 原子发布开放格式样本包。
+7. 仅当存储策略已确认、当前交付包和文件指纹与审计一致且 release 证据原子写入后，才用 `apply_storage_policy.py --gsm ... --confirm-delete` 删除该单元 raw。随后处理下一个单元。
 8. 每个 GSE 只生成一份中文 `reports/report.html`，同时保留 TSV/JSON 审计证据。
 
-长任务使用项目 Pixi 环境与 detached tmux。先验证 pilot，再扩大并发或进入滚动下载—转换—释放。
+长任务使用项目 Pixi 环境。先验证 pilot，再启动剩余队列；Mode B 验证逐 GSM release 后才可 tmux 脱钩。使用 [references/queue-execution.md](references/queue-execution.md) 的 `run_queue.py` 隔离失败单元，不能把 pilot 或遍历退出 0 当成全集完成。
 
 ## 强制边界
 
+- 正式交付采用 Matrix Market、TSV/TSV.gz、JSON 和校验和文本，按样本独立存储；不依赖 Seurat、AnnData、qs、RDS、pickle、h5ad 或 loom 对象读取。
+- 中断可留下不完整 temporary；无法证明完整时不得交付、标记完成或删除 raw。
+- ODP HEAD 的 `000`/TLS/超时不是缺失；先复核 AWS 精确对象，确认存在则下载完整归档。重试预算仅经人工归档恢复，`--clear-error` 不清零持久预算；见 NCBI reference 与恢复手册。
 - provenance 与 transport 分开记录。Phred 分布只能提示质量是否简化，不能证明文件来自作者提交。
 - SRA Lite 是 `SIMPLIFIED` quality class，必须显式 opt-in；不得伪装为 full-quality archive。
 - raw-only assay，或 CEL/IDAT 尚未指定可审计转换产物时，不具备 raw 删除资格。

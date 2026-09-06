@@ -23,6 +23,9 @@ def fetch(url: str, method: str = "GET") -> tuple[int, bytes, dict[str, str]]:
             return response.status, response.read(), dict(response.headers.items())
     except urllib.error.HTTPError as exc:
         return exc.code, exc.read(), dict(exc.headers.items())
+    except (urllib.error.URLError, TimeoutError, OSError):
+        # Transport failure is not evidence that the object is absent.
+        return 0, b"", {}
 
 
 def source_objects(run: str, bucket: str, xml_bytes: bytes) -> list[tuple[str, str, str]]:
@@ -33,7 +36,7 @@ def source_objects(run: str, bucket: str, xml_bytes: bytes) -> list[tuple[str, s
         key = content.findtext("s3:Key", default="", namespaces=namespace) or content.findtext("Key", "")
         size = content.findtext("s3:Size", default="", namespaces=namespace) or content.findtext("Size", "")
         etag = (content.findtext("s3:ETag", default="", namespaces=namespace) or content.findtext("ETag", "")).strip('"')
-        if key and size.isdigit() and int(size) > 0:
+        if key.startswith(run + "/") and size.isdigit() and int(size) > 0:
             url = f"https://{bucket}.s3.amazonaws.com/{urllib.parse.quote(key, safe='/')}"
             objects.append((url, size, etag if len(etag) == 32 and "-" not in etag else ""))
     return objects
@@ -61,9 +64,15 @@ def probe_run(run: str, fixture: dict[str, object] | None = None) -> list[dict[s
             objects = [tuple(item) for item in fixture.get(run, {}).get(bucket, [])]  # type: ignore[union-attr]
             status = 200
         else:
-            query = urllib.parse.urlencode({"list-type": "2", "prefix": run})
+            query = urllib.parse.urlencode({"list-type": "2", "prefix": run + "/"})
             status, body, _ = fetch(f"https://{bucket}.s3.amazonaws.com/?{query}")
-            objects = source_objects(run, bucket, body) if status == 200 else []
+            try:
+                objects = source_objects(run, bucket, body) if status == 200 else []
+                # A truncated listing cannot establish complete read-role coverage.
+                if status == 200 and b"<IsTruncated>true</IsTruncated>" in body:
+                    status, objects = 0, []
+            except ET.ParseError:
+                status, objects = 0, []
         if objects:
             urls, sizes, md5s = zip(*objects)
             rows.append(
@@ -78,21 +87,32 @@ def probe_run(run: str, fixture: dict[str, object] | None = None) -> list[dict[s
             rows.append(
                 {
                     "srr": run, "source": "ncbi_source", "provenance": "AUTHOR_SUBMITTED",
-                    "status": "missing", "url": "", "bytes": "", "md5": "", "roles": "",
-                    "evidence": f"{bucket} selective source bucket has no matching object; not evidence that full archive is absent",
+                    "status": "missing" if status in {200, 404} else "unreachable", "url": "", "bytes": "", "md5": "", "roles": "",
+                    "evidence": f"{bucket} list status={status}; no usable object observed; not evidence that full archive is absent",
                 }
             )
     odp_url = f"https://sra-pub-run-odp.s3.amazonaws.com/sra/{run}/{run}"
     if fixture is not None:
         odp_size = str(fixture.get(run, {}).get("odp_bytes", ""))  # type: ignore[union-attr]
-        odp_status = 200 if odp_size.isdigit() and int(odp_size) > 0 else 404
+        odp_status = int(fixture.get(run, {}).get("odp_status", 200 if odp_size.isdigit() and int(odp_size) > 0 else 404))
     else:
         odp_status, _, headers = fetch(odp_url, method="HEAD")
-        odp_size = headers.get("Content-Length", "")
+        headers = {key.lower():value for key,value in headers.items()}
+        odp_size = headers.get("content-length", "")
+        if odp_status and headers.get('x-amz-delete-marker','').lower() == 'true':
+            odp_status = 404
+        if odp_status not in {200,404}:
+            from ncbi_odp import list_object
+            alternative = list_object(run)
+            if alternative['status'] == 'available':
+                rows.append(dict(srr=run,source='ncbi_ondemand',provenance='ARCHIVE_NORMALIZED_SRA',
+                                 status='available',url=odp_url,bytes=str(alternative['bytes']),md5='',roles='SRA',
+                                 evidence=f'HEAD status={odp_status}; AWS exact-key listing: '+json.dumps(alternative,sort_keys=True)))
+                return rows
     rows.append(
         {
             "srr": run, "source": "ncbi_ondemand", "provenance": "ARCHIVE_NORMALIZED_SRA",
-            "status": "available" if odp_status == 200 and odp_size.isdigit() and int(odp_size) > 0 else "missing",
+            "status": "available" if odp_status == 200 and odp_size.isdigit() and int(odp_size) > 0 else ("missing" if odp_status == 404 else "unreachable"),
             "url": odp_url if odp_status == 200 else "", "bytes": odp_size if odp_status == 200 else "",
             "md5": "", "roles": "SRA" if odp_status == 200 else "",
             "evidence": f"SRA ODP exact object HEAD status={odp_status}; full-quality normalized SRA",

@@ -10,7 +10,9 @@ metadata/{assay_routing.tsv,expected_runs.tsv,source_manifest.tsv,storage_policy
 metadata/download_manifests/<GSM>.tsv
 raw/<GSM>/{fastq,sra,CEL,IDAT}/
 temporary/<GSM>/{fastq,sra,CEL,IDAT,work}/
-processed/<GSM>/... 或 processed/gene_count_matrix.tsv
+processed/<GSM>/...
+deliverables/<sample_id>/{matrix,counts.tsv.gz,sample.tsv,provenance.json,validation.json,checksums.sha256,.complete}
+reports/{conversion_inputs,processed_receipts,release_journals}/<GSM>.json
 reports/{download_integrity_audit.tsv,processed_output_audit.tsv,conversion_provenance.tsv,storage_release.tsv,storage_deletion_log.tsv,report.html}
 ```
 
@@ -47,7 +49,7 @@ selection_evidence selection_reason fallback_reason
 ## 下载与转换证据
 
 - `<GSM>.tsv`：逐 run 的实际对象分类、文件路径、bytes/MD5、验证方法和完成时间。NCBI resolver 若实际得到 Lite，必须记录 `SRA_LITE/SIMPLIFIED`。
-- `conversion_provenance.tsv`：每 GSM 一行，至少含 `gse,gsm,tool,tool_version,input_fastq,output_matrix,validated_at`；`input_files` 可作为兼容扩展。输入必须覆盖该 GSM 全部成员 runs。
+- `conversion_provenance.tsv`：每 GSM 一行，至少含 `gse,gsm,tool,tool_version,input_fastq,output_matrix,validated_at`；测序正式交付还需 `reference,counting_strategy`；`input_files` 可作为兼容扩展。输入必须覆盖该 GSM 全部成员 runs。
 - `processed_output_audit.tsv`：每 GSM 的结构、样本覆盖和状态；支持 `--gsm/--unit` 增量更新。
 
 ## `storage_release.tsv`
@@ -59,3 +61,11 @@ selection_evidence selection_reason fallback_reason
 ## 报告边界
 
 每 GSE 只有一份中文 `reports/report.html`。所有报告显示项目相对路径，禁止写入代理凭据或绝对私有路径。TSV/JSON/log 是机器证据，不算额外人类报告。
+
+## 内容绑定与交付
+
+`conversion_inputs/<GSM>.json` 在转换前保存完整来源合同、样本映射、下载记录和精确输入 paths/bytes/SHA256。`processed_receipts/<GSM>.json` 将同一合同、provenance 与全套产物校验和绑定。任一文件或归属改变使旧 PASS 失效。
+
+`release_journals/<GSM>.json` 在首次 unlink 前保存原始候选及 receipt 指纹，逐文件持久化删除结果；中断恢复只处理原事务剩余文件，新出现文件或变化产物阻断恢复。TSV 是摘要，JSON journal 是逐文件恢复依据。
+
+正式格式与流程见 `open-delivery.md`；STRUCTURE_ONLY 不等于 PASS，旧 TSV PASS 不提供删除权限。
