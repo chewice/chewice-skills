@@ -2,7 +2,7 @@
 
 ## 读取范围
 
-通过根 `CURRENT_HANDOFF.md` 的 Context Map 定位目标 context，读取该 context 的 Handoff、`QUESTIONS.md` 中目标行、对应 `BRIEF.md`，以及 BRIEF 明确引用的资料。不要加载其他 Question。
+通过根 `CURRENT_HANDOFF.md` 定位目标 context，优先读取对应 Handoff、Question 索引行和 BRIEF。需要时定向查找与当前问题相关的资料，避免加载无关 Question。
 
 ## 创建 Question
 
@@ -17,9 +17,15 @@ pixi run record-project new-question \
 
 命令从项目级最大 Q-ID 递增分配 `Q-NNN`，用同一 ISO 8601 时间戳创建 `docs/questions/<Q-ID>/BRIEF.md`、更新 `QUESTIONS.md` 与目标 Context Map 行。默认 dry-run；`--apply` 才写入，拒绝覆盖。ID 分配与索引同步是机械工作，不需要 Human 再次确认；Human 原始问题必须保留，Agent 不得把自己的解释冒充原问题。
 
+`new-question` 默认 `--analysis-mode exploratory`，使用 `assets/templates/BRIEF-exploratory.md`。明确准备验证性研究时可传 `--analysis-mode confirmatory`，生成完整设计模板，但不会自动审批。
+
 `QUESTIONS.md` 只保存以下索引列：`Q-ID | Research question | Design review | Closure decision | Brief | Updated`。BRIEF 是研究问题与设计的事实源，Handoff 只引用 active ID 和 checkpoint，不复制设计内容。
 
 ## BRIEF 合同：只记录事前设计
+
+compact BRIEF 只有 `Question`、`Inputs`、`First Comparison` 三个章节。先写当前问题与首次检查；描述性探索不必预设假设或 C-ID。输入按 [`biomedical-data.md`](biomedical-data.md) 说明数据与样本表入口、观测/独立单位、数值及处理状态，未知项如实标记，不必另建文件。
+
+`Record format: compact` 只用于尚未审核的设计；允许以有理由的 `stopped` 结束探索。设计审核、标记 `answered` 或准备 confirmatory 前，参照 `assets/templates/BRIEF.md` 补全设计并改为 `Record format: full`，保留原问题、输入引用、日期与已有决定。新增设计注明形成时间，不把探索后的选择冒充事前设计。没有 Record format 字段的既有记录按 full 验证，不自动改写。
 
 顶层 metadata 至少包含：
 
@@ -29,7 +35,7 @@ pixi run record-project new-question \
 
 `Design review` 只允许 `pending | approved | rejected`；`Closure decision` 只允许 `open | answered | stopped`。只有 Human 可以把 review 改为 approved/rejected，或把 closure 从 open 改为 answered/stopped；决定、时间和理由必须共同记录。
 
-固定章节如下：
+full 设计章节如下：
 
 1. `Research Question and Decision`
 2. `Hypotheses and Falsifiers`

@@ -2,6 +2,24 @@
   "skill_name": "research-project-workflow",
   "evals": [
     {
+      "id": 12,
+      "prompt": "先看看这个 h5ad 的细胞分布和各组样本数。obs 里有 donor_id、sample_id、batch，已有 samples.tsv。暂时没有明确假设。",
+      "should_trigger": true,
+      "expected_output": "用 compact BRIEF/RESULT 开始描述性探索，不要求 hypothesis、C-ID/E-ID 或审核章节；引用已有 samples.tsv，核实 donor/sample/cell 映射及独立重复，检查实际使用的矩阵/layer 和数值状态，不重复创建样本注册表，也不凭文件名猜测处理方法。"
+    },
+    {
+      "id": 13,
+      "prompt": "探索 draft 已有一张图，我把 Status 改成 reviewed，就直接当独立验证的结论吧。",
+      "should_trigger": true,
+      "expected_output": "说明 compact 仅适用于 exploratory draft；保留图与观察，在审核前补全 full 证据记录。独立验证需要新建 confirmatory Artifact 和已审核的事前设计，改状态或格式不能使原探索变成独立验证。"
+    },
+    {
+      "id": 11,
+      "prompt": "设计还没定稿。先登记这个问题，看看现有数据的分布和组间差异，再决定后续分析。不要让我填完全部表格才开始。",
+      "should_trigger": true,
+      "expected_output": "用简短 BRIEF 登记问题并创建 exploratory draft，不要求设计审批；以推断单位和最小比较指导线性试做，科学决策直接可见，不预建 runner 或包装一次性代码；保留未定设计与观察，不把探索结果改标为 confirmatory。"
+    },
+    {
       "id": 1,
       "prompt": "非破坏地接管这个已有研究仓库，先建立最小的可恢复科研控制层。",
       "should_trigger": true,

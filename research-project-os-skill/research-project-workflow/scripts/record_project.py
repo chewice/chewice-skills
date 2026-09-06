@@ -354,12 +354,15 @@ def build_new_question_plan(
     root: Path,
     *,
     question: str,
+    analysis_mode: str = "exploratory",
     context: str = "root",
     timestamp: str | None = None,
 ) -> dict[str, Any]:
     root = root.expanduser().resolve()
     if not question.strip():
         raise ValueError("Question must not be empty")
+    if analysis_mode not in ANALYSIS_MODES:
+        raise ValueError(f"Invalid Analysis mode: {analysis_mode}")
     questions, handoff = require_control_files(root)
     _, rows = table_rows(questions, "Q-ID")
     question_id = next_id(
@@ -370,7 +373,8 @@ def build_new_question_plan(
     brief_path = root / brief_relative
     if brief_path.exists():
         raise ValueError(f"Refusing to overwrite existing path: {brief_relative}")
-    brief = (TEMPLATE_ROOT / "BRIEF.md").read_text(encoding="utf-8")
+    template = "BRIEF-exploratory.md" if analysis_mode == "exploratory" else "BRIEF.md"
+    brief = (TEMPLATE_ROOT / template).read_text(encoding="utf-8")
     brief = brief.replace("Q-XXX", question_id)
     for name, value in (
         ("Q-ID", question_id),
@@ -384,19 +388,7 @@ def build_new_question_plan(
         ("Closure rationale", ""),
     ):
         brief = replace_field(brief, name, value)
-    question_section = re.search(
-        r"^##\s+1\. Research Question and Decision\s*$\n(.*?)(?=^##\s+|\Z)",
-        brief,
-        re.MULTILINE | re.DOTALL,
-    )
-    if question_section is None:
-        raise ValueError("Template lacks heading: 1. Research Question and Decision")
-    updated_body = replace_field(question_section.group(1), "Research question", question)
-    brief = (
-        brief[: question_section.start(1)]
-        + updated_body
-        + brief[question_section.end(1) :]
-    )
+    brief = replace_field(brief, "Research question", question)
     new_questions = append_question_row(
         questions,
         question_id=question_id,
@@ -413,13 +405,18 @@ def build_new_question_plan(
         question_id=question_id,
         artifact_id="none",
         checkpoint="Question recorded; study design pending",
-        next_action=f"Complete and review {brief_relative}",
+        next_action=(
+            f"Inspect inputs and choose a first comparison in {brief_relative}"
+            if analysis_mode == "exploratory"
+            else f"Complete and review {brief_relative}"
+        ),
     )
     return {
         "operation": "new-question",
         "project": str(root),
         "context": context,
         "question_id": question_id,
+        "analysis_mode": analysis_mode,
         "timestamp": timestamp,
         "files": [
             plan_file(brief_relative, "create", brief),
@@ -452,7 +449,13 @@ def build_new_artifact_plan(
     if not brief_path.is_file():
         raise ValueError(f"Question BRIEF is missing: {brief_relative}")
     brief = brief_path.read_text(encoding="utf-8")
-    if (
+    format_match = re.search(r"^Record format:[ \t]*(.*)$", brief, re.MULTILINE)
+    record_format = format_match.group(1).strip() if format_match else "full"
+    if record_format not in {"compact", "full"}:
+        raise ValueError(f"Invalid Record format in {brief_relative}: {record_format}")
+    if record_format == "compact" and analysis_mode == "confirmatory":
+        raise ValueError("Confirmatory analysis requires a full, approved Study Design")
+    if analysis_mode == "confirmatory" and (
         not re.search(r"^Design review:\s*approved\s*$", brief, re.MULTILINE)
         or not re.search(r"^Reviewed at:\s*\S", brief, re.MULTILINE)
         or not re.search(r"^Review rationale:\s*\S", brief, re.MULTILINE)
@@ -460,7 +463,7 @@ def build_new_artifact_plan(
         raise ValueError(
             f"Question requires an approved Study Design review receipt: {brief_relative}"
         )
-    for heading in (
+    required_headings = (
         "1. Research Question and Decision",
         "2. Hypotheses and Falsifiers",
         "3. Estimand and Inference Unit",
@@ -468,7 +471,10 @@ def build_new_artifact_plan(
         "5. Analysis and Uncertainty",
         "6. Claim-Evidence Matrix",
         "7. Acceptance, Stopping and Risks",
-    ):
+    ) if analysis_mode == "confirmatory" else (
+        "Question" if record_format == "compact" else "1. Research Question and Decision",
+    )
+    for heading in required_headings:
         match = re.search(
             rf"^##\s+{re.escape(heading)}\s*$\n(.*?)(?=^##\s+|\Z)",
             brief,
@@ -476,7 +482,7 @@ def build_new_artifact_plan(
         )
         if match is None or not has_substantive_content(match.group(1)):
             raise ValueError(
-                f"Approved Study Design has an empty section in {brief_relative}: {heading}"
+                f"Study Design has an empty section in {brief_relative}: {heading}"
             )
     artifact_parent = root / f"explore/{question_id}"
     existing = [path.name for path in artifact_parent.glob("A-*") if path.is_dir()]
@@ -485,7 +491,8 @@ def build_new_artifact_plan(
     result_relative = f"explore/{question_id}/{artifact_id}/RESULT.md"
     if (root / result_relative).exists():
         raise ValueError(f"Refusing to overwrite existing path: {result_relative}")
-    result = (TEMPLATE_ROOT / "RESULT.md").read_text(encoding="utf-8")
+    template = "RESULT-exploratory.md" if analysis_mode == "exploratory" else "RESULT.md"
+    result = (TEMPLATE_ROOT / template).read_text(encoding="utf-8")
     result = result.replace("Q-XXX", question_id).replace("A-XXX", artifact_id)
     for name, value in (
         ("Question", question_id),
@@ -577,7 +584,8 @@ def main(arguments: list[str] | None = None) -> int:
             if args.question is None:
                 raise ValueError("new-question requires --question")
             plan = build_new_question_plan(
-                args.project, question=args.question, context=args.context
+                args.project, question=args.question, context=args.context,
+                analysis_mode=args.analysis_mode or "exploratory",
             )
         else:
             if args.question_id is None or args.analysis_mode is None:

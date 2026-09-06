@@ -17,6 +17,10 @@ Claims assessed: C-XXX
 
 Data source and version:
 
+Sample metadata and units used:
+
+Measurement, identifiers and processing state:
+
 Code revision:
 
 Environment or lock:

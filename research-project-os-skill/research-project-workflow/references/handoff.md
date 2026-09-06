@@ -37,7 +37,7 @@ Context 使用稳定 slug，Scope 与 Handoff 必须是项目内相对路径。�
 
 ## 恢复与更新
 
-恢复时依次读取根 `AGENTS.md`、根 `CURRENT_HANDOFF.md`，再读取 Active context 行声明的局部 Handoff（root 行不重复读取）和 `Required Reads`。只在当前动作需要时读取 active BRIEF/RESULT；不得递归发现或扫描未声明的 `CURRENT_HANDOFF.md`。
+恢复时优先读取根 `AGENTS.md`、根 `CURRENT_HANDOFF.md`、Active context 声明的局部 Handoff 和 `Required Reads`。当前动作需要时读取 active BRIEF/RESULT；入口缺失或过时时可定向查找相关资料，核实后修正路由。不要默认递归扫描全部上下文。
 
 切换 context 前，先写清当前 `Checkpoint`/`Last verified checkpoint`、`Blocker` 与 `Next decisive action`，再更新 `Active context`。new-question/new-artifact 至少正确更新目标 Context Map 行；局部 context 同时更新其局部 Handoff。跨 context 依赖写入根 `Cross-context Dependencies`，局部仅引用与自身有关的依赖。
 

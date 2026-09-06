@@ -34,4 +34,4 @@ pixi run scaffold-project --project /path/to/project --apply
 - 事前设计：`docs/questions/<Q-ID>/BRIEF.md`。
 - 事后证据：`explore/<Q-ID>/<A-ID>/RESULT.md` 及该 Artifact 明确引用的 code、config、output 或 receipt。
 - 已审核实现是否进入 `pipeline/` 是独立的 implementation reuse 决定；不得把 Explore 路径直接当作稳定 runtime。
-- Human 主动提供的参考材料只在明确引用时读取；具体分析脚本由 `scripting-style` Skill 约束。
+- 参考材料按当前科学问题定向读取；分析遵循生成的 AGENTS.md 中的线性、少包装原则，具体写法可按需使用已安装的 `scripting-style` Skill。

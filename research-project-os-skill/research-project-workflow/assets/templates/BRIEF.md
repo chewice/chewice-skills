@@ -35,6 +35,10 @@ Outcome and time:
 
 Observation and inference unit:
 
+Sample metadata and replicate structure:
+
+Data reference and measurement state:
+
 ## 4. Study Design and Evidence Eligibility
 
 Analysis mode and design:

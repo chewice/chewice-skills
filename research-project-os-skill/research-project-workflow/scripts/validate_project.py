@@ -69,6 +69,10 @@ RESULT_HEADINGS = (
     "9. Human Review",
     "10. Implementation Reuse",
 )
+COMPACT_BRIEF_HEADINGS = ("Question", "Inputs", "First Comparison")
+COMPACT_RESULT_HEADINGS = (
+    "Question", "Inputs", "Analysis", "Observations", "Interpretation and Next Step",
+)
 ANALYSIS_MODES = {"exploratory", "confirmatory"}
 ARTIFACT_STATUSES = {"draft", "review-ready", "reviewed"}
 REVIEW_DECISIONS = {"pending", "approved", "rejected"}
@@ -225,7 +229,20 @@ def validate_questions(
             errors.append(f"Missing BRIEF for {question_id}: {expected}")
             continue
         text = brief.read_text(encoding="utf-8")
-        require_headings(text, BRIEF_HEADINGS, expected, errors)
+        record_format = field(text, "Record format") or "full"
+        if record_format not in {"compact", "full"}:
+            errors.append(f"Invalid Record format in {expected}: {record_format}")
+        compact = record_format == "compact"
+        require_headings(
+            text, COMPACT_BRIEF_HEADINGS if compact else BRIEF_HEADINGS, expected, errors
+        )
+        if compact:
+            if field(text, "Design review") != "pending":
+                errors.append(f"Compact BRIEF must be expanded before design review: {expected}")
+            if field(text, "Closure decision") == "answered":
+                errors.append(f"Compact BRIEF must be expanded before answering: {expected}")
+            if not field(section(text, "Question"), "Research question"):
+                errors.append(f"Compact BRIEF lacks Research question: {expected}")
         for name in (
             "Q-ID",
             "Created",
@@ -277,7 +294,8 @@ def validate_questions(
                 else:
                     claim_ids.add(match.group(1))
         if (
-            field(text, "Design review") == "approved"
+            not compact
+            and field(text, "Design review") == "approved"
             and field(text, "Reviewed at")
             and field(text, "Review rationale")
         ):
@@ -298,14 +316,16 @@ def validate_artifact(
 ) -> tuple[str, str] | None:
     label = path.relative_to(root).as_posix()
     text = path.read_text(encoding="utf-8")
-    require_headings(text, RESULT_HEADINGS, label, errors)
+    record_format = field(text, "Record format") or "full"
+    if record_format not in {"compact", "full"}:
+        errors.append(f"Invalid Record format in {label}: {record_format}")
     question_id = field(text, "Question")
     artifact_id = field(text, "Artifact")
     expected_question = path.parents[1].name
     expected_artifact = path.parent.name
     if question_id != expected_question or question_id not in question_ids:
         errors.append(f"Question ID mismatch in {label}")
-    elif question_id not in approved_designs:
+    elif field(text, "Analysis mode") == "confirmatory" and question_id not in approved_designs:
         errors.append(f"Artifact lacks an approved Study Design review receipt: {label}")
     if artifact_id != expected_artifact or re.fullmatch(r"A-\d{3}", artifact_id) is None:
         errors.append(f"Artifact ID mismatch in {label}")
@@ -317,6 +337,12 @@ def validate_artifact(
     for name in ("Created", "Updated"):
         if not field(text, name):
             errors.append(f"{label} lacks metadata value: {name}")
+    if record_format == "compact":
+        require_headings(text, COMPACT_RESULT_HEADINGS, label, errors)
+        if field(text, "Analysis mode") != "exploratory" or status != "draft":
+            errors.append(f"Compact RESULT is only valid for exploratory draft: {label}")
+        return (question_id, artifact_id) if question_id and artifact_id else None
+    require_headings(text, RESULT_HEADINGS, label, errors)
     review = section(text, "9. Human Review")
     review_decision = field(review, "Decision")
     if review_decision not in REVIEW_DECISIONS:

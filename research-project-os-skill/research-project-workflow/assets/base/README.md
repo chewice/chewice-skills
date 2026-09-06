@@ -19,6 +19,8 @@ BRIEF 不保存事后结果，RESULT 不改写事前设计。null、negative、c
 
 ## 按需结构
 
-Scaffold 只建立根控制层。Question、Artifact、局部 context、pipeline、results、reports、logs、configs 与参考资料目录在首次真实需要时创建。具体分析脚本由 `scripting-style` Skill 管理；Pixi 环境由 `pixi-environment-builder` Skill 管理。
+Scaffold 只建立根控制层，其余目录在首次真实需要时创建。探索默认使用 compact BRIEF/RESULT，记录问题、输入、试做、观察与下一步；描述性探索无需预设假设或 Claim/Evidence 编号。同一 draft 持续记录试做，正式审核前再补全 full 记录；confirmatory 要求完整且已审核的事前设计。
+
+输入说明优先引用已有样本表，写清样本层级、独立重复及矩阵/对象的数值含义和处理状态，未知信息如实标记。分析代码遵循 AGENTS.md 的线性、少包装原则，可按需使用已安装的 `scripting-style`；Pixi 环境由 `pixi-environment-builder` 管理。
 
 所有 mutating script 默认 dry-run 并拒绝覆盖。用户明确请求的项目内、非覆盖、可恢复写入无需重复确认；覆盖、删除、Git mutation 或外部写入仍需明确授权。

@@ -8,6 +8,8 @@
 
 按以下边界核对：Question 与事前 Design 在 BRIEF；事后 Evidence/Inference 在 RESULT；Handoff 只负责路由。区分 observed facts、Agent inference、Human decisions 与待确认内容。technical validation、scientific support、Human approval、Question closure 和 implementation reuse 分别报告，不相互代替。
 
+当前是 compact 探索记录时，直接总结问题、输入、试做、观察与下一步；没有假设、Claim/Evidence 编号或审核章节是允许的，不因“总结工作”自动扩展为 full。
+
 ## 2. 输出总结
 
 总结当前研究问题、事前设计是否已审核、新增 evidence（包括 null/negative/contradictory）、当前 inference 与 qualified claim、限制、Human 已作决定、最后验证点、blocker 和 next decisive action。若存在多个 context，只总结 Active context 和显式 cross-context dependencies。
