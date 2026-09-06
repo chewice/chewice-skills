@@ -42,11 +42,14 @@ class WorkflowTests(unittest.TestCase):
     def scaffold(self, root: Path) -> None:
         SCAFFOLD.apply_plan(SCAFFOLD.build_plan(root))
 
-    def question(self, root: Path, *, context: str = "root") -> Path:
+    def question(
+        self, root: Path, *, context: str = "root", analysis_mode: str = "exploratory"
+    ) -> Path:
         plan = RECORD.build_new_question_plan(
             root,
             question="干预是否改变主要结局？",
             context=context,
+            analysis_mode=analysis_mode,
             timestamp=self.timestamp,
         )
         RECORD.apply_plan(plan)
@@ -54,6 +57,17 @@ class WorkflowTests(unittest.TestCase):
 
     def approve_design(self, brief: Path, *, question_id: str = "Q-001") -> None:
         text = brief.read_text(encoding="utf-8")
+        if "Record format: compact" in text:
+            # This fixture supplies a full design; approval alone cannot expand one.
+            question = VALIDATOR.field(text, "Research question")
+            text = (RECORD.TEMPLATE_ROOT / "BRIEF.md").read_text(encoding="utf-8")
+            text = text.replace("Q-XXX", question_id)
+            for name, value in (
+                ("Research question", question),
+                ("Created", self.timestamp),
+                ("Updated", self.timestamp),
+            ):
+                text = RECORD.replace_field(text, name, value)
         text = text.replace("Design review: pending", "Design review: approved")
         text = text.replace("Reviewed at:", f"Reviewed at: {self.timestamp}")
         text = text.replace("Review rationale:", "Review rationale: design accepted")
@@ -64,8 +78,7 @@ class WorkflowTests(unittest.TestCase):
             ("Analysis mode and design:", "Analysis mode and design: exploratory cohort"),
             ("Analysis strategy:", "Analysis strategy: estimate the contrast"),
             (
-                "|---|---|---|---|",
-                "|---|---|---|---|\n"
+                "| C-XXX: qualified claim | | | pending |",
                 "| C-001: intervention changes outcome | observed contrast | none | pending |",
             ),
             ("Acceptance criteria:", "Acceptance criteria: interval excludes null"),
@@ -138,25 +151,115 @@ class WorkflowTests(unittest.TestCase):
                 "Research question: 干预是否改变主要结局？",
                 brief.read_text(encoding="utf-8"),
             )
-            self.assertIn(
-                "Decision this question informs:", brief.read_text(encoding="utf-8")
-            )
-            self.assertIn("Scope and boundary:", brief.read_text(encoding="utf-8"))
+            self.assertIn("Record format: compact", brief.read_text(encoding="utf-8"))
+            self.assertNotIn("C-XXX", brief.read_text(encoding="utf-8"))
+            validation = VALIDATOR.validate_project(root)
+            self.assertTrue(validation["structure_consistent"], validation["errors"])
             with self.assertRaisesRegex(ValueError, "after planning"):
                 RECORD.apply_plan(plan)
 
-    def test_new_artifact_requires_approved_study_design_receipt(self) -> None:
+    def test_exploration_can_start_before_design_approval(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.scaffold(root)
+            brief = self.question(root)
+            result = self.artifact(root)
+            text = result.read_text(encoding="utf-8")
+            self.assertIn("Analysis mode: exploratory", text)
+            self.assertIn("Status: draft", text)
+            self.assertNotIn("Claims assessed:", text)
+            self.assertNotIn("### E-", text)
+            self.assertIn("Design review: pending", brief.read_text(encoding="utf-8"))
+            self.assertTrue(VALIDATOR.validate_project(root)["structure_consistent"])
+            result.write_text(
+                text.replace("Analysis mode: exploratory", "Analysis mode: confirmatory"),
+                encoding="utf-8",
+            )
+            self.assertFalse(VALIDATOR.validate_project(root)["structure_consistent"])
+
+    def test_compact_exploration_preserves_biomedical_input_notes_without_registry(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.scaffold(root)
+            brief = self.question(root)
+            text = brief.read_text(encoding="utf-8")
+            for name, value in (
+                ("Data and sample metadata", "cohort.h5ad; existing samples.tsv; obs.sample_id"),
+                ("Observation and independent unit", "cells within libraries; independent donors"),
+                ("Measurement and processing state", "layers[counts]; Ensembl; annotation unknown"),
+                ("First inspection or comparison", "inspect cells and donor counts by batch"),
+            ):
+                text = RECORD.replace_field(text, name, value)
+            brief.write_text(text, encoding="utf-8")
+            before = brief.read_bytes()
+            plan = RECORD.build_new_artifact_plan(
+                root, question_id="Q-001", analysis_mode="exploratory"
+            )
+            self.assertFalse((root / "explore").exists())
+            RECORD.apply_plan(plan)
+            self.assertEqual(brief.read_bytes(), before)
+            created = {item["path"] for item in plan["files"] if item["action"] == "create"}
+            self.assertEqual(created, {"explore/Q-001/A-001/RESULT.md"})
+            result = root / "explore/Q-001/A-001/RESULT.md"
+            text = result.read_text(encoding="utf-8")
+            text = RECORD.replace_field(text, "Output and observation", "not run; no output yet")
+            result.write_text(text, encoding="utf-8")
+            validation = VALIDATOR.validate_project(root)
+            self.assertTrue(validation["structure_consistent"], validation["errors"])
+            self.assertEqual(validation["scientific_validity"], "not_evaluated")
+
+    def test_compact_records_cannot_bypass_full_review_or_identity_checks(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.scaffold(root)
+            brief = self.question(root)
+            result = self.artifact(root)
+            original = result.read_text(encoding="utf-8")
+            for old, new in (
+                ("Status: draft", "Status: review-ready"),
+                ("Status: draft", "Status: reviewed"),
+                ("Artifact: A-001", "Artifact: A-999"),
+                ("Question: Q-001", "Question: Q-999"),
+                ("Record format: compact", "Record format: other"),
+            ):
+                with self.subTest(new=new):
+                    result.write_text(original.replace(old, new), encoding="utf-8")
+                    self.assertFalse(VALIDATOR.validate_project(root)["structure_consistent"])
+            result.write_text(original, encoding="utf-8")
+            text = brief.read_text(encoding="utf-8")
+            brief.write_text(text.replace("Design review: pending", "Design review: approved"), encoding="utf-8")
+            validation = VALIDATOR.validate_project(root)
+            self.assertTrue(any("expanded before design review" in error for error in validation["errors"]))
+
+    def test_full_templates_and_existing_full_drafts_remain_valid(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.scaffold(root)
+            self.question(root, analysis_mode="confirmatory")
+            result = self.artifact(root)
+            full = (RECORD.TEMPLATE_ROOT / "RESULT.md").read_text(encoding="utf-8")
+            full = full.replace("Q-XXX", "Q-001").replace("A-XXX", "A-001")
+            for name in ("Created", "Updated"):
+                full = RECORD.replace_field(full, name, self.timestamp)
+            result.write_text(full, encoding="utf-8")
+            validation = VALIDATOR.validate_project(root)
+            self.assertTrue(validation["structure_consistent"], validation["errors"])
+
+    def test_confirmatory_artifact_requires_approved_study_design_receipt(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             self.scaffold(root)
             brief = self.question(root)
             with self.assertRaisesRegex(ValueError, "approved Study Design"):
-                self.artifact(root)
+                RECORD.build_new_artifact_plan(
+                    root, question_id="Q-001", analysis_mode="confirmatory"
+                )
             self.approve_design(brief)
-            result = self.artifact(root)
-            text = result.read_text(encoding="utf-8")
-            self.assertIn("Analysis mode: exploratory", text)
-            self.assertIn("Status: draft", text)
+            plan = RECORD.build_new_artifact_plan(
+                root, question_id="Q-001", analysis_mode="confirmatory"
+            )
+            RECORD.apply_plan(plan)
+            self.assertTrue(VALIDATOR.validate_project(root)["structure_consistent"])
 
     def test_project_level_question_and_artifact_ids_increment(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

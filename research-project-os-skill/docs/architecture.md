@@ -9,6 +9,21 @@ Question → Study Design → Evidence → Inference → Qualified Claim → Nex
 框架只保留会改变研究判断、证据可追溯性或恢复能力的结构。目录、ID、时间戳和索引是
 bookkeeping，由 dry-run-by-default 的脚本处理；具体分析方法和 runtime 不进入本框架。
 
+exploratory 默认使用 `Record format: compact`：BRIEF 包含 Question、Inputs、First Comparison；
+RESULT 包含 Question、Inputs、Analysis、Observations、Interpretation and Next Step。同一 draft
+持续记录试做，不要求假设或 Claim/Evidence 编号；已形成证据的修订或独立验证另建 Artifact。
+confirmatory 保留完整设计及审核 receipt 的执行门槛；正式报告仍只综合审核通过的记录。
+
+Record format 缺省为 full，既有记录不改写。compact BRIEF 保持 pending，可记录有理由的 stopped；
+设计审核或 answered 前扩展为 full。compact RESULT 只用于 exploratory draft，进入审核前扩展为
+full，保留原始观察、输出引用和日期。结构校验仍检查身份、索引与上下文，不认证科学有效性。
+
+生物医学输入说明复用已有样本表，按需记录样本层级、独立重复、标识符/参考版本和数值状态。
+这些信息写在现有 BRIEF/RESULT 或引用的数据说明中，不引入样本数据库或自动组学分析 pipeline。
+
+生成的 AGENTS.md 明确线性分析、少函数包装、先诊断再修正的原则。框架工具保留必要的
+函数和安全校验，不将这些工程结构强加给探索脚本。
+
 ## Source of truth
 
 | Record | 唯一职责 | 不负责 |
@@ -37,7 +52,7 @@ next decisive action、dependencies 和 Required reads。Validator 只沿 Contex
 ```text
 research-project-workflow
 ├── SKILL.md
-├── references/{scaffold,question,explore,handoff,summarize-work}.md
+├── references/{scaffold,question,explore,handoff,summarize-work,biomedical-data}.md
 ├── assets/{base,templates}/
 └── scripts/{scaffold_project,record_project,validate_project}.py
 

@@ -213,6 +213,23 @@ def main() -> None:
         )
 
         brief = project / "docs/questions/Q-001/BRIEF.md"
+        assert "Record format: compact" in brief.read_text(encoding="utf-8")
+        preview = run(
+            RECORD, "new-artifact", "--project", str(project), "--context", "cohort-a",
+            "--question-id", "Q-001", "--analysis-mode", "exploratory", "--json",
+        )
+        assert json.loads(preview.stdout)["mode"] == "dry-run"
+        assert not (project / "explore").exists()
+        run(
+            RECORD, "new-artifact", "--project", str(project), "--context", "cohort-a",
+            "--question-id", "Q-001", "--analysis-mode", "exploratory", "--apply",
+        )
+        compact_result = project / "explore/Q-001/A-001/RESULT.md"
+        assert "Record format: compact" in compact_result.read_text(encoding="utf-8")
+        validation = run(VALIDATOR, "--project", str(project), "--json")
+        assert json.loads(validation.stdout)["structure_consistent"] is True
+
+        # Expand the synthetic draft to full records before the report boundary.
         brief.write_text(approved_brief(), encoding="utf-8")
         questions = project / "QUESTIONS.md"
         question_lines = questions.read_text(encoding="utf-8").splitlines()
@@ -225,19 +242,6 @@ def main() -> None:
             question_lines[index] = "| " + " | ".join(cells) + " |"
         questions.write_text("\n".join(question_lines) + "\n", encoding="utf-8")
 
-        run(
-            RECORD,
-            "new-artifact",
-            "--project",
-            str(project),
-            "--context",
-            "cohort-a",
-            "--question-id",
-            "Q-001",
-            "--analysis-mode",
-            "exploratory",
-            "--apply",
-        )
         result = project / "explore/Q-001/A-001/RESULT.md"
         result.write_text(reviewed_result(), encoding="utf-8")
         output = project / "results/Q-001/table.tsv"

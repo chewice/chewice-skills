@@ -10,6 +10,11 @@
   explanation、applicability boundary 和 next decisive test 均有明确位置。
 - Null、negative、contradictory 与 inconclusive evidence 不被丢弃或改写成正结论。
 - Human approval、scientific support 与 implementation reuse 为三个独立判断。
+- 未审批的简短 BRIEF 可创建 exploratory Artifact 并通过结构验证；confirmatory 仍要求完整设计和审核 receipt。
+- 生成项目说明强调最小科学分析、线性代码、少包装和先诊断再修正；探索不因未填写全部设计章节而暂停。
+- 默认创建 compact BRIEF/RESULT；描述性探索无需 hypothesis、C-ID/E-ID 或审核章节。
+- compact 不可直接标为已审核或 confirmatory；既有 full 记录仍可验证，扩展后的 full 记录可进入报告流程。
+- 生物医学输入按需记录样本层级、独立重复、数值与处理状态；引用已有样本表，不自动新建重复注册表。
 
 ## 上下文与恢复
 
@@ -23,7 +28,7 @@
 - Scaffold 默认 dry-run，只建立最小控制文件，不预建空业务目录、不生成 Q/A 实例或固定 Pixi 环境。
 - Question/Artifact 的 ID、模板、时间戳、索引和上下文由单个计划一致更新，已有目标不会被覆盖。
 - 用户已明确请求的项目内 non-destructive bookkeeping 不需要二次确认。
-- 科学结论与 review、覆盖或删除、Git/Notion/外部写入仍需 Human 明确决定。
+- Human review、覆盖或删除、Git/Notion/外部写入仍需 Human 明确决定；Agent 可基于证据提出有边界的科学推断。
 - Validator 只声明 `structure_consistent`，并显式报告 `scientific_validity: not_evaluated`。
 - 旧结构在 non-destructive adoption 中只产生 warning。
 

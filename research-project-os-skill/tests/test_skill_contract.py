@@ -67,6 +67,7 @@ class SkillContractTests(unittest.TestCase):
                 "explore.md",
                 "handoff.md",
                 "summarize-work.md",
+                "biomedical-data.md",
             },
             "report-generation": {
                 "html.md",
