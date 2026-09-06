@@ -1,6 +1,7 @@
 ---
 name: zotero-livecite
-description: 在 Microsoft Word 中把 DOI、DOI URL、裸 DOI 或 PMID: 12345678 建成可 Refresh 的 Zotero live citation（ADDIN ZOTERO_ITEM / ZOTERO_BIBL），并用 Zotero MCP 检索、建 collection、按 DOI/PMID 入藏和核对可见性。当用户要求插入或刷新 Word 动态引用、Zotero 文献表、把 DOI 加进 Zotero、为稿件建 collection、静态审计、Refresh 授权或 UI-evidence 时使用。正文引用不得写成普通文本编号或作者年份。未经另行明确授权不得启动 Word、运行 Refresh 或写入 Zotero。不用于 EndNote 迁库或 EndNote 字段迁移（改用 endnote-zotero）、普通格式咨询、把 [1] 当纯文本写入 DOCX、全库去重清 tag，或仅仅安装插件。
+description: >-
+  在 Microsoft Word 中把 DOI、DOI URL、裸 DOI 或 PMID: 12345678 建成可 Refresh 的 Zotero live citation（ADDIN ZOTERO_ITEM / ZOTERO_BIBL），并用 Zotero MCP 检索、建 collection、按 DOI/PMID 入藏和核对可见性。当用户要求插入或刷新 Word 动态引用、Zotero 文献表、把 DOI 加进 Zotero、为稿件建 collection、静态审计、Refresh 授权或 UI-evidence 时使用。正文引用不得写成普通文本编号或作者年份。未经另行明确授权不得启动 Word、运行 Refresh 或写入 Zotero。不用于 EndNote 迁库或 EndNote 字段迁移（改用 endnote-zotero）、普通格式咨询、把 [1] 当纯文本写入 DOCX、全库去重清 tag，或仅仅安装插件。
 ---
 
 # Zotero Live Cite
