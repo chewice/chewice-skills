@@ -21,6 +21,8 @@ AWS fallback 不承诺跨进程续传：旧 partial 保留并计入磁盘占用�
 
 ODP 缺失时用 `prefetch --type sra --max-size u`，实际返回 Lite 并不等于传输失败。只有已有 `allow_sra_lite=true` 且已确认 ODP 缺失时才接纳校验通过的 Lite；完整归档始终优先。未获授权的 Lite 保留等待决策，不反复删除重下。现场对 Lite 的许可不能默认套用到所有新项目。
 
+预取器同样复用已校验的 Lite cache：本轮确认 ODP 缺失后，有授权则记为 ready，无授权则保留并停止该 run 的预取；两者都不重复调用 prefetch。若完整 ODP 已可用则优先完整对象，状态不明时仍不得接纳 Lite。
+
 `download_run.sh` 把实际类型原子写入 staging 的 `<SRR>.object.tsv`，发布恢复前重新读取，最终 manifest 使用 `SRA_LITE/SIMPLIFIED` 与 `replacement_note`。不能因 staging 统一文件名为 `.sra` 而改写成 full-quality；旧 staging 缺少身份记录时须人工核查，不能靠文件名推定。
 
 无 provider MD5 时不虚构校验和：`vdb-validate` → `fasterq-dump --size-check only` → 实际转换 → gzip CRC → FASTQ 结构和 R1/R2 条数、已知 `expected_spots` 校验；本地 MD5 用于后续损坏检测。元数据 spots 与实际生物学 read 数若不适配该 layout，先厘清再重试。

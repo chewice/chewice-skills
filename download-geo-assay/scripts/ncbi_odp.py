@@ -51,8 +51,9 @@ def probe(run):
         try:
             result = subprocess.run(['curl','-sS','-I','--connect-timeout','20','--max-time','40','--retry','0',
                                      '-D',str(headers),'-o','/dev/null','-w','%{http_code}',url],
-                                    capture_output=True,text=True,timeout=45)
-            code = result.stdout.strip() if result.returncode == 0 else '000'
+                                    env=aws_env(),capture_output=True,text=True,timeout=45)
+            raw_code = result.stdout.strip()
+            code = raw_code if result.returncode == 0 and re.fullmatch(r'[1-5][0-9]{2}', raw_code) else '000'
         except (OSError, subprocess.TimeoutExpired):
             code = '000'
         values = {}

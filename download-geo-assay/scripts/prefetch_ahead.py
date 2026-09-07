@@ -82,6 +82,15 @@ def main() -> int:
                     evidence = {**list_object(run), 'http_code':evidence.get('http_code','')}
                 evidence_path = root / f'reports/status/{run}.odp.json'
                 write_json(evidence_path,evidence)
+                # Recheck full-object availability, but never fetch an already validated Lite again.
+                # Unresolved ODP must not authorize Lite; an available full archive still wins.
+                if allow_prefetch and valid(lite):
+                    allowed = allow_sra_lite_for_gsm(root, row['gsm'])
+                    state.update(status='ready' if allowed else 'terminal_failed',
+                                 exit_code=0, object_class='SRA_LITE',
+                                 reason='validated_lite_cache' if allowed else 'lite_requires_authorization')
+                    write_json(state_path, state)
+                    continue
                 with (logs / f'{run}.prefetch.log').open('a') as log:
                     if evidence['status'] == 'available':
                         command = [sys.executable,str(HERE/'ncbi_odp.py'),'copy','--run',run,
