@@ -241,7 +241,7 @@ def main() -> None:
 
     skill_scripts = Path(__file__).resolve().parent
     for source in skill_scripts.iterdir():
-        if source.name in {Path(__file__).name, "self_test.py", "regression_test.py", "integrity_test.py", "delivery_test.py", "fault_test.py"} or not source.is_file():
+        if source.name == Path(__file__).name or not source.is_file():
             continue
         target = project / "scripts" / source.name
         if not target.exists():

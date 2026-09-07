@@ -109,13 +109,6 @@ raw 释放在首次 unlink 前持久化 `reports/release_journals/<GSM>.json`，
 更新日志。强杀后重跑原命令；恢复只允许日志中的原始候选集，并重新验证产物与样本包，
 不得把新出现文件加入旧删除事务。
 
-## 可复现故障验证
-
-在 skill 根目录运行 `pixi run --locked test-faults`，使用锁定的真实 aria2 和本地 HTTP
-服务测试多次断网、远端 ETag 变化、下载进程强杀，以及正式样本发布/raw 删除中途强杀。
-磁盘写入失败通过下载器退出码注入；下载恢复结果与已知 SHA256 基线比较。
-端到端转换是合成计数 fixture，不代表已经重跑真实 GEO 队列或验证生物学计数策略。
-
 ## Publish fingerprint mismatch 是本地恢复问题
 
 当前 fingerprint 由来源、URL、预期字节数、provider MD5、read role 与最终产品构成，**不包含脚本内容或代理地址**。修改脚本本身不应要求重新下载。现场旧脚本若改变了这些字段或 fingerprint 算法，仍可能留下不兼容 journal。

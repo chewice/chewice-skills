@@ -20,15 +20,6 @@
 
 不负责 GEO series matrix/logcounts，也不执行 DESeq2、RMA、Seurat/Scanpy、GO/KEGG 或 ATAC/ChIP 下游分析。
 
-开发验证：
-
-```bash
-# 在本 skill 目录内
-pixi run --locked test
-# 三批也可分别验证
-pixi run --locked test-integrity
-pixi run --locked test-delivery
-pixi run --locked test-faults
-```
+运行环境由 `scripts/scaffold_project.py` 在下载项目内生成 `pixi.toml`，按项目安装和锁定依赖。
 
 正式交付合同见 [references/open-delivery.md](references/open-delivery.md)：每样本独立的 MEX/TSV、JSON、SHA256 清单，可用通用 R/Python 文件读取器导入，无需 Seurat/AnnData 对象。
