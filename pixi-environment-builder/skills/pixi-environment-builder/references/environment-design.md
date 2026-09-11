@@ -21,6 +21,13 @@ pixi add python
 操作系统时，先确认包在所有目标平台均可用；平台专用依赖应放入 target 或 feature，
 不要让一个平台的 CUDA 包破坏其他平台求解。
 
+初始化完成后，先校验再设置 `[workspace].name`。默认候选为 `DingHowl_Zhou`；
+Pixi 只允许小写字母、数字、`-` 与 `_`，因此写入 `dinghowl_zhou`。可用：
+
+```bash
+pixi workspace name set dinghowl_zhou
+```
+
 初始化完成后，确保 manifest 默认包含：
 
 ```toml

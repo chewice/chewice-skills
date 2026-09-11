@@ -16,10 +16,14 @@ description: "创建、迁移、审查或诊断 Pixi 工作区和环境，并预
 3. 为重要依赖明确唯一来源：Conda、PyPI、Git 或本地路径。
 4. 先设计最小顶层依赖，再根据求解器和运行验证补充约束。
 5. 使用 Pixi CLI 修改或初始化 manifest 时，优先采用当前安装版本支持的命令。
-6. 创建 `pixi.toml` 时，默认添加 `[tasks.init]`，令其执行项目根目录的
+6. 创建 `pixi.toml` 时，先校验再写入 `[workspace].name`。默认候选为
+   `DingHowl_Zhou`。合法格式仅为小写字母 `a-z`、数字 `0-9`、连字符 `-` 与下划线
+   `_`（`^[a-z0-9_-]+$`）。`DingHowl_Zhou` 含大写，格式不正确；写入合法名
+   `dinghowl_zhou`，并向用户说明校验结果与采用的 name。用户另行指定 name 时同样先校验：合法则原样写入，不合法则停止并报告，不写入非法 name。
+7. 创建 `pixi.toml` 时，默认添加 `[tasks.init]`，令其执行项目根目录的
    `setup-vscode.sh`，并从 `assets/setup-vscode.sh` 复制该脚本。
-7. 运行锁定、安装或缓存清理前说明会发生的状态变化；用户只要求诊断时保持只读。
-8. 用导入、版本、CLI、GPU 或 kernel 检查验证实际目标，而不只确认安装成功。
+8. 运行锁定、安装或缓存清理前说明会发生的状态变化；用户只要求诊断时保持只读。
+9. 用导入、版本、CLI、GPU 或 kernel 检查验证实际目标，而不只确认安装成功。
 
 ## 按需读取
 
@@ -33,6 +37,12 @@ description: "创建、迁移、审查或诊断 Pixi 工作区和环境，并预
 只读取与当前任务相关的 reference。
 
 ## 新建工作区默认初始化
+
+新建 `pixi.toml` 前校验 `[workspace].name`：
+
+- 合法：`^[a-z0-9_-]+$`（与 `pixi workspace name set` 的要求一致）。
+- 默认候选：`DingHowl_Zhou`。该字符串含大写字母，格式不正确；采用 `dinghowl_zhou`。
+- 不把未通过校验的 name 写入 manifest。
 
 新建 `pixi.toml` 时必须包含：
 
