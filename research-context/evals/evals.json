@@ -5,7 +5,7 @@
       "id": 1,
       "prompt": "接管这个已有分析仓库，从上次停下的地方继续。",
       "should_trigger": true,
-      "expected_output": "读取已有 context.md（未指定时用 doc/context.md），按入口定向恢复当前问题、依据、限制和下一步；不创建目录、编号或记录模板。"
+      "expected_output": "读取已有 context.md（未指定时用 docs/context.md），按入口定向恢复当前问题、依据、限制和下一步；不创建目录、编号或记录模板。"
     },
     {
       "id": 2,
