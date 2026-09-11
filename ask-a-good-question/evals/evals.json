@@ -47,7 +47,7 @@
       "id": 8,
       "prompt": "问题已经定了，请创建正式 BRIEF、Artifact 目录和 CURRENT_HANDOFF。",
       "should_trigger": false,
-      "expected_output": "转交 research-project-workflow；这是已启动项目的研究治理。"
+      "expected_output": "转交 research-context；这是已启动项目的上下文维护，不是选题。"
     },
     {
       "id": 9,
