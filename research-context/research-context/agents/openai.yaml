@@ -1,0 +1,4 @@
+interface:
+  display_name: "科研上下文"
+  short_description: "维护单一 context.md 与 Agent 交接，围绕当前研究问题恢复和推进工作"
+  default_prompt: "使用 $research-context 在用户已有项目中维护一份 context.md，按第一性原理与 Occam's razor 围绕当前问题恢复工作、核验证据并交接任务；不创建脚手架，不默认生成正式报告。"

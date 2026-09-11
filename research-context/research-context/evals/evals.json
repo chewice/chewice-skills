@@ -1,0 +1,59 @@
+{
+  "skill_name": "research-context",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "接管这个已有分析仓库，从上次停下的地方继续。",
+      "should_trigger": true,
+      "expected_output": "读取已有 context.md（未指定时用 doc/context.md），按入口定向恢复当前问题、依据、限制和下一步；不创建目录、编号或记录模板。"
+    },
+    {
+      "id": 2,
+      "prompt": "这个项目还没有 context.md，先帮我把控制层和目录建好再分析。",
+      "should_trigger": true,
+      "expected_output": "不自动创建 context.md、目录或脚手架；能依据当前资料开展的工作继续，并说明哪些状态尚未持久化。"
+    },
+    {
+      "id": 3,
+      "prompt": "总结工作",
+      "should_trigger": true,
+      "expected_output": "根据 context.md 与必要入口核对当前问题、已核实事实、暂定解释、人的决定和下一步；只更新有实质变化的摘要，不默认写正式报告。"
+    },
+    {
+      "id": 4,
+      "prompt": "流程跑通了、检查也过了，直接当成假设成立并作为主结论。",
+      "should_trigger": true,
+      "expected_output": "分别报告执行完成、技术检查结果和推断限制；技术检查通过不等于科学结论成立，主结论选择交由用户决定。"
+    },
+    {
+      "id": 5,
+      "prompt": "这次结果不显著，还和之前方向相反。记下并告诉我下一步最该查什么。",
+      "should_trigger": true,
+      "expected_output": "保留 null/contradictory evidence 与恢复入口，不把摘要压缩成成功叙事；提出能改变判断的下一步。"
+    },
+    {
+      "id": 6,
+      "prompt": "研究方向改了，不要按原来那条线往下做。",
+      "should_trigger": true,
+      "expected_output": "更新当前问题、摘要、任务委派和后续工作，不只追加一条说明；检查进行中或已返回的工作是否仍适用。"
+    },
+    {
+      "id": 7,
+      "prompt": "两个 agent 给的结论不一样，按多数意见选一个吧。",
+      "should_trigger": true,
+      "expected_output": "保留差异，比较输入、方法、假设与证据后再核验；不以多数意见代替证据。"
+    },
+    {
+      "id": 8,
+      "prompt": "帮我把这个 Seurat 分析脚本改得更线性，少做函数封装。",
+      "should_trigger": false,
+      "expected_output": "转交 scripting-style；不把具体分析脚本风格纳入本 Skill。"
+    },
+    {
+      "id": 9,
+      "prompt": "给这个项目创建一个包含 CUDA 和 PyTorch 的 Pixi 环境。",
+      "should_trigger": false,
+      "expected_output": "转交 pixi-environment-builder；本 Skill 不生成或设计固定 Pixi 环境。"
+    }
+  ]
+}

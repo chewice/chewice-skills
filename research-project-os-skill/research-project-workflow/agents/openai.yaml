@@ -1,4 +1,0 @@
-interface:
-  display_name: "问题驱动科研工作流"
-  short_description: "连接研究问题、研究设计、证据、推断与下一项关键检验"
-  default_prompt: "使用 $research-project-workflow 按 Question → Study Design → Evidence → Inference → Qualified Claim → Next decisive test 维护科研分析；区分事前 BRIEF、事后 RESULT、Human review、scientific validity 与 implementation reuse，并通过分层 Context Handoff 保持大型项目可恢复。"
