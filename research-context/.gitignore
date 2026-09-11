@@ -1,5 +1,0 @@
-# pixi environment
-/.pixi/
-__pycache__/
-*.py[cod]
-.ruff_cache/
