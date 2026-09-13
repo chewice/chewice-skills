@@ -12,7 +12,8 @@ description: "创建、迁移、审查或诊断 Pixi 工作区和环境，并预
 
 1. 检查仓库中的 `pixi.toml`、`pyproject.toml`、`pixi.lock`、
    `environment.yml`、导入语句、notebook 版本输出和错误日志。
-2. 确认运行平台、Python/R/CUDA 等兼容锚点、环境用途、网络限制和验收命令。
+2. 确认运行平台（默认 `linux-64`，其余平台仅在用户明确要求时加入）、
+   Python/R/CUDA 等兼容锚点、环境用途、网络限制和验收命令。
 3. 为重要依赖明确唯一来源：Conda、PyPI、Git 或本地路径。
 4. 先设计最小顶层依赖，再根据求解器和运行验证补充约束。
 5. 使用 Pixi CLI 修改或初始化 manifest 时，优先采用当前安装版本支持的命令。
@@ -20,10 +21,12 @@ description: "创建、迁移、审查或诊断 Pixi 工作区和环境，并预
    `DingHowl_Zhou`。合法格式仅为小写字母 `a-z`、数字 `0-9`、连字符 `-` 与下划线
    `_`（`^[a-z0-9_-]+$`）。`DingHowl_Zhou` 含大写，格式不正确；写入合法名
    `dinghowl_zhou`，并向用户说明校验结果与采用的 name。用户另行指定 name 时同样先校验：合法则原样写入，不合法则停止并报告，不写入非法 name。
-7. 创建 `pixi.toml` 时，默认添加 `[tasks.init]`，令其执行项目根目录的
+7. 创建 `pixi.toml` 时，默认设置 `platforms = ["linux-64"]`。仅当用户明确要求
+   其他平台时再扩展；不要自行加入 `osx-*`、`win-*` 或多平台列表。
+8. 创建 `pixi.toml` 时，默认添加 `[tasks.init]`，令其执行项目根目录的
    `setup-vscode.sh`，并从 `assets/setup-vscode.sh` 复制该脚本。
-8. 运行锁定、安装或缓存清理前说明会发生的状态变化；用户只要求诊断时保持只读。
-9. 用导入、版本、CLI、GPU 或 kernel 检查验证实际目标，而不只确认安装成功。
+9. 运行锁定、安装或缓存清理前说明会发生的状态变化；用户只要求诊断时保持只读。
+10. 用导入、版本、CLI、GPU 或 kernel 检查验证实际目标，而不只确认安装成功。
 
 ## 按需读取
 
@@ -47,9 +50,13 @@ description: "创建、迁移、审查或诊断 Pixi 工作区和环境，并预
 新建 `pixi.toml` 时必须包含：
 
 ```toml
+platforms = ["linux-64"]
+
 [tasks.init]
 cmd = "bash setup-vscode.sh"
 ```
+
+`platforms` 默认仅为 `linux-64`。用户另行指出其余平台需求时再修改；不要默认写成多平台。
 
 同时将 [assets/setup-vscode.sh](assets/setup-vscode.sh) 复制到项目根目录。保留脚本中的
 `${workspaceFolder}` 字面量，不要在复制时展开。创建后运行 `bash -n setup-vscode.sh`

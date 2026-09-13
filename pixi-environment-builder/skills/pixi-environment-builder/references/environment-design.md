@@ -17,7 +17,8 @@ pixi init --format pixi --channel conda-forge .
 pixi add python
 ```
 
-最小 manifest 通常包含 workspace 名称、channels、platforms 和顶层依赖。需要支持多个
+最小 manifest 通常包含 workspace 名称、channels、platforms 和顶层依赖。默认
+`platforms = ["linux-64"]`；仅当用户明确要求时再加入其他平台。需要支持多个
 操作系统时，先确认包在所有目标平台均可用；平台专用依赖应放入 target 或 feature，
 不要让一个平台的 CUDA 包破坏其他平台求解。
 
