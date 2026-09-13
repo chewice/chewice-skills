@@ -54,6 +54,12 @@
       "prompt": "给这个项目创建一个包含 CUDA 和 PyTorch 的 Pixi 环境。",
       "should_trigger": false,
       "expected_output": "转交 pixi-environment-builder；本 Skill 不生成或设计固定 Pixi 环境。"
+    },
+    {
+      "id": 10,
+      "prompt": "把今晚改脚本、调 Pixi、迁目录的步骤都记进 context.md",
+      "should_trigger": true,
+      "expected_output": "不写入工程过程；仅在其改变输入、产物入口或人的决定时更新对应条目；建议这些细节由 git history / README / manifest 承载。"
     }
   ]
 }
