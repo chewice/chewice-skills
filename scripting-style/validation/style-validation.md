@@ -9,7 +9,7 @@
 - 来源访问：只读；顶层项目 API 与环境文件均排除
 - 生物学执行：未运行；本验证只检查代码结构和证据可见性
 
-旧 stage-first 验证由本记录取代，原文仍可从 Git 历史追溯。由于用户确认的重构建立在全语料审查上，下列 corpus holdout 是 `retrospective_same_type_regression`，不是 blind/unseen test。fresh forward tasks 才是隔离 evaluation surface。
+下列 corpus holdout 是 `retrospective_same_type_regression`，不是 blind/unseen test。fresh forward tasks 才是隔离 evaluation surface。
 
 ## 当前契约
 

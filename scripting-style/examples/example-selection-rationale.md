@@ -20,7 +20,7 @@
 - `validation_holdout`：在一次新生成或新迭代中，初始变化完成前保持隔离，不作为该轮学习范例。
 - `counterexample`：帮助识别 API / tool 边界，但不能驱动默认分析形态。
 
-当前索引的历史 corpus holdout 已在 2026-08-13 全语料审查中被查看，因此本次记录将它们诚实归类为 retrospective same-type regression，而不是 blind holdout。未来迭代仍应重新冻结新的 prospective holdout。
+索引中的 corpus holdout 是 retrospective same-type regression，不是 blind holdout。未来迭代应重新冻结新的 prospective holdout。
 
 索引推荐的是书写结构，不是算法。除非当前任务独立提供，否则来源路径、参数、样本、生物学标签、模型选择、stored output 和环境细节均不可迁移。
 

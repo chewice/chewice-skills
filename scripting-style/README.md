@@ -12,4 +12,4 @@
 使用 $scripting-style，沿用当前项目的写法续写这个 R 分析，并保留参数比较和人工选择。
 ```
 
-用新范例改进 Skill 时，才使用 [iteration interface](references/iteration-interface.md)；请求仍兼容 `schema_version: "1.0"`，并支持 `.ipynb`。`PROMPT.md` 与 `review/` 是开发证据，不属于日常运行上下文。
+用新范例改进 Skill 时，才使用 [iteration interface](references/iteration-interface.md)；请求仍兼容 `schema_version: "1.0"`，并支持 `.ipynb`。
