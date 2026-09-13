@@ -19,7 +19,11 @@
 
 这是一组可选动作，不是强制提纲。对象含义不变时，让核心对象稳定向下推进；只有科学含义改变，或 baseline 需要保留以供比较时，才创建新对象。
 
-持久核心对象使用 `seu`、`metadata`、`counts`、`markers` 或项目已经采用的明确名称。在一个短小的绘图或变换块中，`p`、`fn`、`data_plot`、`data_use` 等紧凑局部名可以保留。
+默认把分析写在顶层，使语句可以按顺序逐行运行并在中间停下。不要把整段分析包进 named function、`main()` 或 `run_analysis()`。函数不禁用：比较循环里的短匿名函数可以保留；稳定的逐元素技术核仍可在内联案例被理解后抽取。
+
+持久对象（读入的表、矩阵、上一步 RDS 列表、排名、比较表）使用能说明其内容的名字，长度适中，例如 `counts`、`metadata`、`seu`、`markers`，或项目已经采用的明确名称。后面还要读的对象不用 `tab`、`dat`、`tmp`、`obj`、`input`、`main`、`c`、`mat`、`stats` 这类占位名。方法缩写（`dge`、`voom`、`fit`、`de`）和路径句柄 `fn` 可保留。不要为了对齐会话变量去改 RDS / list 的字段名。
+
+紧凑名只留给 `fn`、匿名函数形参，以及几行内用完的绘图句柄。多行分析循环里的循环变量也应能读懂。
 
 ## 沿用项目的 section 风格
 
@@ -27,7 +31,7 @@
 
 只有用户或仓库明确要求 RStudio / VS Code OUTLINE 导航时，才使用 `# 1. Title ----` 及其 title-first 层级。不要只为统一标题而重写既有脚本。
 
-section 按科学语义组织，例如检查样本构成、比较候选维度、选择 lineage、查看 null control、为下一 part 保存对象。`# 读取数据`、`# 保存结果` 这类短导航注释，只要确有帮助就可以保留。
+section 按科学语义组织，例如检查样本构成、比较候选维度、选择 lineage、查看 null control、为下一 part 保存对象。优先保留 `# [问题]`、`[检查点]`、`[决策点]`、`[待判断]` 和紧邻的科学备选。`# 读取数据`、`# 保存结果` 这类短导航注释，只要确有帮助就可以保留。不要为环境、dry-run、路径切换说明或报告 URL 写操作横幅，除非那一行本身就是科学选择。
 
 ## 保留观察点和决策点
 
@@ -35,12 +39,15 @@ section 按科学语义组织，例如检查样本构成、比较候选维度、
 
 ```r
 dim(counts)
+counts[1:5, 1:5]
 head(metadata)
 summary(metadata$nFeature_RNA)
 table(metadata$sample, metadata$group)
 seu
 p
 ```
+
+按对象选用查看方式：矩阵或宽表用 `dim()` 和 `[1:5, 1:5]`；metadata / annotation 用 `head()`；list 或 YAML 打印对象或所需 slot。不必每个对象三种都写。
 
 在明确的交互式项目中可以使用 `View()`，但不要默认加到非交互脚本中。紧邻调用保存的诊断图，往往比断言更能支持科研决定。
 
@@ -58,7 +65,7 @@ selected_value <- NA
 
 生成尚未运行的代码时，把选择写成待判断或保留明确占位。不得编造最优值、cluster identity、cutoff 依据或生物学结论。
 
-不得凭惯例、来源范例或 package default，静默补上会改变分析含义的 `resolution`、cutoff、top-N、model family、受 seed 影响的选择或同类参数。项目没有既定值时，要么基于当前数据比较候选，要么在调用紧邻处保留明确的未决值。只要 default 会改变解释，它仍然是科学选择。
+不得凭惯例、来源范例或 package default，静默补上会改变分析含义的 `resolution`、cutoff、top-N、model family、受 seed 影响的选择或同类参数。项目没有既定值时，要么基于当前数据比较候选，要么在调用紧邻处保留明确的未决值。只要 default 会改变解释，它仍然是科学选择。若用户指向一份项目内参数来源，可以把起始值写在调用附近，并标明这是起始方案而不是已验证最优。
 
 不要为了“显式”而把未请求的 package defaults 全部写进调用，也不要自行增加 algorithm switch、seed、plot sampling size、palette、DPI 或一组额外诊断。先完成能回答当前问题的最小比较；只有邻近项目已有约定，或某个设置确实影响当前判断时才写出并解释它。
 
@@ -74,7 +81,7 @@ selected_value <- NA
 4. 在主线中修正假设；
 5. 只有逐元素技术核稳定后，才提成局部函数并应用到显式集合。
 
-若内联原型能解释模型或校验批量结果，即使批量化后也可作为证据保留。文件开头预先定义一个隐藏尚未验证分析的函数，顺序是不对的。
+若内联原型能解释模型或校验批量结果，即使批量化后也可作为证据保留。文件开头预先定义一个隐藏尚未验证分析的函数，顺序是不对的。减少用函数包装整段分析，不禁用函数。
 
 ## 只抽取稳定的技术核
 
@@ -86,7 +93,9 @@ cutoff、目标分组、annotation、root / terminal、候选参数和其他科�
 
 ## 区分观察与硬契约
 
-用 `head()`、`dim()`、`summary()`、`table()`、对象打印和诊断图支持判断。只有继续执行会静默污染科学含义时，才用 `stopifnot()` 或简短 `stop()`，例如：
+用 `head()`、`dim()`、`[1:5, 1:5]`、`summary()`、`table()`、对象打印和诊断图支持判断。减少 `stopifnot()` / `stop()`，不禁用。不要用它们做 dry-run、缺参填写或单元发现闸门；交互会话里打印检查结果，由人决定是否继续。
+
+只有继续执行会静默污染科学含义时，才保留简洁断言，例如：
 
 - metadata 行与矩阵列不再对齐；
 - 必需 identifier 重复；
@@ -94,6 +103,28 @@ cutoff、目标分组、annotation、root / terminal、候选参数和其他科�
 - 模型输入方向或长度不可能成立。
 
 不要把普通探索改造成 validation subsystem，也不要保存 pass marker。
+
+## 工作目录与路径
+
+若项目约定从脚本所在目录运行，在 `library()` 前进入该目录（已在该目录则跳过），并打印 `getwd()` 与 `.libPaths()`。随后把 `data_path`、`out_path` 写成相对该目录的路径，紧接着 `dir.create(out_path, showWarnings = FALSE, recursive = TRUE)`。
+
+逐文件读取时，先赋 `fn`，再读，再查看，再复用 `fn` 读下一个文件：
+
+```r
+fn <- file.path(data_path, "TODO_INPUT")
+counts <- read.delim(fn, check.names = FALSE)
+dim(counts)
+counts[1:5, 1:5]
+
+fn <- file.path(data_path, "TODO_METADATA")
+metadata <- read.table(fn, header = TRUE, sep = "\t")
+dim(metadata)
+head(metadata)
+```
+
+RDS 重载用同一形状。嵌套的 `readRDS(file.path(...))` 仍允许，作为更短的写法，但不是逐行会话的首选。用项目实际文件和读取函数；不要把 `raw_feature_bc_matrix`、`Matrix::readMM` 或 mtx.gz 当成通用默认。
+
+沿用项目已有的路径锚点。不要把某个仓库里的 `setwd("scripts/...")` 字符串当成通用默认值，也不引入机器特定绝对路径。
 
 ## 允许真实的科研边界
 
