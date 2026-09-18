@@ -1,3 +1,6 @@
+# primary 为主要同类型范例；complement 仅补足缺口；counterexample 用于识别工具边界。
+# 本索引的 validation_holdout 是历史同类型回归，不是盲测；新迭代应另留未读范例。
+# 仅在 SOURCE_ROOT 明确可解析时读取来源；缺失时使用类型指南，不搜索机器或宣称已读。
 schema_version: "2.0"
 skill: "scripting-style"
 source_root: "<SOURCE_ROOT>"

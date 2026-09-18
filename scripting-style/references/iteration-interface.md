@@ -92,13 +92,10 @@ Phase 2 记录位于：
 ```text
 iterations/<iteration_id>/phase2/
 ├── accepted-decisions.yaml
-├── change-summary.md
-├── new-holdout-validation.md
-├── regression-validation.md
 └── final-validation.md
 ```
 
-只创建有内容的文件。这些记录不能替代功能 Skill 或 validation output。
+将实际修改、新 holdout、既有回归和限制合并在 `final-validation.md`；有必要保留的原始输出或来源哈希另存。不为同一结论重复生成多份总结。记录不能替代功能 Skill 或 validation output；已完成迭代的旧草案与全量快照可在用户要求清理时删除，保留仍有效的决定和验证依据。
 
 ## 完成标准
 

@@ -1,44 +1,19 @@
-"""State the current scientific question and upstream input here."""
+"""TODO: 当前科学问题，以及上游输入来自哪里。"""
 
+# %% 读取并检查样本信息
+# 查看实际字段和少量记录，再确定分组与对齐方式。
+# 本例使用 TSV；按目标对象的真实格式调整读取调用。
 from pathlib import Path
 
-import TODO_PACKAGE
+import pandas as pd
 
+metadata_path = Path("inputs/TODO_METADATA.tsv")
+metadata = pd.read_csv(metadata_path, sep="\t")
+print(metadata.head())
+print(metadata.columns)
 
-input_path = Path("inputs/TODO_INPUT")
-output_path = Path("derived/TODO_OUTPUT")
-
-# Read the current project object directly; use the project's real library call.
-analysis_data = None
-print(analysis_data)
-
-# Inspect only the structure or groups needed for the next judgment.
-# print(analysis_data.shape)
-# print(analysis_data.head())
-
-# Optional when this operation will later be batched: try one representative item first.
-representative_id = "TODO_REPRESENTATIVE_ID"
-# representative_result = TODO_METHOD(analysis_data, representative_id)
-# representative_result
-
-# Optional when the task compares candidates: keep diagnostics visible before choosing.
-candidate_values = []
-candidate_results = {}
-
-for candidate_value in candidate_values:
-    # candidate_results[candidate_value] = TODO_METHOD(
-    #     analysis_data,
-    #     candidate_value=candidate_value,
-    # )
-    pass
-
-selected_value = None  # TODO only for a candidate comparison: set after inspection.
-
-# Optional batch extension: extract a per-item helper only after the trial is stable.
-# analysis_result = TODO_DOWNSTREAM(analysis_data, selected_value)
-
-# Save only a scientifically useful result or known downstream handoff.
-# output_path.parent.mkdir(parents=True, exist_ok=True)
-# TODO_WRITE(analysis_result, output_path)
-
-# TODO after execution: record the observed limitation or next question.
+# %% 根据观察继续分析
+# TODO：在同一会话中检查前段输出后，写入下一步及选择依据。
+# 不预填未知分组、阈值或模型，也不把 None 传入尚未决定的下游步骤。
+# 新增片段按需展示局部内容、摘要或诊断，再决定是否继续。
+# 使用已有对象，不在每个 cell 重复加载数据；只保存有明确用途的结果。

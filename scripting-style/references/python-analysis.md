@@ -15,7 +15,21 @@ imports 与短输入块之后，尽快进入真实变换或模型：
 -> 只保存所需产物
 ```
 
-使用项目相对 `Path` 或仓库已有的路径锚点。固定项目数据集、columns、comparisons 和输出名可以作为可见常量。
+使用项目相对 `Path` 或仓库已有的路径锚点。输入路径可以先写；依赖数据内容的 columns、groups 和 comparisons，先观察已载入对象，再把选择写在首次使用附近。
+
+## 按分析目的分段运行
+
+新建探索性脚本默认使用 `# %% 检查样本构成` 一类轻量分隔；修改既有脚本时沿用当前分段。每段标题与简短注释说明本段目的和需要观察的问题，不逐行解释语法。一个段落可以选择单行、多行或整个 cell 执行，不要求每段独立初始化。
+
+```python
+# %% 读取并检查样本信息
+# 查看实际字段和记录，再确定分组与对齐方式。
+metadata = pd.read_csv(metadata_path)
+print(metadata.head())
+print(metadata.columns)
+```
+
+复用 Python 交互会话中的对象；有 `# %%` 不代表普通 Python 进程会自动暂停。执行当前片段、读取实际输出后，再写入和执行依赖它的下一段。不要反复用 `python -c`、here-document 或新临时脚本重载同一个大对象。上游选择改变后，重跑受影响的下游片段。
 
 除非用户要求可复用工具，或当前项目已经存在相应调用契约，否则不要生成 `argparse`、`click`、`main()`、config object、subcommands、logging setup、runner 或退出状态文件。被已知上游命令调用的小脚本可以沿用其真实 positional / environment contract，但不要把它泛化成新接口。
 
@@ -31,9 +45,11 @@ print(data[group_column].value_counts(dropna=False))
 print(result.describe())
 ```
 
-对科学数组或 annotated object，显示真正影响下一步的 shapes、keys、category counts、metrics 或 diagnostic plots。不要围绕普通观察建立 assertion framework。
+读入后至少展示一份与当前问题相关的实际内容，而不只显示 shape 或完成消息。NumPy 数组用 `counts[:5, :5]`，DataFrame 用 `metadata.head()` 或 `.iloc[:5, :5]`；稀疏矩阵需要稠密显示时只对小切片 `.toarray()`，不转换整个矩阵。AnnData 等对象可查看 `.obs.head()` 以及当前需要的表达层小切片；不默认选择或替换 assay/layer。
 
-只有当前任务确实比较候选方法或参数时，才用短而显式的 loop 收集可比诊断。candidate values、metrics 和后续人工选择放在同一局部。这是用户已确认探索原则在 Python 中的应用，不表示唯一的 standalone Python 来源足以建立通用 sweep 写法。代码未运行时，用 `TODO` 或明确待定值，不得编造 winner。
+筛选、合并、转换或拟合后，按下一判断所需展示局部值、category counts、metrics 或 diagnostic plots。普通脚本中用 `print()` 或实际绘图显示调用；不假定 notebook 的隐式 display 可用。不要求每次变换都打印，也不创建通用 preview helper 或 assertion framework。
+
+只有当前任务确实比较候选方法或参数时，才用短而显式的 loop 收集可比诊断。candidate values、metrics 和后续选择放在相邻片段。先看输出，再依据当前问题写下选择及理由；证据不足且取舍会改变分析含义时才询问用户。代码未运行时用注释保留待决定项，依赖它的调用也暂不执行，不把 `None` 传入下游来制造完整流程。不要编造 winner。公开 Notebook 不作为 standalone Python 具体语法的证据。
 
 不得凭惯例补上有科学含义的 threshold、top-N、model setting 或 library default。使用当前项目已经确定的值、设计显式比较，或把未决值留在调用附近。
 
