@@ -13,6 +13,7 @@ from pathlib import Path
 from artifact_integrity import (IntegrityError, atomic_json, check_receipt, fsync_dir,
                                 load, safe_path, sha256, snapshot, verify)
 from project_layout import read_tsv
+from acquisition_runtime import ResourceReservation
 
 
 def sample_identity(root, gsm):
@@ -69,10 +70,15 @@ def publish(root,gsm,*,before_commit=None):
             fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError as exc:
             raise IntegrityError('Another sample publication is active') from exc
-        return _publish(root,gsm,before_commit=before_commit)
+        receipt = check_receipt(root, gsm)
+        expected_bytes = sum(entry['bytes'] for entry in receipt['outputs']) + 65536
+        paths = [root / 'deliverables' / identity['sample_id'],
+                 root / 'deliverables/.staging' / identity['sample_id']]
+        with ResourceReservation(root, f'publish:{gsm}', expected_bytes, paths=paths) as reservation:
+            return _publish(root,gsm,before_commit=before_commit,reservation=reservation)
 
 
-def _publish(root,gsm,*,before_commit=None):
+def _publish(root,gsm,*,before_commit=None,reservation=None):
     receipt=check_receipt(root,gsm)
     identity=sample_identity(root,gsm)
     target=root/'deliverables'/identity['sample_id']
@@ -112,8 +118,13 @@ def _publish(root,gsm,*,before_commit=None):
         original=safe_path(root,source)
         if not path.exists() or sha256(path)!=sha256(original):
             with original.open('rb') as inp,path.open('wb') as out:
-                shutil.copyfileobj(inp,out,8*1024*1024)
+                while chunk := inp.read(8*1024*1024):
+                    if reservation:
+                        reservation.check()
+                    out.write(chunk)
                 out.flush(); os.fsync(out.fileno())
+                if reservation:
+                    reservation.check()
     # Scientific reference/strategy choices belong to conversion provenance, not inferred from file names.
     prov=receipt['provenance']
     if product in {'matrix_10x','matrix_velocity','gene_count_matrix'} and (not prov.get('reference') or not prov.get('counting_strategy')):

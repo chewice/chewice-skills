@@ -69,3 +69,25 @@ selection_evidence selection_reason fallback_reason
 `release_journals/<GSM>.json` 在首次 unlink 前保存原始候选及 receipt 指纹，逐文件持久化删除结果；中断恢复只处理原事务剩余文件，新出现文件或变化产物阻断恢复。TSV 是摘要，JSON journal 是逐文件恢复依据。
 
 正式格式与流程见 `open-delivery.md`；STRUCTURE_ONLY 不等于 PASS，旧 TSV PASS 不提供删除权限。
+
+## 获取运行时配置与状态
+
+| 配置 | 默认值 | 含义 |
+|---|---|---|
+| `download_workers` | 2 | 队列同时获取的 run 数 |
+| `download_connections` | 4 | 每文件最大连接数 |
+| `conversion_workers` | 1 | 仅允许 1；展开、压缩、assay 转换共用槽位 |
+| `max_same_error_attempts` | 3 | 同类错误的持久重试上限 |
+| `retry_delays_seconds` | `0;30;120` | 逐次退避秒数 |
+| `storage_check_interval_seconds` | 1 | 运行中空间检查间隔 |
+| `min_headroom_bytes` | 10 GiB | 磁盘和预算安全余量 |
+| `proxy_env_file` | 空 | 可信本地代理环境文件路径 |
+| `require_proxy` | true | 外网必须经过指定代理 |
+
+显式命令参数/`GEO_SRA_*` 环境覆盖优先于项目配置，未指定时使用默认值。`GEO_SRA_PROXY_ENV` 优先于项目的代理文件；不要将凭据写进此 TSV。脱敏后的设置写入 `reports/status/acquisition_config.effective.json`。
+
+`acquisition_runtime.json` 保存预留、所属进程身份、启动时间和父子关系。进程退出前不得手动删除此账本。`<RUN>.ready.json` 记录获取成功的来源对象路径、大小、摘要和来源身份；`acquired` 仅允许进入转换阶段。AWS `awaiting_identity` 表示传输与原生校验通过、尚待来源身份复核，不是 PASS。
+
+下载 manifest 与 complete marker 均需 `acceptance_fingerprint`，覆盖 layout、expected spots、CB/UMI、read roles、final product 和合同版本。合同变化使旧 PASS 失效，应重验已有对象，不直接重新传输。source fingerprint 继续绑定来源对象身份；它不包含代理和脚本内容。
+
+supplement manifest 还记录 `integrity_methods,response_bytes,etag,last_modified,expected_bytes,expected_md5,member_of,member_name,source_fingerprint`。归档成员绑定已验证来源归档；本地摘要只用于防变更，不作为来源完整性的唯一证据。`UNVERIFIED` 不允许进入转换/发布验收门。

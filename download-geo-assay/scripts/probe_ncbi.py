@@ -11,18 +11,22 @@ import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from acquisition_runtime import open_url
 
 FIELDS = ["srr", "source", "provenance", "status", "url", "bytes", "md5", "roles", "evidence"]
 SOURCE_BUCKETS = ("sra-pub-src-1", "sra-pub-src-2")
 
 
-def fetch(url: str, method: str = "GET") -> tuple[int, bytes, dict[str, str]]:
-    request = urllib.request.Request(url, method=method, headers={"User-Agent": "download-geo-assay/1"})
+def fetch(url: str, method: str = "GET", root: Path | None = None) -> tuple[int, bytes, dict[str, str]]:
     try:
-        with urllib.request.urlopen(request, timeout=30) as response:
-            return response.status, response.read(), dict(response.headers.items())
+        with open_url(root or Path.cwd(), url, method=method, timeout=30,
+                      headers={"User-Agent": "download-geo-assay/1"}) as response:
+            body = response.read(2 * 1024**2 + 1)
+            if len(body) > 2 * 1024**2:
+                return 0, b"", {}  # An oversized listing cannot prove complete coverage.
+            return response.status, body, dict(response.headers.items())
     except urllib.error.HTTPError as exc:
-        return exc.code, exc.read(), dict(exc.headers.items())
+        return exc.code, exc.read(65536), dict(exc.headers.items())
     except (urllib.error.URLError, TimeoutError, OSError):
         # Transport failure is not evidence that the object is absent.
         return 0, b"", {}
@@ -57,7 +61,7 @@ def infer_roles(urls: list[str]) -> list[str]:
     return roles
 
 
-def probe_run(run: str, fixture: dict[str, object] | None = None) -> list[dict[str, str]]:
+def probe_run(run: str, fixture: dict[str, object] | None = None, root: Path | None = None) -> list[dict[str, str]]:
     rows: list[dict[str, str]] = []
     for bucket in SOURCE_BUCKETS:
         if fixture is not None:
@@ -65,7 +69,7 @@ def probe_run(run: str, fixture: dict[str, object] | None = None) -> list[dict[s
             status = 200
         else:
             query = urllib.parse.urlencode({"list-type": "2", "prefix": run + "/"})
-            status, body, _ = fetch(f"https://{bucket}.s3.amazonaws.com/?{query}")
+            status, body, _ = fetch(f"https://{bucket}.s3.amazonaws.com/?{query}", root=root)
             try:
                 objects = source_objects(run, bucket, body) if status == 200 else []
                 # A truncated listing cannot establish complete read-role coverage.
@@ -96,14 +100,14 @@ def probe_run(run: str, fixture: dict[str, object] | None = None) -> list[dict[s
         odp_size = str(fixture.get(run, {}).get("odp_bytes", ""))  # type: ignore[union-attr]
         odp_status = int(fixture.get(run, {}).get("odp_status", 200 if odp_size.isdigit() and int(odp_size) > 0 else 404))
     else:
-        odp_status, _, headers = fetch(odp_url, method="HEAD")
+        odp_status, _, headers = fetch(odp_url, method="HEAD", root=root)
         headers = {key.lower():value for key,value in headers.items()}
         odp_size = headers.get("content-length", "")
         if odp_status and headers.get('x-amz-delete-marker','').lower() == 'true':
             odp_status = 404
         if odp_status not in {200,404}:
             from ncbi_odp import list_object
-            alternative = list_object(run)
+            alternative = list_object(run, root=root)
             if alternative['status'] == 'available':
                 rows.append(dict(srr=run,source='ncbi_ondemand',provenance='ARCHIVE_NORMALIZED_SRA',
                                  status='available',url=odp_url,bytes=str(alternative['bytes']),md5='',roles='SRA',
@@ -126,11 +130,13 @@ def main() -> int:
     parser.add_argument("--expected", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--fixture", type=Path, help="offline JSON fixture")
+    parser.add_argument("--root", type=Path)
     args = parser.parse_args()
     with args.expected.open(newline="") as handle:
         runs = sorted({row["srr"].rstrip("\r") for row in csv.DictReader(handle, delimiter="\t")})
     fixture = json.loads(args.fixture.read_text()) if args.fixture else None
-    rows = [row for run in runs for row in probe_run(run, fixture)]
+    root = (args.root or args.expected.resolve().parent.parent).resolve()
+    rows = [row for run in runs for row in probe_run(run, fixture, root)]
     args.output.parent.mkdir(parents=True, exist_ok=True)
     temp = args.output.with_suffix(args.output.suffix + ".tmp")
     with temp.open("w", newline="") as handle:

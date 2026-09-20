@@ -15,6 +15,8 @@
 - raw 删除采用“前置授权、验证后自动释放”，任何审计失败均保留 raw。
 - scaffold 允许 `pending`，watchdog 默认不启动、不自动重启。
 - `run_queue.py` 区分 pilot 与全集，park 失败 GSM，Mode B 逐 GSM 审计并释放；见 `references/queue-execution.md`。
+- 默认两个下载任务、每文件四个连接、一个转换任务；共享磁盘预留及运行中检查，取消时等待所有所属写盘进程退出。
+- 外网请求统一使用指定代理；无代理或代理失败时暂停，不自动直连。
 - NCBI 优先复用完整 cache；获授权的 Lite 保留身份与替换依据；可选 `prefetch_ahead.py` 预取上限为 3 个 run。
 - 每个 GSE 保持一份中文 `reports/report.html`。
 

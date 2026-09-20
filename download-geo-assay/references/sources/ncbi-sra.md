@@ -17,7 +17,7 @@
 
 只有 HEAD 404 或明确的 `x-amz-delete-marker: true` 才允许进入 prefetch/Lite 分支；空列表、AWS 失败或缺少 AWS CLI 均保留 `unreachable`，按持久预算停止。新 scaffold 已包含 `awscli`。旧项目须先检查 `aws --version`，并在项目环境准备该工具。
 
-AWS fallback 不承诺跨进程续传：旧 partial 保留并计入磁盘占用，新 copy 从独立文件开始。预算耗尽后先检查空间和旧 partial，再显式恢复；不能自动反复归档预算重试。已完整校验的 cache 始终优先于 HEAD/AWS/prefetch；已有 terminal 状态仍需先按恢复手册归档，缓存存在不自动解除失败状态。
+AWS fallback 不承诺传输中的字节续传：旧 partial 保留并计入磁盘占用，新 copy 从独立文件开始。文件传输完整并通过原生校验后先写 `awaiting_identity`；后置 listing 失败时重试只补身份查询，保留已验证对象，不重复传输。预算耗尽后先检查空间和旧 partial，再显式恢复；不能自动反复归档预算重试。已完整校验的 cache 始终优先于 HEAD/AWS/prefetch；已有 terminal 状态仍需先按恢复手册归档，缓存存在不自动解除失败状态。
 
 ODP 缺失时用 `prefetch --type sra --max-size u`，实际返回 Lite 并不等于传输失败。只有已有 `allow_sra_lite=true` 且已确认 ODP 缺失时才接纳校验通过的 Lite；完整归档始终优先。未获授权的 Lite 保留等待决策，不反复删除重下。现场对 Lite 的许可不能默认套用到所有新项目。
 
@@ -35,8 +35,8 @@ ODP 缺失时用 `prefetch --type sra --max-size u`，实际返回 Lite 并不�
 python scripts/prefetch_ahead.py --root . --current-run SRR...
 ```
 
-该工具仅预取选中 NCBI archive 来源的后续 run，独立 cache、同一 run/cache 锁、持久三次预算；cache 已满时 idle，跳过当前 run。它也遵守 ODP 分流：完整 cache 优先，AWS 确认存在则 copy，明确缺失且来源为 ncbi_sra 才 prefetch；状态不明时保留失败证据，不绕过主下载器的规则。其预算是独立的 `<SRR>.prefetch.json`，不会被 transfer 的 archive-retry 重置。保留完整文件、Lite 和 partial，主下载器接管时仍重新校验类型与 ODP 条件。每次调用是有界的一轮，不自行启动循环、tmux 或 watchdog。若配置了代理文件，在新会话先加载环境，再调用 Python 预取器；该工具自行清除 `all_proxy/ALL_PROXY`。不并行第二个 STAR。
+该工具获取 source manifest 中后续 run 的来源对象，复用主下载器的 acquire 阶段、校验、代理和持久重试预算，不启动转换。缓存、ready 和 partial 均计入占用；当前 run 被排除。每次调用只运行有上限的一轮；主队列活动时让出调度，不启动独立竞争者。主队列默认并行下载不需要另外启用此工具。
 
-格式与来源依据：[NCBI SRA formats](https://www.ncbi.nlm.nih.gov/sra/docs/sra-data-formats/)、[NCBI AWS download](https://www.ncbi.nlm.nih.gov/sra/docs/sra-aws-download/)。
+## Toolkit 的严格代理与本地转换
 
-传输语义：[AWS HeadObject](https://docs.aws.amazon.com/AmazonS3/latest/API/API_HeadObject.html)、[AWS ListObjectsV2 CLI](https://docs.aws.amazon.com/cli/latest/reference/s3api/list-objects-v2.html)、[AWS s3 cp](https://docs.aws.amazon.com/cli/latest/reference/s3/cp.html)。
+SRA Toolkit 自身可能使用全局 KFG 设置；仅导出代理变量不能证明禁用了直连。运行时为每个 Toolkit 子进程创建临时配置，用 `vdb-config` 读回确认代理仅使用环境且 `proxy/only=true`。本地 `vdb-validate` 和 `fasterq-dump` 则确认 `repository/remote/disabled=true`；不能确认的版本明确阻断。此配置不写用户全局 NCBI 设置。

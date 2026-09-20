@@ -123,8 +123,21 @@ def verified_inputs(root: Path, gsm: str):
         expected=[row for row in read_tsv(root/'metadata/supplement_files.tsv') if row.get('gsm') == gsm]
         if not expected or {row['url'] for row in expected} != {row['url'] for row in records}:
             raise IntegrityError('Array source members are incomplete')
+        from download_geo_supplement import supplement_source_fingerprint
+        fingerprints = {supplement_source_fingerprint(row) for row in expected}
+        originals = [row for row in records if not row.get('member_of')]
+        if (len(originals) != len(expected) or
+                {row.get('source_fingerprint') for row in originals} != fingerprints):
+            raise IntegrityError('Array source identity/acceptance changed; revalidate retained files')
         names=[]
         for row in records:
+            if row.get('source_fingerprint') not in fingerprints or not row.get('integrity_methods'):
+                raise IntegrityError('Array source completeness evidence is missing')
+            if row.get('member_of') and not any(
+                item['path'] == row['member_of'] and item['source_fingerprint'] == row['source_fingerprint']
+                for item in originals
+            ):
+                raise IntegrityError('Array member has no matching validated archive')
             name=row['path']; path=safe_path(root,name)
             if gsm not in Path(name).parts or str(path.stat().st_size) != row['observed_bytes']:
                 raise IntegrityError('Array sample/size mismatch')
@@ -148,6 +161,10 @@ def verified_inputs(root: Path, gsm: str):
         marker = dict(line.split('\t', 1) for line in (root/f'reports/status/{run}.complete').read_text().splitlines())
         if marker.get('validation') != 'PASS' or not row.get('source_fingerprint') or marker.get('source_fingerprint') != row['source_fingerprint']:
             raise IntegrityError(f'{run}: missing/mismatched completion evidence')
+        from transfer_state import acceptance_fingerprint
+        acceptance = acceptance_fingerprint(source)
+        if row.get('acceptance_fingerprint') != acceptance or marker.get('acceptance_fingerprint') != acceptance:
+            raise IntegrityError(f'{run}: acceptance conditions changed; revalidate retained files')
         payload = {key: source.get(column, '') for key, column in [
             ('source','selected_source'), ('urls','selected_urls'), ('bytes','selected_bytes'),
             ('md5','selected_md5'), ('roles','read_roles'), ('final_product','final_product')]}

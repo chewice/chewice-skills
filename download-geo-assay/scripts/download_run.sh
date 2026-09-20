@@ -2,26 +2,32 @@
 set -Eeuo pipefail
 
 usage() {
-    echo "Usage: $0 <GSE-project-root> <run-accession>" >&2
+    echo "Usage: $0 <GSE-project-root> <run-accession> [--stage acquire|materialize|all]" >&2
     exit 2
 }
 
-[[ $# -eq 2 ]] || usage
+[[ $# -eq 2 || ( $# -eq 4 && "$3" == --stage ) ]] || usage
 ROOT=$(cd "$1" && pwd)
 RUN=$2
+STAGE=${4:-all}
+[[ "$STAGE" == acquire || "$STAGE" == materialize || "$STAGE" == all ]] || usage
 MANIFEST="$ROOT/metadata/source_manifest.tsv"
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 VALIDATOR="$SCRIPT_DIR/validate_fastq_pair.py"
 STATE_HELPER="$SCRIPT_DIR/transfer_state.py"
+RUNTIME_HELPER="$SCRIPT_DIR/acquisition_runtime.py"
 LAYOUT_HELPER="$SCRIPT_DIR/project_layout.py"
 [[ -s "$MANIFEST" ]] || { echo "Missing $MANIFEST" >&2; exit 2; }
+if [[ "$STAGE" == all || "${GEO_SRA_MANAGED_STAGE:-}" != "$STAGE" ]]; then
+    exec python3 "$STATE_HELPER" run-stage --root "$ROOT" --run "$RUN" --stage "$STAGE"
+fi
 [[ -s "$VALIDATOR" && -s "$STATE_HELPER" && -s "$LAYOUT_HELPER" ]] || {
     echo "Missing download helper scripts" >&2
     exit 2
 }
 
 mapfile -t ROW < <(
-    python - "$MANIFEST" "$RUN" "$SCRIPT_DIR" <<'PY'
+    python3 - "$MANIFEST" "$RUN" "$SCRIPT_DIR" <<'PY'
 import csv
 import sys
 
@@ -74,7 +80,7 @@ ACTUAL_OBJECT_CLASS=$OBJECT_CLASS
 ACTUAL_QUALITY_CLASS=$QUALITY_CLASS
 
 [[ "$SRR" == "$RUN" ]] || { echo "Run parser mismatch" >&2; exit 2; }
-eval "$(python "$LAYOUT_HELPER" --root "$ROOT" --gsm "$GSM" --srr "$SRR" --print-dirs)"
+eval "$(python3 "$LAYOUT_HELPER" --root "$ROOT" --gsm "$GSM" --srr "$SRR" --print-dirs)"
 [[ -n "${FASTQ_DIR:-}" && -n "${WORK_DIR:-}" && -n "${RETAIN_RAW:-}" ]] || {
     echo "Failed to resolve project layout for $SRR" >&2
     exit 2
@@ -92,6 +98,7 @@ LOG_DIR="$ROOT/reports/logs"
 STATUS_DIR="$ROOT/reports/status"
 COMPLETE_MARKER="$STATUS_DIR/${SRR}.complete"
 TRANSFER_STATE="$STATUS_DIR/${SRR}.transfer.json"
+READY_RECEIPT="$STATUS_DIR/${SRR}.ready.json"
 PUBLISH_JOURNAL="$WORK_DIR/publish.json"
 VALIDATION_REPORT="$WORK_DIR/fastq_validation.json"
 mkdir -p "$DOWNLOAD_DIR" "$CONVERT_DIR" "$SCRATCH" "$QUARANTINE_DIR" \
@@ -103,28 +110,15 @@ else
 fi
 exec > >(tee -a "$LOG_DIR/${GSM}_${SRR}.log") 2>&1
 
-# Load only an explicitly selected, trusted local environment file.
-if [[ -n "${GEO_SRA_PROXY_ENV:-}" ]]; then
-    source "$GEO_SRA_PROXY_ENV"
-fi
-unset all_proxy ALL_PROXY
-export no_proxy="${no_proxy:+$no_proxy,}localhost,127.0.0.1"
-export NO_PROXY="${NO_PROXY:+$NO_PROXY,}localhost,127.0.0.1"
-if [[ "$SOURCE" != ngdc_* || "${GEO_SRA_NGDC_DIRECT:-1}" != 1 ]]; then
-    for proxy_var in http_proxy https_proxy HTTP_PROXY HTTPS_PROXY; do
-        proxy_value=${!proxy_var:-}
-        if [[ -n "$proxy_value" && ! "$proxy_value" =~ ^https?:// ]]; then
-            echo "$proxy_var requires an HTTP(S) proxy URL" >&2
-            exit 2
-        fi
-    done
-fi
+# The runtime loads the explicit proxy and project configuration before admission.
+# No provider-specific direct connection can override the selected transport.
 
 exec 8>"$WORK_DIR/run.lock"
-flock -n 8 || {
-    echo "Another process is already handling $SRR" >&2
-    exit 75
-}
+flock 8
+if [[ "$STAGE" == materialize ]]; then
+    exec 5>"$STATUS_DIR/materialize.lock"
+    flock 5
+fi
 
 IFS=';' read -r -a URLS <<< "$URLS_TEXT"
 IFS=';' read -r -a EXPECTED_BYTES <<< "$BYTES_TEXT"
@@ -139,7 +133,6 @@ MAX_ATTEMPTS=${GEO_SRA_MAX_ATTEMPTS:-3}
 DOWNLOAD_CONNECTIONS=${GEO_SRA_CONNECTIONS:-4}
 SRA_THREADS=${GEO_SRA_SRA_THREADS:-8}
 COMPRESS_THREADS=${GEO_SRA_COMPRESS_THREADS:-8}
-NGDC_DIRECT=${GEO_SRA_NGDC_DIRECT:-1}
 RUN_FASTQC=${GEO_SRA_RUN_FASTQC:-1}
 RETRY_DELAYS=${GEO_SRA_RETRY_DELAYS:-0,30,120}
 [[ "$MAX_ATTEMPTS" =~ ^[1-9][0-9]*$ ]] || {
@@ -149,26 +142,49 @@ RETRY_DELAYS=${GEO_SRA_RETRY_DELAYS:-0,30,120}
 IFS=',' read -r -a DELAYS <<< "$RETRY_DELAYS"
 
 SOURCE_FINGERPRINT=$(
-    python "$STATE_HELPER" fingerprint \
+    python3 "$STATE_HELPER" fingerprint \
         --source "$SOURCE" --urls "$URLS_TEXT" --bytes "$BYTES_TEXT" \
         --md5 "$MD5_TEXT" --roles "$ROLES_TEXT" --final-product "$FINAL_PRODUCT"
 )
+ACCEPTANCE_FINGERPRINT=$(python3 "$STATE_HELPER" acceptance --root "$ROOT" --run "$RUN")
+
+network_command() {
+    local url=$1
+    shift
+    [[ "$STAGE" == acquire ]] || { echo "Network operation forbidden in materialize stage" >&2; return 2; }
+    python3 "$RUNTIME_HELPER" exec --root "$ROOT" --network --url "$url" -- "$@"
+}
+
+# Toolkit commands may fetch dependencies implicitly. The runtime verifies a
+# per-process KFG with remote access disabled for all local validation/conversion.
+vdb-validate() {
+    python3 "$RUNTIME_HELPER" exec --root "$ROOT" -- vdb-validate "$@"
+}
+
+fasterq-dump() {
+    python3 "$RUNTIME_HELPER" exec --root "$ROOT" -- fasterq-dump "$@"
+}
 
 state_update() {
-    python "$STATE_HELPER" update --path "$TRANSFER_STATE" --run "$SRR" \
-        --fingerprint "$SOURCE_FINGERPRINT" "$@"
+    python3 "$STATE_HELPER" update --path "$TRANSFER_STATE" --run "$SRR" \
+        --fingerprint "$SOURCE_FINGERPRINT" --acceptance "$ACCEPTANCE_FINGERPRINT" "$@"
 }
 
 state_get() {
-    python "$STATE_HELPER" get --path "$TRANSFER_STATE" --field "$1" \
+    python3 "$STATE_HELPER" get --path "$TRANSFER_STATE" --field "$1" \
         --default "${2:-}"
 }
 
 if [[ "$(state_get status)" == terminal_failed && "$(state_get source_fingerprint)" == "$SOURCE_FINGERPRINT" ]]; then
-    echo "Terminal failure already recorded for $SRR; review and archive state before manual retry" >&2
-    exit 1
+    if [[ "$(state_get error_class)" == read_validation && -n "$(state_get acceptance_fingerprint)" \
+        && "$(state_get acceptance_fingerprint)" != "$ACCEPTANCE_FINGERPRINT" ]]; then
+        echo "Acceptance requirements changed; retrying local validation only"
+    else
+        echo "Terminal failure already recorded for $SRR; review and archive state before manual retry" >&2
+        exit 1
+    fi
 fi
-if [[ -s "$PUBLISH_JOURNAL" ]] && ! python - "$PUBLISH_JOURNAL" "$SOURCE_FINGERPRINT" <<'PYJ'
+if [[ -s "$PUBLISH_JOURNAL" ]] && ! python3 - "$PUBLISH_JOURNAL" "$SOURCE_FINGERPRINT" <<'PYJ'
 import json, sys
 journal = json.load(open(sys.argv[1]))
 raise SystemExit(0 if journal.get("source_fingerprint") == sys.argv[2] else 1)
@@ -189,7 +205,7 @@ array_value() {
 }
 
 relative_path() {
-    python - "$ROOT" "$1" <<'PY'
+    python3 - "$ROOT" "$1" <<'PY'
 import os
 import sys
 print(os.path.relpath(sys.argv[2], sys.argv[1]))
@@ -236,16 +252,11 @@ probe_remote() {
         curl -fsSIL --connect-timeout 20 --max-time 40 --retry 0
         --output "$header" "$url"
     )
-    if [[ "$SOURCE" == ngdc_* && "$NGDC_DIRECT" == 1 ]]; then
-        env -u http_proxy -u https_proxy -u all_proxy \
-            -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY "${command[@]}" || return 1
-    else
-        "${command[@]}" || return 1
-    fi
+    network_command "$url" "${command[@]}" || return 1
 }
 
 header_value() {
-    python - "$1" "$2" <<'PY'
+    python3 - "$1" "$2" <<'PY'
 import sys
 from pathlib import Path
 
@@ -284,7 +295,7 @@ download_staged() {
     local control="${part}.aria2"
     local resume_meta="${part}.resume.json"
     local headers="${part}.headers"
-    local etag="" modified="" remote_size="" offset=0 rc=0 error_class error_key count
+    local etag="" modified="" remote_size="" offset=0 rc=0 error_class error_key count complete_without_control=0
     mkdir -p "$(dirname "$staged")"
     if validate_downloaded_file "$staged" "$role" "$expected_size" "$expected_md5"; then
         echo "Reusing validated staged $(basename "$staged")"
@@ -292,7 +303,18 @@ download_staged() {
     fi
     [[ ! -e "$staged" ]] || quarantine_paths invalid_staged "$staged"
 
-    if [[ -f "$part" && ( ! -f "$control" || ! -f "$resume_meta" ) ]]; then
+    # aria2 removes its control file at successful completion. A crash before our
+    # rename must recover that complete object by content, without another GET.
+    if [[ -f "$part" && ! -f "$control" ]] && validate_downloaded_file "$part" "$role" "$expected_size" "$expected_md5"; then
+        if [[ -n "$expected_md5" ]]; then
+            mv "$part" "$staged"
+            unlink "$resume_meta" 2>/dev/null || true
+            return 0
+        elif [[ -f "$resume_meta" ]]; then
+            complete_without_control=1
+        fi
+    fi
+    if [[ -f "$part" && ( ! -f "$control" || ! -f "$resume_meta" ) && "$complete_without_control" == 0 ]]; then
         quarantine_paths untrusted_partial "$part" "$control" "$resume_meta"
     fi
     if [[ ! -f "$part" && ( -f "$control" || -f "$resume_meta" ) ]]; then
@@ -319,7 +341,7 @@ download_staged() {
             record_failure remote_changed "${role}:identity_unknown" "No provider digest or remote version validator for partial" 1 || true
             return 1
         fi
-        python "$STATE_HELPER" resume-check --path "$resume_meta" \
+        python3 "$STATE_HELPER" resume-check --path "$resume_meta" \
             --fingerprint "$SOURCE_FINGERPRINT" --url "$url" --role "$role" \
             --expected-bytes "$expected_size" --expected-md5 "$expected_md5" \
             --etag "$etag" --last-modified "$modified" --remote-bytes "$remote_size" && rc=0 || rc=$?
@@ -330,12 +352,16 @@ download_staged() {
         elif (( rc != 0 )); then
             return "$rc"
         fi
+        if (( complete_without_control == 1 )); then
+            mv "$part" "$staged"
+            unlink "$resume_meta" 2>/dev/null || true
+            return 0
+        fi
         offset=0
         [[ -f "$part" ]] && offset=$(stat -c %s "$part")
-        state_update --phase transfer --status in_progress --attempt-delta 1 \
-            --bytes-resumed "$offset" >/dev/null
+        state_update --phase transfer --status in_progress --attempt-delta 1 >/dev/null
         (( offset > 0 )) && state_update --resume-delta 1 >/dev/null
-        echo "Downloading $(basename "$staged") offset=$offset"
+        echo "Downloading $(basename "$staged") partial_logical_bytes=$offset; piece map controls resume"
         local -a aria=(
             aria2c --no-conf=true --allow-overwrite=true --auto-file-renaming=false
             --auto-save-interval=1
@@ -351,15 +377,8 @@ download_staged() {
         elif [[ -n "$modified" ]]; then
             aria+=(--header="If-Unmodified-Since: $modified")
         fi
-        if [[ "$SOURCE" == ngdc_* && "$NGDC_DIRECT" == 1 ]]; then
-            env -u http_proxy -u https_proxy -u all_proxy \
-                -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY \
-                "${aria[@]}" --dir="$(dirname "$part")" \
-                --out="$(basename "$part")" "$url" && rc=0 || rc=$?
-        else
-            "${aria[@]}" --dir="$(dirname "$part")" \
-                --out="$(basename "$part")" "$url" && rc=0 || rc=$?
-        fi
+        network_command "$url" "${aria[@]}" --dir="$(dirname "$part")" \
+            --out="$(basename "$part")" "$url" && rc=0 || rc=$?
         if (( rc == 9 || rc == 16 )); then
             record_failure disk_or_conversion "${role}:disk_write" "aria2 cannot write output (exit=$rc); partial retained" 1 || true
             return 1
@@ -372,11 +391,12 @@ download_staged() {
             return 0
         fi
         error_class=network_interrupted
-        if [[ -f "$part" && -n "$expected_size" ]] \
-            && (( $(stat -c %s "$part") == expected_size )); then
+        # A segmented partial can already have the final logical length. Only a
+        # finished transfer or aria2's explicit checksum error proves corruption.
+        if [[ -f "$part" ]] && (( rc == 0 || rc == 32 )); then
             error_class=checksum_or_integrity
             quarantine_paths corrupt_full "$part" "$control" "$resume_meta"
-            python "$STATE_HELPER" resume-check --path "$resume_meta" \
+            python3 "$STATE_HELPER" resume-check --path "$resume_meta" \
                 --fingerprint "$SOURCE_FINGERPRINT" --url "$url" --role "$role" \
                 --expected-bytes "$expected_size" --expected-md5 "$expected_md5" \
                 --etag "$etag" --last-modified "$modified" --remote-bytes "$remote_size"
@@ -435,7 +455,8 @@ adopt_archive() {
 probe_odp() {
     local result
     while true; do
-        result=$(python "$SCRIPT_DIR/ncbi_odp.py" probe --run "$SRR" --evidence "$STATUS_DIR/${SRR}.odp.json") || return 2
+        [[ "$STAGE" == acquire ]] || return 2
+        result=$(python3 "$SCRIPT_DIR/ncbi_odp.py" probe --root "$ROOT" --run "$SRR" --evidence "$STATUS_DIR/${SRR}.odp.json") || return 2
         IFS=$'\t' read -r ODP_STATUS ODP_METHOD <<< "$result"
         [[ "$ODP_STATUS" != unreachable ]] && return 0
         if ! record_failure network_interrupted "SRA:odp_probe" \
@@ -447,7 +468,8 @@ copy_odp() {
     local destination=$1 expected_size=${2:-} expected_md5=${3:-} rc error_class
     while true; do
         state_update --phase transfer --status in_progress --attempt-delta 1 >/dev/null
-        python "$SCRIPT_DIR/ncbi_odp.py" copy --run "$SRR" --evidence "$STATUS_DIR/${SRR}.odp.json" \
+        [[ "$STAGE" == acquire ]] || return 2
+        python3 "$SCRIPT_DIR/ncbi_odp.py" copy --root "$ROOT" --run "$SRR" --evidence "$STATUS_DIR/${SRR}.odp.json" \
             --destination "$destination" --expected-bytes "$expected_size" --expected-md5 "$expected_md5" && rc=0 || rc=$?
         (( rc == 0 )) && return 0
         case "$rc" in
@@ -470,7 +492,7 @@ prefetch_staged() {
     local odp_status rc count error_class candidate
     mkdir -p "$cache_root" "$prefetch_root"
     exec 6>"$cache_root/${SRR}.lock"
-    flock -n 6 || { echo "Prefetch cache busy for $SRR" >&2; return 75; }
+    flock 6
     if validate_downloaded_file "$staged" SRA "" ""; then
         if [[ ! -s "$DOWNLOAD_DIR/${SRR}.object.tsv" ]]; then
             echo "Staged archive lacks object identity; inspect full/Lite before recovery" >&2
@@ -503,7 +525,8 @@ prefetch_staged() {
     fi
     while true; do
         state_update --phase prefetch --status in_progress --attempt-delta 1 >/dev/null
-        prefetch "$SRR" --type sra --max-size u -O "$prefetch_root" && rc=0 || rc=$?
+        network_command "https://sra-download.ncbi.nlm.nih.gov" \
+            prefetch "$SRR" --type sra --max-size u -O "$prefetch_root" && rc=0 || rc=$?
         if [[ -s "$source_file" ]] && adopt_archive "$source_file" "$staged"; then return 0; fi
         if [[ "$odp_status" == missing && "${ALLOW_SRA_LITE:-false}" == true ]]; then
             for candidate in "$lite_file" "$cache_root/$SRR/$SRR.sralite"; do
@@ -541,11 +564,11 @@ compress_staged() {
 }
 
 write_download_manifest() {
-    python - "$ROOT" "$DOWNLOAD_MANIFEST" "$GSE" "$GSM" "$SRR" "$SOURCE" \
+    python3 - "$ROOT" "$DOWNLOAD_MANIFEST" "$GSE" "$GSM" "$SRR" "$SOURCE" \
         "$PROVENANCE" "$ACTUAL_PROVENANCE" "$ACTUAL_OBJECT_CLASS" "$ACTUAL_QUALITY_CLASS" \
         "$FINAL_PRODUCT" "$URLS_TEXT" "$BYTES_TEXT" "$MD5_TEXT" \
         "$EXPECTED_SPOTS" "$VALIDATION_REPORT" "$TRANSFER_STATE" \
-        "$SOURCE_FINGERPRINT" "${RETAINED_FILES[@]}" <<'PY'
+        "$SOURCE_FINGERPRINT" "$ACCEPTANCE_FINGERPRINT" "${RETAINED_FILES[@]}" <<'PY'
 import csv
 import hashlib
 import json
@@ -558,7 +581,7 @@ from pathlib import Path
     root, manifest_path, gse, gsm, srr, source, selected_provenance,
     provenance, object_class, quality_class, final_product, urls,
     expected_bytes, expected_md5, expected_spots, validation_path, state_path,
-    source_fingerprint, *files
+    source_fingerprint, acceptance_fingerprint, *files
 ) = sys.argv[1:]
 root = Path(root)
 
@@ -574,6 +597,8 @@ state = json.loads(Path(state_path).read_text()) if Path(state_path).is_file() e
 observed = [Path(path) for path in files]
 if not observed or any(not path.is_file() for path in observed):
     raise SystemExit("Cannot record missing retained files")
+sizes = ";".join(str(path.stat().st_size) for path in observed)
+checksums = ";".join(md5(path) for path in observed)
 methods = ["format_validation", "run_transaction"]
 if source != "ncbi_sra" and all(expected_bytes.split(";")):
     methods.append("provider_bytes")
@@ -592,23 +617,24 @@ row = {
     "replacement_note": "Recheck recorded source-bucket probes for full-quality replacement" if object_class == "SRA_LITE" else "",
     "quality_class": quality_class, "final_product": final_product, "urls": urls,
     "expected_bytes": expected_bytes,
-    "observed_bytes": ";".join(str(path.stat().st_size) for path in observed),
+    "observed_bytes": sizes,
     "expected_md5": expected_md5,
-    "observed_md5": ";".join(md5(path) for path in observed),
+    "observed_md5": checksums,
     "expected_spots": expected_spots,
     "observed_r1": str(validation.get("reads_per_mate", "")),
     "observed_r2": str(validation.get("reads_per_mate", "")) if validation.get("r2") else "",
     "validation": "PASS",
     "completed_at": datetime.now().astimezone().isoformat(),
     "retained_files": ";".join(os.path.relpath(path, root) for path in observed),
-    "retained_bytes": ";".join(str(path.stat().st_size) for path in observed),
-    "retained_md5": ";".join(md5(path) for path in observed),
+    "retained_bytes": sizes,
+    "retained_md5": checksums,
     "integrity_methods": ";".join(methods),
     "integrity_evidence": "provider_digest_verified" if "provider_md5" in methods else (
         "native_archive_verified" if "vdb_validate" in methods else "format_size_read_count_verified"),
     "attempt_count": str(state.get("attempt_count", 0)),
     "resume_count": str(state.get("resume_count", 0)),
     "source_fingerprint": source_fingerprint,
+    "acceptance_fingerprint": acceptance_fingerprint,
     "odp_evidence": json.dumps(json.loads((root / f'reports/status/{srr}.odp.json').read_text()), sort_keys=True)
         if (root / f'reports/status/{srr}.odp.json').is_file() else "",
 }
@@ -635,68 +661,57 @@ complete_run() {
     flock 7
     write_download_manifest
     flock -u 7
-    printf 'gse\t%s\ngsm\t%s\nsrr\t%s\nsource\t%s\nprovenance\t%s\nfinal_product\t%s\nsource_fingerprint\t%s\nvalidation\tPASS\ncompleted_at\t%s\n' \
+    printf 'gse\t%s\ngsm\t%s\nsrr\t%s\nsource\t%s\nprovenance\t%s\nfinal_product\t%s\nsource_fingerprint\t%s\nacceptance_fingerprint\t%s\nvalidation\tPASS\ncompleted_at\t%s\n' \
         "$GSE" "$GSM" "$SRR" "$SOURCE" "$ACTUAL_PROVENANCE" "$FINAL_PRODUCT" \
-        "$SOURCE_FINGERPRINT" "$(date -Is)" > "${COMPLETE_MARKER}.tmp"
+        "$SOURCE_FINGERPRINT" "$ACCEPTANCE_FINGERPRINT" "$(date -Is)" > "${COMPLETE_MARKER}.tmp"
     mv "${COMPLETE_MARKER}.tmp" "$COMPLETE_MARKER"
     state_update --phase complete --status complete --clear-error >/dev/null
     unlink "$PUBLISH_JOURNAL" 2>/dev/null || true
+    unlink "$READY_RECEIPT" 2>/dev/null || true
     find "$STAGING_DIR" -type f -delete
     find "$STAGING_DIR" -depth -type d -empty -delete
     find "$SCRATCH" -type f -delete 2>/dev/null || true
     find "$SCRATCH" -depth -type d -empty -delete 2>/dev/null || true
     if [[ -f "$ROOT/scripts/build_report.py" ]]; then
-        python "$ROOT/scripts/build_report.py" --root "$ROOT" \
+        python3 "$ROOT/scripts/build_report.py" --root "$ROOT" \
             || echo "WARNING: HTML 报告刷新失败" >&2
     fi
     echo "[$(date -Is)] COMPLETE $GSE/$GSM/$SRR source=$SOURCE product=$FINAL_PRODUCT"
 }
 
-if [[ -s "$COMPLETE_MARKER" && -s "$DOWNLOAD_MANIFEST" ]] && \
-    python - "$ROOT" "$DOWNLOAD_MANIFEST" "$SRR" "$SOURCE_FINGERPRINT" <<'PY'
-import csv
-import hashlib
-import sys
-from pathlib import Path
-
-root, manifest, run, fingerprint = sys.argv[1:]
-with open(manifest, newline="") as handle:
-    rows = [row for row in csv.DictReader(handle, delimiter="\t") if row["srr"] == run]
-if len(rows) != 1 or rows[0].get("source_fingerprint") != fingerprint:
-    raise SystemExit(1)
-files = [item for item in rows[0].get("retained_files", "").split(";") if item]
-checksums = [item for item in rows[0].get("retained_md5", "").split(";") if item]
-sizes = [item for item in rows[0].get("retained_bytes", "").split(";") if item]
-if not files or not (len(files) == len(checksums) == len(sizes)):
-    raise SystemExit(1)
-for name, checksum, size in zip(files, checksums, sizes, strict=True):
-    path = Path(root, name)
-    if not path.is_file() or path.stat().st_size != int(size):
-        raise SystemExit(1)
-    value = hashlib.md5()
-    with path.open("rb") as handle:
-        while chunk := handle.read(8 * 1024 * 1024):
-            value.update(chunk)
-    if value.hexdigest() != checksum:
-        raise SystemExit(1)
-PY
-then
+complete_rc=0
+python3 "$STATE_HELPER" completed --root "$ROOT" --run "$SRR" \
+    --manifest "$DOWNLOAD_MANIFEST" --marker "$COMPLETE_MARKER" --lock "$MANIFEST_LOCK" \
+    --report "$VALIDATION_REPORT" --fingerprint "$SOURCE_FINGERPRINT" || complete_rc=$?
+if (( complete_rc == 0 )); then
     state_update --phase complete --status complete --clear-error >/dev/null
     unlink "$PUBLISH_JOURNAL" 2>/dev/null || true
+    unlink "$READY_RECEIPT" 2>/dev/null || true
     find "$STAGING_DIR" -type f -delete
     find "$STAGING_DIR" -depth -type d -empty -delete
     find "$SCRATCH" -type f -delete 2>/dev/null || true
     find "$SCRATCH" -depth -type d -empty -delete 2>/dev/null || true
-    echo "[$(date -Is)] COMPLETE $GSE/$GSM/$SRR already validated"
+    echo "[$(date -Is)] COMPLETE $GSE/$GSM/$SRR locally validated"
     exit 0
+elif (( complete_rc == 12 )); then
+    record_failure read_validation "FASTQ:acceptance_contract" \
+        "Retained objects fail the current acceptance contract; preserved without downloading" 1 || true
+    exit 1
+elif (( complete_rc != 1 )); then
+    exit "$complete_rc"
 fi
 
 declare -a RETAINED_FILES=()
-if [[ -s "$PUBLISH_JOURNAL" ]]; then
+if [[ -s "$PUBLISH_JOURNAL" && "$STAGE" == acquire ]]; then
+    state_update --phase acquired --status acquired --clear-error >/dev/null
+    echo "[$(date -Is)] ACQUIRED $GSE/$GSM/$SRR pending local publish recovery"
+    exit 0
+fi
+if [[ -s "$PUBLISH_JOURNAL" && "$STAGE" == materialize ]]; then
     state_update --phase publishing --status in_progress >/dev/null
     restore_archive_identity
-    published=$(python "$STATE_HELPER" publish --journal "$PUBLISH_JOURNAL" \
-        --fingerprint "$SOURCE_FINGERPRINT")
+    published=$(python3 "$STATE_HELPER" publish --journal "$PUBLISH_JOURNAL" \
+        --fingerprint "$SOURCE_FINGERPRINT" --root "$ROOT" --run "$SRR" --report "$VALIDATION_REPORT")
     mapfile -t RETAINED_FILES <<< "$published"
     complete_run
     exit 0
@@ -708,6 +723,7 @@ R2_FILE=""
 declare -a STAGED_FILES=()
 declare -a FINAL_FILES=()
 
+if [[ "$STAGE" == acquire ]]; then
 if [[ "$SOURCE" == ncbi_sra ]]; then
     SRA_FILE="$DOWNLOAD_DIR/${SRR}.sra"
     prefetch_staged "$SRA_FILE"
@@ -727,7 +743,7 @@ else
             cache="$ROOT/temporary/prefetch_cache/$SRR/$SRR.sra"
             mkdir -p "$ROOT/temporary/prefetch_cache"
             exec 6>"$ROOT/temporary/prefetch_cache/${SRR}.lock"
-            flock -n 6 || exit 75
+            flock 6
             if validate_downloaded_file "$cache" SRA "$expected_size" "$expected_md5"; then
                 adopt_archive "$cache" "$output"
             fi
@@ -746,6 +762,37 @@ else
         download_staged "$url" "$output" "$role" "$expected_size" "$expected_md5"
     done
 fi
+
+    ready_args=(python3 "$STATE_HELPER" ready --root "$ROOT" --path "$READY_RECEIPT"
+                --run "$SRR" --fingerprint "$SOURCE_FINGERPRINT")
+    if [[ -n "$SRA_FILE" ]]; then
+        ready_args+=(--file "SRA=$SRA_FILE")
+    else
+        for role in "${ROLES[@]}"; do
+            ready_args+=(--file "$role=$DOWNLOAD_DIR/${SRR}_${role}.fastq.gz")
+        done
+    fi
+    "${ready_args[@]}"
+    state_update --phase acquired --status acquired --clear-error >/dev/null
+    echo "[$(date -Is)] ACQUIRED $GSE/$GSM/$SRR"
+    exit 0
+fi
+
+ready_files=$(python3 "$STATE_HELPER" ready --root "$ROOT" --path "$READY_RECEIPT" \
+    --run "$SRR" --fingerprint "$SOURCE_FINGERPRINT" --check) || {
+    echo "Validated acquisition receipt required before materialization; network is disabled" >&2
+    exit 2
+}
+while IFS=$'\t' read -r role path; do
+    case "$role" in
+        SRA) SRA_FILE=$path; vdb-validate "$path" ;;
+        R1) R1_FILE=$path ;;
+        R2) R2_FILE=$path ;;
+        I1|I2) : ;;
+        *) echo "Unsupported acquired role: $role" >&2; exit 2 ;;
+    esac
+done <<< "$ready_files"
+[[ -z "$SRA_FILE" ]] || restore_archive_identity
 
 if [[ -n "$SRA_FILE" && "$FINAL_PRODUCT" != sra ]]; then
     state_update --phase converting --status in_progress >/dev/null
@@ -795,7 +842,7 @@ state_update --phase validating --status in_progress >/dev/null
 if [[ "$FINAL_PRODUCT" != sra ]]; then
     [[ -s "$R1_FILE" ]] || { echo "Missing staged R1 for $SRR" >&2; exit 1; }
     validator_args=(
-        python "$VALIDATOR" --srr "$SRR" --r1 "$R1_FILE"
+        python3 "$VALIDATOR" --srr "$SRR" --r1 "$R1_FILE"
         --report "$VALIDATION_REPORT"
     )
     [[ -n "$R2_FILE" ]] && validator_args+=(--r2 "$R2_FILE")
@@ -811,7 +858,7 @@ if [[ "$FINAL_PRODUCT" != sra ]]; then
         technical="$DOWNLOAD_DIR/${SRR}_${role}.fastq.gz"
         [[ -s "$technical" ]] || continue
         technical_args=(
-            python "$VALIDATOR" --srr "${SRR}_${role}" --r1 "$technical"
+            python3 "$VALIDATOR" --srr "${SRR}_${role}" --r1 "$technical"
         )
         [[ -n "$EXPECTED_SPOTS" ]] && technical_args+=(--expected-spots "$EXPECTED_SPOTS")
         if ! "${technical_args[@]}"; then
@@ -849,7 +896,7 @@ else
     done
 fi
 
-python - "$PUBLISH_JOURNAL" "$SOURCE_FINGERPRINT" "$QUARANTINE_DIR" \
+python3 - "$PUBLISH_JOURNAL" "$SOURCE_FINGERPRINT" "$ACCEPTANCE_FINGERPRINT" "$QUARANTINE_DIR" \
     "${#STAGED_FILES[@]}" "${STAGED_FILES[@]}" "${FINAL_FILES[@]}" <<'PY'
 import hashlib
 import json
@@ -858,7 +905,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-journal, fingerprint, quarantine, count, *paths = sys.argv[1:]
+journal, fingerprint, acceptance, quarantine, count, *paths = sys.argv[1:]
 count = int(count)
 staged = [Path(path) for path in paths[:count]]
 finals = [Path(path) for path in paths[count:]]
@@ -884,6 +931,7 @@ for source, final in zip(staged, finals, strict=True):
     items.append({"staged": str(source), "final": str(final), "bytes": size, "md5": checksum})
 payload = {
     "source_fingerprint": fingerprint,
+    "acceptance_fingerprint": acceptance,
     "created_at": datetime.now().astimezone().isoformat(),
     "files": items,
 }
@@ -897,7 +945,7 @@ os.replace(temp, path)
 PY
 
 state_update --phase publishing --status in_progress >/dev/null
-published=$(python "$STATE_HELPER" publish --journal "$PUBLISH_JOURNAL" \
-    --fingerprint "$SOURCE_FINGERPRINT")
+published=$(python3 "$STATE_HELPER" publish --journal "$PUBLISH_JOURNAL" \
+    --fingerprint "$SOURCE_FINGERPRINT" --root "$ROOT" --run "$SRR" --report "$VALIDATION_REPORT")
 mapfile -t RETAINED_FILES <<< "$published"
 complete_run

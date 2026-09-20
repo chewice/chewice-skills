@@ -61,12 +61,81 @@ def obvious_role(value: str) -> str:
 
 
 def unit_peak(source_bytes: int, has_sra: bool, converted: bool, lookahead: int, headroom: int) -> tuple[int, int]:
-    fastq_expansion = source_bytes * 4 if has_sra else source_bytes
-    fasterq_scratch = source_bytes * 10 if has_sra else 0
-    conversion_scratch = fastq_expansion if converted else 0
-    processed = max(1024**3, fastq_expansion // 4) if converted else 0
-    working = source_bytes + fastq_expansion + fasterq_scratch + conversion_scratch + lookahead
+    # Peak reservation, not a promise of a fixed compression/expansion ratio.
+    working = source_bytes * (18 if has_sra else 1) + lookahead
+    if converted:
+        working += source_bytes * (4 if has_sra else 1)
+    processed = max(1024**3, source_bytes) if converted else 0
     return working, working + 2 * processed + headroom
+
+
+def reusable_paths(root: Path, rows: list[dict[str, str]]) -> list[Path]:
+    """Paths retained in the next attempt; quarantine/failed AWS copies stay charged separately."""
+    paths: set[Path] = set()
+    for row in rows:
+        run, gsm = row['srr'], row['gsm']
+        work = root / 'temporary' / gsm / 'work' / run
+        # Work files are overwritten/reused by this same run, unlike quarantined copies.
+        for directory in (work / 'staging', work / 'fasterq_tmp'):
+            if directory.exists():
+                paths.update(path for path in directory.rglob('*') if path.is_file())
+        for directory in (work / 'ncbi' / run, root / 'temporary/prefetch_cache' / run):
+            for suffix in ('sra', 'sralite', 'sra.tmp', 'sralite.tmp', 'sra.aws.part', 'sra.aws.pending.json'):
+                cache = directory / f'{run}.{suffix}'
+                if cache.is_file():
+                    paths.add(cache)
+        for base in ('raw', 'temporary'):
+            for role in ('R1', 'R2', 'I1', 'I2'):
+                path = root / base / gsm / 'fastq' / f'{run}_{role}.fastq.gz'
+                if path.is_file():
+                    paths.add(path)
+            path = root / base / gsm / 'sra' / f'{run}.sra'
+            if path.is_file():
+                paths.add(path)
+    return sorted(paths)
+
+
+def unit_reservation(root: Path, rows: list[dict[str, str]]) -> tuple[int, int, list[Path]]:
+    sizes = [split(row.get('selected_bytes', '')) for row in rows]
+    if any(not values or any(not v.isdigit() or int(v) <= 0 for v in values) for values in sizes):
+        raise ValueError('Unknown source bytes; probe size before starting this unit')
+    source_bytes = sum(int(value) for values in sizes for value in values)
+    has_sra = any('SRA' in split(row['read_roles']) and row['final_product'] != 'sra' for row in rows)
+    converted = any(row['final_product'] not in {'pending', 'fastq', 'sra'} for row in rows)
+    working, project = unit_peak(source_bytes, has_sra, converted, 0, 0)
+    override = read_config(root).get('materialize_peak_bytes')
+    if override and has_sra:
+        if not override.isdigit() or int(override) <= 0:
+            raise ValueError('materialize_peak_bytes must be a positive integer')
+        # Conversion occurs one run at a time; hold the other acquired sources too.
+        peak = max(source_bytes - sum(map(int, values)) + int(override)
+                   for row, values in zip(rows, sizes)
+                   if 'SRA' in split(row['read_roles']) and row['final_product'] != 'sra')
+        extra = max(source_bytes, peak) - source_bytes * 18
+        working += extra
+        project += extra
+    # Include future destinations so written bytes replace pending space in the ledger.
+    # Failed/quarantined copies deliberately remain outside this reusable set.
+    paths = set(reusable_paths(root, rows))
+    for row in rows:
+        run, gsm = row['srr'], row['gsm']
+        work = root / 'temporary' / gsm / 'work' / run
+        paths.update((work / 'staging', work / 'fasterq_tmp'))
+        for directory in (work / 'ncbi' / run, root / 'temporary/prefetch_cache' / run):
+            for suffix in ('sra', 'sralite', 'sra.tmp', 'sralite.tmp', 'sra.aws.part', 'sra.aws.pending.json'):
+                paths.add(directory / f'{run}.{suffix}')
+                for sidecar in ('.aria2', '.resume.json'):
+                    paths.add(directory / f'{run}.{suffix}{sidecar}')
+        for base in ('raw', 'temporary'):
+            for role in ('R1', 'R2', 'I1', 'I2'):
+                paths.add(root / base / gsm / 'fastq' / f'{run}_{role}.fastq.gz')
+            paths.add(root / base / gsm / 'sra' / f'{run}.sra')
+        if converted:
+            from publish_sample import sample_identity
+            sample = sample_identity(root, gsm)['sample_id']
+            paths.update((root / 'processed' / gsm, root / 'deliverables' / sample,
+                          root / 'deliverables/.staging' / sample))
+    return project, working, sorted(paths)
 
 
 def detect_user_quota_remaining() -> int | None:
@@ -103,6 +172,7 @@ def main() -> int:
     parser.add_argument("--expected-runs", type=int)
     parser.add_argument("--max-project-bytes", type=int)
     parser.add_argument("--gsm", help="Audit metadata globally, but budget only this next unit")
+    parser.add_argument("--metadata-only", action="store_true", help="Queue reservations enforce runtime budgets separately")
     args = parser.parse_args()
     root = args.root.resolve()
     manifest = args.manifest if args.manifest.is_absolute() else root / args.manifest
@@ -247,21 +317,29 @@ def main() -> int:
     ahead = config.get("prefetch_ahead_runs", "0")
     if not ahead.isdigit() or not 0 <= int(ahead) <= 3:
         raise SystemExit("prefetch_ahead_runs must be 0..3")
-    lookahead = max(unit_sources.values(), default=0) * int(ahead)
+    # Each managed prefetch reserves its own actual run; do not multiply GSM size here.
+    lookahead = 0
     if args.gsm and args.gsm not in sample_runs:
         raise SystemExit(f"Unknown GSM: {args.gsm}")
     if args.gsm and int(ahead) and any(not split(row["selected_bytes"]) for row in rows):
         add("ERROR", summary_row, "space_guard", "Unknown lookahead source bytes; probe sizes before enabling prefetch")
     temporary_current = directory_bytes(root / "temporary")
     for gsm, unit_rows in sorted(sample_runs.items()):
+        if args.metadata_only:
+            continue
         if args.gsm and gsm != args.gsm:
             continue
         source_bytes = unit_sources[gsm]
         if args.gsm and any(not split(row["selected_bytes"]) for row in unit_rows):
             add("ERROR", unit_rows[0], "space_guard", "Unknown source bytes; probe size before starting this unit")
-        has_sra = any("SRA" in split(row["read_roles"]) for row in unit_rows)
+        has_sra = any("SRA" in split(row["read_roles"]) and row['final_product'] != 'sra' for row in unit_rows)
         converted = any(row["final_product"] not in {"pending", "fastq", "sra"} for row in unit_rows)
         working, addition = unit_peak(source_bytes, has_sra, converted, lookahead, headroom)
+        reusable = reusable_paths(root, unit_rows)
+        existing = sum(path.stat().st_size for path in reusable)
+        existing_temporary = sum(path.stat().st_size for path in reusable if path.is_relative_to(root / 'temporary'))
+        addition = max(headroom, addition - existing)
+        working = max(0, working - existing_temporary)
         row = unit_rows[0]
         limits = {"free_space": free, **caps}
         violated: list[str] = []

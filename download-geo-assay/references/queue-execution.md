@@ -15,15 +15,23 @@ bash scripts/run_all.sh --modality bulk_rnaseq --convert-script scripts/convert_
 `convert_gsm.sh` 是项目按 assay、参考版本和科学选择准备的脚本，参数为项目根目录、GSM；必须覆盖该 GSM 所有 runs，输出标准产物及 `reports/conversion_provenance.tsv`。Skill 不自动猜参考或链特异性。请求标准矩阵产物（无论 raw 是否保留）但没有转换脚本时，队列在任何下载之前停止。
 
 - `terminal_failed` 只 park 当前 GSM，保留 raw 并继续下一 GSM；不会重新开始该 run 的网络预算。同一 GSM 有多个 runs 时，任一失败都不能转换不完整文库。
-- 脚本退出 2、锁冲突、未知本地失败或空间检查失败暂停整队，修复后新开会话。已有 terminal 状态须人工检查原因并归档后才能重试。
+- 脚本退出 2、未知本地失败或运行中空间检查失败暂停整队，修复后新开会话。正常 run/cache 锁交接等待完成；已占用 queue 锁时不启动第二个队列。已有 terminal 状态须人工检查原因并归档后才能重试。
 - 只有 processed 审计和 release 门都通过，才跳过已完成转换。单个非空 `ReadsPerGene.out.tab` 不足以跳过审计或删原料。
 - 每个 Mode B GSM 下载 → 输入指纹 → 转换 → 审计 → 开放格式样本包发布 → `apply_storage_policy.py --gsm ... --confirm-delete` → 下一 GSM。该工具就是滚动释放入口，也可用于收尾；不要另写直接 `rm` 绕过它。
-- 退出 0 表示本次队列遍历正常结束。`reports/queue_<modality>.tsv` 中有 `parked`、`blocked`、`not_started` 时全集未完成；HTML 会展示此表。`pilot_done` 不能宣称全集完成。
-- 每个 GSE 同时只运行一个测序队列，以串行使用 STAR 和审计表。混合 assay 分开日志与会话；watchdog 默认不开，若启用仅监测，不因 parked 样本重启整队。
+- 退出 0 表示本次队列遍历正常结束。`reports/queue_<modality>.tsv` 中有 `parked`、`blocked`、`waiting_space`、`interrupted`、`not_started` 时全集未完成；HTML 会展示此表。`pilot_done` 不能宣称全集完成。
+- 每个 GSE 同时只运行一个测序队列；内部默认两个下载 worker、每文件最多四个连接、一个转换 worker。SRA 展开、压缩和外部转换脚本共用 `reports/status/materialize.lock`。混合 assay 分开日志与会话；watchdog 默认不开，若启用仅监测，不因 parked 样本重启整队。
 
-将队列 stdout/stderr 重定向到 `reports/logs/queue_<modality>.log`；它包含 `gsm_start`、GSM 状态、pilot/queue 结束状态。各下载器细节另见每个 run 的日志。
+将队列 stdout/stderr 重定向到 `reports/logs/queue_<modality>.log`；它包含 GSM 状态、pilot/queue 结束状态。各下载器细节另见每个 run 的日志。
 
 转换脚本须输出 `open-delivery.md` 指定的每样本开放文件，并记录 `reference,counting_strategy`。正式包在 `deliverables/<sample_id>/`，任何临时对象格式不能代替该包。
+
+## 阶段、预取与停止
+
+`download_run.sh ROOT RUN --stage acquire` 只获取并校验来源对象，写 `<RUN>.ready.json`；`--stage materialize` 只消费本地对象，校验当前验收合同、展开、压缩并提交最终文件。省略阶段仍完整执行两步。ready 不代表最终 PASS。
+
+队列优先派发当前 GSM 的成员；空间不足时等待在途单元完成与授权 release。若无在途任务可以释放空间，返回 `waiting_space` 并报告占用和限制，不无限空转。独立 `prefetch_ahead.py` 默认关闭，启用后使用相同 acquire 阶段、预算与持久重试；队列正在运行时返回 idle，由队列统一调度。
+
+SIGINT/SIGTERM 停止派发，并终止、等待所属进程树；确认写盘结束后才释放锁和预留。异常重启核对进程身份和启动时间，回收可确认归属的遗留进程；身份不明时停止。
 
 ## 队列结束后的收尾
 

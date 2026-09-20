@@ -10,6 +10,7 @@ import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from acquisition_runtime import managed_run, RuntimeSupervisor
 
 
 FIELDS = [
@@ -61,10 +62,9 @@ def candidate_urls(run: str, partitions: list[str]) -> list[str]:
     return urls
 
 
-def curl_head(url: str, timeout: int, proxy: str | None) -> tuple[str, int, str]:
+def curl_head(url: str, timeout: int, proxy: str | None, root: Path | None = None) -> tuple[str, int, str]:
     command = [
         "curl",
-        "-k",
         "-sSIL",
         "--connect-timeout",
         str(timeout),
@@ -74,11 +74,11 @@ def curl_head(url: str, timeout: int, proxy: str | None) -> tuple[str, int, str]
         "\n__HTTP__:%{http_code}\n",
         url,
     ]
-    if proxy == "DIRECT":
-        command[1:1] = ["--noproxy", "*"]
-    elif proxy:
-        command[1:1] = ["--proxy", proxy]
-    result = subprocess.run(command, text=True, capture_output=True, check=False)
+    try:
+        result = managed_run(root or Path.cwd(), command, network=True, url=url,
+                             proxy=proxy, text=True, capture_output=True, timeout=timeout + 5)
+    except subprocess.TimeoutExpired:
+        return 'unreachable', 0, 'request timed out'
     text = result.stdout + "\n" + result.stderr
     http_matches = re.findall(r"__HTTP__:(\d+)", text)
     status_code = int(http_matches[-1]) if http_matches else 0
@@ -104,6 +104,7 @@ def probe_one(
     timeout: int,
     fixture: dict[str, dict[str, str]],
     proxy: str | None,
+    root: Path | None = None,
 ) -> dict[str, str]:
     run = row["srr"].strip()
     if run in fixture:
@@ -150,7 +151,7 @@ def probe_one(
     for attempt in range(1, attempts + 1):
         for url in urls:
             count += 1
-            status, size, message = curl_head(url, timeout, proxy)
+            status, size, message = curl_head(url, timeout, proxy, root)
             messages.append(f"{Path(url).name}:{message}")
             if status == "available":
                 return {
@@ -198,6 +199,7 @@ def main() -> None:
     parser.add_argument("--input", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--fixture", type=Path)
+    parser.add_argument("--root", type=Path)
     parser.add_argument(
         "--partitions",
         default="INSDC,INSDC1,INSDC2,INSDC3,INSDC4,INSDC5,INSDC6,INSDC7,INSDC8,INSDC9,INSDC10",
@@ -208,9 +210,9 @@ def main() -> None:
     proxy_group = parser.add_mutually_exclusive_group()
     proxy_group.add_argument(
         "--proxy",
-        help="可选 HTTP(S) proxy URL；不得把含凭据的值写入 manifest/report/log",
+        help="覆盖配置的 HTTP(S) proxy URL；不得把含凭据的值写入 manifest/report/log",
     )
-    proxy_group.add_argument("--direct", action="store_true", help="忽略环境代理并直连")
+    proxy_group.add_argument("--direct", action="store_true", help="已停用：外网请求必须使用指定代理")
     args = parser.parse_args()
 
     rows = read_tsv(args.input)
@@ -222,14 +224,17 @@ def main() -> None:
     fixture = load_fixture(args.fixture)
     if args.proxy and not re.match(r"^https?://", args.proxy):
         raise SystemExit("--proxy 必须是 aria2/curl 均支持的 HTTP(S) proxy URL")
-    proxy = "DIRECT" if args.direct else args.proxy
+    if args.direct:
+        parser.error('External direct access is disabled; configure the designated proxy')
+    proxy = args.proxy
+    root = (args.root or args.input.resolve().parent.parent).resolve()
     partitions = [value.strip() for value in args.partitions.split(",") if value.strip()]
 
-    with ThreadPoolExecutor(max_workers=args.jobs) as executor:
+    with RuntimeSupervisor(root), ThreadPoolExecutor(max_workers=args.jobs) as executor:
         output_rows = list(
             executor.map(
                 lambda item: probe_one(
-                    item, partitions, args.attempts, args.timeout, fixture, proxy
+                    item, partitions, args.attempts, args.timeout, fixture, proxy, root
                 ),
                 rows,
             )

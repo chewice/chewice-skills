@@ -52,7 +52,7 @@ SRR 是下载单元；GSM 或建库文库是转换、审计和释放 raw 的原�
 3. 只询问无法可靠推导的选择：最终产物、raw 去留、可用预算、明确来源偏好、是否接受 SRA Lite、是否授权自动恢复。用 `record_storage_policy.py` 写入确认。
 4. 探测来源并运行 `select_sources.py`。先排除与最终产物不兼容、文件角色不明确或校验元数据不完整的候选，再按保真度和传输 endpoint 排序；排除原因保留在 `selection_reason`。用户明确指定来源时只在该来源内选择，无合格候选则停止；NGDC 只是在 `auto` 模式下的有效镜像偏好。
 5. 先以一个 GSM/文库做 pilot，并运行 `audit_manifest.py` 做峰值预算。预算取项目上限、working/temporary 上限、用户 quota 和文件系统可用空间中的最严约束。
-6. 下载并校验该单元全部 runs，先用 `artifact_integrity.py --gsm` 保存精确输入与校验和，再执行转换；用 `audit_processed_outputs.py --gsm` 全量审计内容、样本覆盖、输入映射和 provenance，用 `publish_sample.py --gsm` 原子发布开放格式样本包。
+6. 由队列受控并发获取来源对象，优先完成当前 GSM；下载并校验该单元全部 runs，先用 `artifact_integrity.py --gsm` 保存精确输入与校验和，再执行转换；用 `audit_processed_outputs.py --gsm` 全量审计内容、样本覆盖、输入映射和 provenance，用 `publish_sample.py --gsm` 原子发布开放格式样本包。
 7. 仅当存储策略已确认、当前交付包和文件指纹与审计一致且 release 证据原子写入后，才用 `apply_storage_policy.py --gsm ... --confirm-delete` 删除该单元 raw。随后处理下一个单元。
 8. 每个 GSE 只生成一份中文 `reports/report.html`，同时保留 TSV/JSON 审计证据。
 
@@ -67,7 +67,8 @@ SRR 是下载单元；GSM 或建库文库是转换、审计和释放 raw 的原�
 - SRA Lite 是 `SIMPLIFIED` quality class，必须显式 opt-in；不得伪装为 full-quality archive。
 - raw-only assay，或 CEL/IDAT 尚未指定可审计转换产物时，不具备 raw 删除资格。
 - STAR 一次保留全部 GeneCounts 列；未知链特异性保持 `unknown/pending`，不得自动定为 unstranded。
-- 代理是可选 transport 配置。凭据不得写入 TSV、HTML 或明文日志。
+- 所有外网元数据、HEAD、下载、AWS 与预取请求必须使用指定 HTTP(S) 代理；仅本机通信可绕过。代理不可用时暂停，不自动直连。不支持该代理的工具路径阻断；凭据不得写入 TSV、HTML 或明文日志。
+- 默认两个下载 worker、每文件四个连接、一个转换 worker；SRA 展开、压缩和 assay 转换共用转换槽位。下载、预取、解包、转换与发布均受共享软件预算和运行中空间检查约束，软件预算不等同于文件系统硬配额。
 - watchdog 默认只记录快照，不自动重启。自动恢复需要显式授权、持久预算并且能证明产生新进展。
 - 不热改活动脚本。此 Skill 的新行为只用于新建项目；现有项目已复制的脚本与活动队列不自动迁移。
 

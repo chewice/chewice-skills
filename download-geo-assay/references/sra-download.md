@@ -14,9 +14,7 @@ scripts/download_run.sh <project-root> <SRR>
 
 按 `queue-execution.md` 启动单 assay 的 pilot 与剩余 GSM 队列，通过关卡后再 tmux 脱钩。
 
-代理是可选配置：直连可用时不要求主备代理。aria2/curl 使用其支持的 HTTP(S)
-proxy URL；SOCKS 是否可用必须按当前工具实测，不能写成全局网络定律。任何含凭据的 proxy
-值都不得进入 TSV、HTML 或明文日志。
+所有外网请求使用指定 HTTP(S) 代理，通过 `GEO_SRA_PROXY_ENV` 或配置的 `proxy_env_file` 加载可信本地环境文件，也可继承 `http_proxy/https_proxy`。仅 localhost 可绕过；不支持该代理的工具路径阻断。代理失败时暂停，不自动直连。凭据不得进入 TSV、HTML 或明文日志。
 
 ## 下载器必须
 
@@ -34,7 +32,7 @@ proxy URL；SOCKS 是否可用必须按当前工具实测，不能写成全局�
 - 已知 CB/UMI geometry 时校验配对记录数、expected spots 和 barcode read 最短长度；
 - 向 `metadata/download_manifests/<GSM>.tsv` 追加可审计记录；
 - 将累计 attempt/resume、逐文件 checksum 和 integrity method 写入机器证据；
-- 仅保留具有有效 piece map 和匹配 resume metadata 的 partial。
+- 多连接下载的逻辑文件长度不代表完成，网络中断且 piece map 有效时保留断点；没有 control file 的完整 `.part` 先完整校验，通过即可接纳。
 
 校验已有 FASTQ 时直接使用 `scripts/validate_fastq_pair.py`。不得将「HTTP 请求成功」或「大小一致」视为充分证据。
 

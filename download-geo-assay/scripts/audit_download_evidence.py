@@ -14,6 +14,7 @@ import sys
 import zlib
 from collections import Counter
 from pathlib import Path
+from acquisition_runtime import managed_run, RuntimeConfigurationError, ResourceLimitError
 
 HERE = Path(__file__).resolve().parent
 if str(HERE) not in sys.path:
@@ -229,6 +230,21 @@ def main() -> int:
             continue
         if evidence.get("validation") != "PASS":
             row_errors.append("validation is not PASS")
+        from transfer_state import acceptance_fingerprint
+        acceptance = acceptance_fingerprint(source)
+        payload = {key: source.get(column, '') for key, column in [
+            ('source', 'selected_source'), ('urls', 'selected_urls'), ('bytes', 'selected_bytes'),
+            ('md5', 'selected_md5'), ('roles', 'read_roles'), ('final_product', 'final_product')]}
+        fingerprint = hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+        try:
+            marker = dict(line.split('\t', 1) for line in (root / f'reports/status/{run}.complete').read_text().splitlines())
+        except (OSError, ValueError):
+            marker = {}
+        if (evidence.get('acceptance_fingerprint') != acceptance or marker.get('acceptance_fingerprint') != acceptance):
+            row_errors.append('acceptance contract changed/missing; revalidate retained files')
+        if (evidence.get('source_fingerprint') != fingerprint or marker.get('source_fingerprint') != fingerprint
+                or marker.get('validation') != 'PASS'):
+            row_errors.append('source identity/completion evidence changed or missing')
         for source_key, evidence_key in (
             ("gse", "gse"),
             ("gsm", "gsm"),
@@ -334,8 +350,8 @@ def main() -> int:
                 if path.suffix == ".gz":
                     gzip_test(path)
                 elif path.suffix == ".sra":
-                    result = subprocess.run(
-                        ["vdb-validate", str(path)],
+                    result = managed_run(
+                        root, ["vdb-validate", str(path)],
                         stdout=subprocess.DEVNULL,
                         stderr=subprocess.DEVNULL,
                         check=False,
@@ -354,7 +370,8 @@ def main() -> int:
                     digest = md5(path)
                     if recorded_paths and digest not in recorded_paths:
                         row_errors.append(f"retained MD5 changed for {path}")
-            except (OSError, ValueError, EOFError, gzip.BadGzipFile, zlib.error) as exc:
+            except (OSError, ValueError, EOFError, gzip.BadGzipFile, zlib.error,
+                    RuntimeConfigurationError, ResourceLimitError) as exc:
                 row_errors.append(f"{path}: {exc}")
 
         marker = root / "reports/status" / f"{run}.complete"
