@@ -1,11 +1,15 @@
+# 本地 GZDlab 是主要写作来源；只学习路径、命名、分段、展示及绘图表达，不学习科学方法。
+# SOURCE_ROOT 指 GZDlab 根目录，其下有 2025guozi/、sc06/、SP01_reframework/。
 # primary 为主要同类型范例；complement 仅补足缺口；counterexample 用于识别工具边界。
 # 本索引的 validation_holdout 是历史同类型回归，不是盲测；新迭代应另留未读范例。
 # 仅在 SOURCE_ROOT 明确可解析时读取来源；缺失时使用类型指南，不搜索机器或宣称已读。
+# R 开头 setwd()/getwd()/.libPaths() 及以脚本目录为基准的相对路径是用户要求；
+# 来源并非全部如此，不能把缺少这些调用或不同路径锚点解释为允许省略用户要求。
 schema_version: "2.0"
 skill: "scripting-style"
 source_root: "<SOURCE_ROOT>"
 path_policy: "all paths are relative to source_root; source files remain read-only"
-selection_order: ["target_file_type", "task_similarity"]
+selection_order: ["target_file_type", "writing_pattern"]
 selection_limit: "one same-type primary and, only when useful, one same-type complement"
 cross_type_style_transfer: false
 
@@ -13,69 +17,65 @@ file_types:
   r:
     extensions: [".R"]
     primary:
-      - path: "02-annotation/scripts/01-HS_BM_manual_annotation.R"
+      - path: "sc06/02-annotation/scripts/01-HS_BM_manual_annotation.R"
         tasks: ["quality-checks", "parameter-comparison", "human-annotation", "human-edited-handoff"]
         represents: ["observational-checkpoints", "evidence-before-choice", "part-boundary"]
         do_not_generalize: ["cutoffs", "markers", "labels", "tissue-conclusions"]
-      - path: "03-integration/scripts/02-inter-rpca.R"
-        tasks: ["integration", "method-specific-branch"]
-        represents: ["visible-method-rationale", "comparable-diagnostics", "shared-baseline"]
-        do_not_generalize: ["method-default", "parameter-values", "plot-settings"]
-      - path: "04-grn/scripts/03-unsupervised_partI.R"
+      - path: "sc06/04-grn/scripts/03-unsupervised_partI.R"
         tasks: ["exploratory-analysis", "candidate-comparison", "result-interpretation"]
         represents: ["question-driven-blocks", "multiple-candidate-evidence", "choice-written-back"]
         do_not_generalize: ["algorithms", "clusters", "regulons", "conclusions"]
-      - path: "07-trajectory/scripts/05-1-dynamic-genes-Mega.R"
+      - path: "sc06/07-trajectory/scripts/05-1-dynamic-genes-Mega.R"
         tasks: ["representative-trial", "per-element-model", "batch-scan"]
         represents: ["inline-prototype-before-helper", "diagnostic-control", "stable-batch-kernel"]
         do_not_generalize: ["lineage", "model-family", "genes", "cutoffs"]
-      - path: "07-trajectory/scripts/07-1-dynamic-module-Ery.R"
-        tasks: ["expensive-analysis", "module-analysis", "replotting"]
-        represents: ["scientific-cache", "long-semantic-blocks", "interpretation-after-batch"]
-        do_not_generalize: ["cache-schema", "modules", "environment-paths", "parameters"]
     complement:
-      - path: "01-scrna-qc/scripts/03-calculate_metrics.R"
-        tasks: ["qc", "metadata-metrics"]
-        represents: ["incremental-object-update", "head-and-summary-checks"]
-        do_not_generalize: ["package-installation", "qc-thresholds", "object-schema"]
-      - path: "03-integration/scripts/04-save-data.R"
+      - path: "2025guozi/GZ00_14568/果子GZ08_差异分析/GZ_differential_analysis/scripts/06_Deseq2_plus.R"
+        tasks: ["input-inspection", "type-conversion", "purpose-comments"]
+        represents: ["lines 13-18: load, class, explicit conversion, class again; learn the visible object transition"]
+        do_not_generalize: ["rm-list-ls", "project-root-path-anchor", "group-inference", "model-design", "scientific-parameters"]
+      - path: "SP01_reframework/01-spatial-platforms/scripts/01-Visium_V1.R"
+        tasks: ["input-paths", "local-preview", "type-inspection", "section-spacing"]
+        represents: ["lines 37-67: visible fn, read, dim, local slice, class; blank lines separate related operations"]
+        do_not_generalize: ["alternative-readers-as-required-stages", "full-object-densification", "coordinate-model", "scientific-parameters"]
+      - path: "sc06/05-from-pathway-to-program/scripts/03-pathway_activity.R"
+        tasks: ["mixed-plotting", "plot-object-names", "nearby-save-path"]
+        represents: ["lines 26-39 and 54-68: read and inspect objects", "lines 70-114: FeaturePlot and ggplot, p and fn, file.path and ggsave"]
+        do_not_generalize: ["method-selection", "pathway-library", "changing-output-dir-mid-script", "fixed-dpi", "save-without-needed-inspection"]
+      - path: "sc06/03-integration/scripts/04-save-data.R"
         tasks: ["narrow-export", "part-handoff"]
         represents: ["single-purpose-bridge", "explicit-downstream-format"]
         do_not_generalize: ["format-choice", "paths"]
-      - path: "07-trajectory/scripts/02-lineage-picker.R"
-        tasks: ["interactive-candidate-inspection", "human-selection"]
-        represents: ["diagnostic-artifact-before-manual-choice"]
-        do_not_generalize: ["lineages", "cell-identifiers", "visualization-library"]
-      - path: "07-trajectory/scripts/03-lineage-mst.R"
-        tasks: ["resume-after-human-choice", "trajectory"]
-        represents: ["selected-values-written-as-visible-constants", "opaque-api-call"]
-        do_not_generalize: ["root", "terminal", "lineage", "cell-identifiers"]
+      - path: "sc06/07-trajectory/scripts/07-1-dynamic-module-Ery.R"
+        tasks: ["intermediate-archive", "resume-and-replot"]
+        represents: ["named-input-output-directories", "scientific-cache", "long-semantic-blocks"]
+        do_not_generalize: ["cache-schema", "modules", "environment-paths", "parameters", "defensive-check-blocks"]
     validation_holdout:
-      - path: "02-annotation/scripts/03-HS_BM_auto_annotation-part2.R"
+      - path: "sc06/02-annotation/scripts/03-HS_BM_auto_annotation-part2.R"
         tests: ["part-continuation", "human-confirmation"]
-      - path: "03-integration/scripts/03-inter-harmony.R"
+      - path: "sc06/03-integration/scripts/03-inter-harmony.R"
         tests: ["method-neutral-guidance", "parallel-method-script"]
-      - path: "04-grn/scripts/04-hypothesis_driven_partIV.R"
+      - path: "sc06/04-grn/scripts/04-hypothesis_driven_partIV.R"
         tests: ["unseen-question-driven-continuation"]
-      - path: "05-from-pathway-to-program/scripts/04-metabolisum_activity.R"
+      - path: "sc06/05-from-pathway-to-program/scripts/04-metabolisum_activity.R"
         tests: ["purposeful-single-output", "activity-analysis"]
-      - path: "06-lr-pairs/scripts/05-cellchat-stage-compare-weight.R"
+      - path: "sc06/06-lr-pairs/scripts/05-cellchat-stage-compare-weight.R"
         tests: ["large-parallel-comparison-blocks"]
-      - path: "07-trajectory/scripts/05-2-dynamic-genes-Ery.R"
+      - path: "sc06/07-trajectory/scripts/05-2-dynamic-genes-Ery.R"
         tests: ["prototype-to-batch-regression", "copied-branch-drift"]
-      - path: "07-trajectory/scripts/07-2-dynamic-module-Mega.R"
+      - path: "sc06/07-trajectory/scripts/07-2-dynamic-module-Mega.R"
         tests: ["cache-boundary", "copied-branch-drift"]
     counterexample:
-      - path: "04-grn/scripts/02-regulon_activity_score.R"
+      - path: "sc06/04-grn/scripts/02-regulon_activity_score.R"
         reason: "reusable API and CLI implementation, not the default project analysis shape"
-      - path: "06-lr-pairs/scripts/06-cellchat-lr-focus.R"
+      - path: "sc06/06-lr-pairs/scripts/06-cellchat-lr-focus.R"
         reason: "function-heavy boundary with fallback behavior; useful for judging when reuse has become a tool"
 
   python:
     extensions: [".py"]
     evidence_limit: "one narrow project converter; do not infer notebook or general application structure from it"
     primary:
-      - path: "04-grn/scripts/02-regulon2gmt.py"
+      - path: "sc06/04-grn/scripts/02-regulon2gmt.py"
         tasks: ["project-format-conversion", "external-tool-bridge"]
         represents: ["direct-top-level-transformation", "actual-positional-contract", "narrow-parser-helper"]
         do_not_generalize: ["sys-argv-as-default", "formats", "minimum-size", "URLs", "library-choice"]
@@ -85,43 +85,47 @@ file_types:
   bash:
     extensions: [".sh"]
     primary:
-      - path: "01-scrna-qc/scripts/01-cellranger.sh"
+      - path: "sc06/01-scrna-qc/scripts/01-cellranger.sh"
         tasks: ["external-quantification", "few-known-samples"]
         represents: ["direct-tool-command", "explicit-repeated-sample-blocks"]
         do_not_generalize: ["samples", "resources", "tool-flags", "missing-shell-safety"]
     complement:
-      - path: "04-grn/scripts/02-run_pyscenic.sh"
+      - path: "sc06/04-grn/scripts/02-run_pyscenic.sh"
         tasks: ["multi-step-external-analysis", "manual-expensive-stages"]
         represents: ["visible-command-order", "explicit-project-inputs", "manual-stage-selection"]
         do_not_generalize: ["commented-commands-as-default", "environment-runner", "resources", "tool-flags"]
     validation_holdout:
-      - path: "01-scrna-qc/scripts/02-starsolo.sh"
+      - path: "sc06/01-scrna-qc/scripts/02-starsolo.sh"
         tests: ["second-tool-generalization", "explicit-sample-repetition", "safety-boundary"]
     counterexample: []
 
   notebook:
     extensions: [".ipynb"]
     primary:
-      - path: "05-from-pathway-to-program/scripts/01-run_cNMF.ipynb"
+      - path: "sc06/05-from-pathway-to-program/scripts/01-run_cNMF.ipynb"
         tasks: ["factorization", "candidate-sweep", "model-selection"]
         represents: ["candidate-values", "diagnostic-before-choice", "selection-in-later-cell"]
         do_not_generalize: ["rank", "seed", "notebook-magics", "execution-counts", "stored-outputs", "paths"]
-      - path: "03-integration/scripts/05-inter-scvi.ipynb"
+      - path: "sc06/03-integration/scripts/05-inter-scvi.ipynb"
         tasks: ["full-model-analysis", "integration"]
         represents: ["direct-cell-sequence", "model-to-latent-to-diagnostics-to-save"]
         do_not_generalize: ["model-default", "hyperparameters", "stored-outputs", "environment-cleanup"]
     complement: []
     validation_holdout:
-      - path: "03-integration/scripts/06-inter-scanvi.ipynb"
+      - path: "sc06/03-integration/scripts/06-inter-scanvi.ipynb"
         tests: ["semi-supervised-model-branch", "same-type-generalization"]
-      - path: "03-integration/scripts/07-inter-bbknn.ipynb"
+      - path: "sc06/03-integration/scripts/07-inter-bbknn.ipynb"
         tests: ["alternative-method-branch", "same-type-generalization"]
     counterexample: []
 
 global_exclusions:
+  - "*-agent.R as independent primary style evidence; directory names do not establish human authorship"
+  - "R/, tools/, environment and package internals as primary analysis examples"
+  - "scientific workflows or package choices inferred from writing examples"
   - "machine-specific absolute paths"
   - "historical scientific parameters or biological conclusions"
   - "package installation and environment cleanup"
   - "destructive temporary-directory handling"
   - "stale notebook execution counts and stored outputs"
   - "undocumented API internals"
+  - "mandatory ggplot2, fixed plot resolution or whole-object conversion for preview"

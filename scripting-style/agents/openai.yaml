@@ -1,4 +1,4 @@
 interface:
   display_name: "Scripting Style"
-  short_description: "Write readable analysis; inspect each step before continuing"
-  default_prompt: "使用 $scripting-style 编写或续写科研分析：按目的分段并简要说明，展示少量真实数据，在同一会话中运行当前片段、检查结果后再决定下一步，保持顶层代码易读。"
+  short_description: "Readable analysis with relative paths and visible results"
+  default_prompt: "使用 $scripting-style 编写或续写科研分析：以当前文件目录为工作目录使用相对路径，R 开头执行 setwd()、getwd()、.libPaths()，自然分段留白并适时展示数据内容与类型，在同一会话中检查结果后再决定下一步。"

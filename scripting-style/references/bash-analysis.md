@@ -4,6 +4,10 @@
 
 ## 直接写命令顺序
 
+以当前 `.sh` 文件所在目录为工作目录。根据已知启动位置，在入口显式切换并查看目录；例如从项目根运行 `scripts/analysis.sh` 时使用 `cd scripts`、`pwd`，已经在脚本目录则用 `cd .`。后续选中命令块不重复切换，不添加自动搜索目录的函数。
+
+输入、输出和项目工具脚本路径都相对于当前文件目录。目录名与文件名说明样本、阶段或用途，变量紧邻实际命令；不硬编码机器路径。
+
 一种有用形态是：
 
 ```text
@@ -16,6 +20,8 @@ shebang 与风险相称的 shell safety
 会影响科学或计算含义的 tool options 放在对应命令旁边。只有能提高真实命令可读性时，才使用 array 或 line continuation。
 
 每个命令块用简短标题和说明交代处理目的、输入及要检查的输出。一个多行命令是一个执行单元，不拆开执行续行。命令结束后按产物类型检查真实内容，例如文本表可先 `head`；二进制科学对象交给对应 R/Python 会话查看。
+
+逻辑组间留空行，多行命令按参数缩进；赋值保持 `name=value`，不能为了留白在等号两侧加空格。
 
 “检查输出”的注释不会让 shell 暂停。探索时只运行当前命令块，实际查看结果后再续写或执行下一块；不要用整份 `bash script.sh` 越过未决判断。避免 `for dataset ...; Rscript ...` 或连续 Python 进程代替交互探索。已确认的机械重复或用户明确要求的批处理仍可使用简单循环，不新增通用调度层。
 
@@ -31,8 +37,8 @@ shebang 与风险相称的 shell safety
 
 ```bash
 sample_id="sample_a"
-input_dir="inputs/sample_a"
-output_dir="derived/sample_a"
+input_dir="../data/sample_a"
+output_dir="../results/current-step/sample_a"
 mkdir -p "$output_dir"
 
 analysis_tool \
@@ -40,8 +46,8 @@ analysis_tool \
   --output "$output_dir"
 
 sample_id="sample_b"
-input_dir="inputs/sample_b"
-output_dir="derived/sample_b"
+input_dir="../data/sample_b"
+output_dir="../results/current-step/sample_b"
 mkdir -p "$output_dir"
 
 analysis_tool \
