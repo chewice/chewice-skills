@@ -13,6 +13,28 @@ class CapabilityError(ValueError):
     """A capability table is absent or internally inconsistent."""
 
 
+def read_role_errors(roles: list[str], layout: str, final_product: str) -> list[str]:
+    """Check roles against the files the current downloader can publish."""
+    errors: list[str] = []
+    if not roles or any(role not in {"SRA", "R1", "R2", "I1", "I2"} for role in roles):
+        errors.append(f"ambiguous/unsupported read roles {roles}")
+    # One target path per run/role: multiple lanes must not share that path.
+    if len(set(roles)) != len(roles):
+        errors.append(f"duplicate read roles would collide at download paths: {roles}")
+    if final_product == "sra" and roles != ["SRA"]:
+        errors.append("final_product=sra requires one SRA archive")
+    if roles != ["SRA"]:
+        if "SRA" in roles:
+            errors.append("SRA and FASTQ read roles cannot share one source candidate")
+        if layout.upper() == "PAIRED" and not {"R1", "R2"}.issubset(roles):
+            errors.append("paired layout requires both R1 and R2")
+        elif layout.upper() == "SINGLE" and ("R1" not in roles or "R2" in roles):
+            errors.append("single layout requires R1 without R2")
+        elif layout.upper() not in {"PAIRED", "SINGLE"}:
+            errors.append(f"unknown library layout {layout!r}")
+    return errors
+
+
 def _candidate_paths(root: Path | None, filename: str) -> list[Path]:
     paths: list[Path] = []
     if root is not None:

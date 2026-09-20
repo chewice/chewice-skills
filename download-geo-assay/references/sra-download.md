@@ -22,6 +22,7 @@ proxy URL；SOCKS 是否可用必须按当前工具实测，不能写成全局�
 
 - 读取 `metadata/storage_policy.tsv` 决定发布目录；
 - 使用 run 级锁；所有未提交文件仅写入 `temporary/GSM*/work/<run>/staging/`；
+- 传输前阻断未知或重复 read role、不完整配对，以及 `final_product=sra` 对应 FASTQ 的不兼容清单；同一 run 的多 lane 文件不能映射到同一目标路径；
 - 仅当 `.part`、aria2 piece map、resume metadata 和当前 source fingerprint 一致时续传；
 - 发布方提供预期字节数时必须核对；
 - ENA 文件必须核对提供方 MD5；

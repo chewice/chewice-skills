@@ -21,11 +21,14 @@ LAYOUT_HELPER="$SCRIPT_DIR/project_layout.py"
 }
 
 mapfile -t ROW < <(
-    python - "$MANIFEST" "$RUN" <<'PY'
+    python - "$MANIFEST" "$RUN" "$SCRIPT_DIR" <<'PY'
 import csv
 import sys
 
-path, run = sys.argv[1:]
+path, run, scripts = sys.argv[1:]
+sys.path.insert(0, scripts)
+from capabilities import read_role_errors
+
 with open(path, newline="") as handle:
     matches = [
         row for row in csv.DictReader(handle, delimiter="\t")
@@ -34,6 +37,10 @@ with open(path, newline="") as handle:
 if len(matches) != 1:
     raise SystemExit(f"Expected one source-manifest row for {run}, found {len(matches)}")
 row = matches[0]
+roles = [role.strip() for role in row.get("read_roles", "").split(";")]
+errors = read_role_errors(roles, row.get("library_layout", ""), row.get("final_product", ""))
+if errors:
+    raise SystemExit(f"{run}: " + "; ".join(errors))
 fields = [
     "gse", "gsm", "srr", "library_layout", "expected_spots",
     "cb_length", "umi_length", "selected_source", "selected_provenance",

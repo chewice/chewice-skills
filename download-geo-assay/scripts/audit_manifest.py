@@ -18,7 +18,7 @@ HERE = Path(__file__).resolve().parent
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 
-from capabilities import CapabilityError, classify_source, load_source_capabilities  # noqa: E402
+from capabilities import CapabilityError, classify_source, load_source_capabilities, read_role_errors  # noqa: E402
 from project_layout import policy_for_gsm, read_config, read_tsv  # noqa: E402
 
 REQUIRED = {
@@ -27,7 +27,6 @@ REQUIRED = {
     "selected_bytes", "selected_md5", "read_roles", "final_product",
 }
 NGDC_STATUS = {"available", "missing", "invalid", "unreachable", "not_probed"}
-ROLES = {"SRA", "R1", "R2", "I1", "I2", "BAM", "OTHER"}
 PRODUCTS = {"pending", "fastq", "sra", "matrix_velocity", "matrix_10x", "gene_count_matrix"}
 
 
@@ -183,14 +182,12 @@ def main() -> int:
             add("ERROR", row, "source_arrays", f"bytes={len(sizes)} URLs={len(urls)}")
         if md5s and len(md5s) != len(urls):
             add("ERROR", row, "source_arrays", f"md5={len(md5s)} URLs={len(urls)}")
-        if any(role not in ROLES for role in roles) or "OTHER" in roles:
-            add("ERROR", row, "read_roles", f"ambiguous/invalid roles {roles}")
+        for error in read_role_errors(roles, row["library_layout"], row["final_product"]):
+            add("ERROR", row, "read_roles", error)
         filename_roles = [obvious_role(url) for url in urls]
         for url, declared, detected in zip(urls, roles, filename_roles):
             if detected and declared != detected:
                 add("ERROR", row, "filename_roles", f"{Path(url).name}: filename={detected} declared={declared}")
-        if row["library_layout"].upper() == "PAIRED" and set(roles).issubset({"R1", "R2", "I1", "I2"}) and not {"R1", "R2"}.issubset(roles):
-            add("ERROR", row, "read_roles", f"paired layout lacks R1/R2: {roles}")
         for value in sizes:
             if not value.isdigit() or int(value) <= 0:
                 add("ERROR", row, "file_size", f"invalid selected_bytes={value!r}")

@@ -50,7 +50,7 @@ SRR 是下载单元；GSM 或建库文库是转换、审计和释放 raw 的原�
 1. 用 `scripts/scaffold_project.py` 新建项目。assay、最终产物和 raw 去留均可先为 `pending`；不要替用户提前承诺删除。
 2. 获取最小必要元数据并运行 `detect_assay.py`。自动探测参考文件、endpoint、工具能力、read length、quota 和文件系统可用空间。
 3. 只询问无法可靠推导的选择：最终产物、raw 去留、可用预算、明确来源偏好、是否接受 SRA Lite、是否授权自动恢复。用 `record_storage_policy.py` 写入确认。
-4. 探测来源并运行 `select_sources.py`。先按保真度与下游需求选对象类别，再选传输 endpoint。用户明确指定来源时必须服从；NGDC 只是在 `auto` 模式下的有效镜像偏好。
+4. 探测来源并运行 `select_sources.py`。先排除与最终产物不兼容、文件角色不明确或校验元数据不完整的候选，再按保真度和传输 endpoint 排序；排除原因保留在 `selection_reason`。用户明确指定来源时只在该来源内选择，无合格候选则停止；NGDC 只是在 `auto` 模式下的有效镜像偏好。
 5. 先以一个 GSM/文库做 pilot，并运行 `audit_manifest.py` 做峰值预算。预算取项目上限、working/temporary 上限、用户 quota 和文件系统可用空间中的最严约束。
 6. 下载并校验该单元全部 runs，先用 `artifact_integrity.py --gsm` 保存精确输入与校验和，再执行转换；用 `audit_processed_outputs.py --gsm` 全量审计内容、样本覆盖、输入映射和 provenance，用 `publish_sample.py --gsm` 原子发布开放格式样本包。
 7. 仅当存储策略已确认、当前交付包和文件指纹与审计一致且 release 证据原子写入后，才用 `apply_storage_policy.py --gsm ... --confirm-delete` 删除该单元 raw。随后处理下一个单元。

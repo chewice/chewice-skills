@@ -19,6 +19,7 @@ from capabilities import (  # noqa: E402
     CapabilityError,
     classify_source,
     load_source_capabilities,
+    read_role_errors,
     source_capability,
 )
 from project_layout import policy_for_gsm, read_config  # noqa: E402
@@ -49,7 +50,8 @@ def read_tsv(path: Path | None) -> list[dict[str, str]]:
 
 
 def split(value: str) -> list[str]:
-    return [item.strip() for item in value.rstrip("\r").split(";") if item.strip()]
+    # Keep empty positions so file metadata cannot shift to another URL.
+    return [item.strip() for item in value.rstrip("\r").split(";")] if value.strip() else []
 
 
 def https_url(value: str) -> str:
@@ -74,8 +76,6 @@ def infer_roles(urls: list[str], layout: str) -> list[str]:
         roles.append(role)
     if layout.upper() == "SINGLE" and len(urls) == 1 and roles == ["OTHER"]:
         roles = ["R1"]
-    if layout.upper() == "PAIRED" and len(urls) == 2 and set(roles) == {"OTHER"}:
-        roles = ["R1", "R2"]
     return roles
 
 
@@ -120,7 +120,7 @@ def ena_candidates(row: dict[str, str], expected: dict[str, str], root: Path) ->
         re.search(r"\.F(?:AST)?Q(?:\.GZ)?$", Path(urlparse(url).path).name.upper())
         for url in submitted_urls
     )
-    if submitted_fastq and "OTHER" not in submitted_roles:
+    if submitted_fastq:
         candidates.append(
             make_candidate(
                 "ena_submitted", "AUTHOR_SUBMITTED",
@@ -143,10 +143,33 @@ def ena_candidates(row: dict[str, str], expected: dict[str, str], root: Path) ->
             split(row.get("fastq_bytes", "")), split(row.get("fastq_md5", "")),
             infer_roles(fastq_urls, layout), f"ENA {'submitted' if source == 'ena_submitted' else 'generated'} FASTQ metadata", root,
         )
-        signature = (candidate["source"], tuple(candidate["urls"]))
-        if all((item["source"], tuple(item["urls"])) != signature for item in candidates):
-            candidates.append(candidate)
+        # The same URLs can have more complete metadata in this field family.
+        candidates.append(candidate)
     return candidates
+
+
+def candidate_errors(candidate: dict[str, object], layout: str, final_product: str) -> list[str]:
+    source = str(candidate["source"])
+    urls, sizes, md5s, roles = (
+        list(candidate["urls"]), list(candidate["sizes"]),
+        list(candidate["md5s"]), list(candidate["roles"]),
+    )
+    errors = read_role_errors(roles, layout, final_product)
+    if not urls or any(not url for url in urls) or len(roles) != len(urls):
+        errors.append("missing URL or URL/read-role array mismatch")
+    for values, name in ((sizes, "bytes"), (md5s, "MD5")):
+        if values and len(values) != len(urls):
+            errors.append(f"{name} array length {len(values)} != URLs {len(urls)}")
+    if any(not value.isdigit() or int(value) <= 0 for value in sizes):
+        errors.append("invalid/missing bytes")
+    if any(value and not re.fullmatch(r"[0-9a-fA-F]{32}", value) for value in md5s):
+        errors.append("invalid MD5")
+    if source in {"ena_submitted", "ena_fastq"}:
+        if len(sizes) != len(urls) or len(md5s) != len(urls) or not all(md5s):
+            errors.append("ENA FASTQ requires bytes and MD5 for every file")
+    if source.startswith("ngdc_") and len(sizes) != len(urls):
+        errors.append("NGDC selection requires bytes for every file")
+    return errors
 
 
 def preference_for_gsm(root: Path, gsm: str, explicit: str | None) -> str:
@@ -239,14 +262,24 @@ def main() -> None:
             or read_config(root).get("final_product", "")
             or "pending"
         )
-        eligible = [item for item in candidates if preference == "auto" or provider(str(item["source"])) == preference]
         allow_lite = args.allow_sra_lite or bool(
             policy and policy.get("allow_sra_lite") == "true"
         ) or read_config(root).get("allow_sra_lite") == "true"
-        if not allow_lite:
-            eligible = [item for item in eligible if item["object_class"] != "SRA_LITE"]
+        eligible: list[dict[str, object]] = []
+        rejected: list[str] = []
+        for candidate in candidates:
+            if preference != "auto" and provider(str(candidate["source"])) != preference:
+                continue
+            errors = candidate_errors(candidate, row.get("library_layout", ""), final_product)
+            if candidate["object_class"] == "SRA_LITE" and not allow_lite:
+                errors.append("SRA Lite requires explicit opt-in")
+            if errors:
+                rejected.append(f"{candidate['source']} ({candidate['evidence']}): {'; '.join(errors)}")
+            else:
+                eligible.append(candidate)
         if not eligible:
-            failures.append(f"{run}: no usable source for explicit preference={preference}")
+            detail = "; rejected: " + " | ".join(rejected) if rejected else ""
+            failures.append(f"{run}: no usable source for preference={preference}{detail}")
             continue
         selected = min(eligible, key=lambda item: (item["fidelity_rank"], item["transport_rank"]))
         urls = list(selected["urls"])
@@ -254,25 +287,13 @@ def main() -> None:
         md5s = list(selected["md5s"])
         roles = list(selected["roles"])
         source = str(selected["source"])
-        if not urls or len(roles) != len(urls) or "OTHER" in roles:
-            failures.append(f"{run}: ambiguous URL/read roles {roles}")
-            continue
-        for values, name in ((sizes, "bytes"), (md5s, "md5")):
-            if values and len(values) != len(urls):
-                failures.append(f"{run}: {name} array length {len(values)} != URLs {len(urls)}")
-        if source in {"ena_submitted", "ena_fastq"}:
-            if len(sizes) != len(urls) or len(md5s) != len(urls):
-                failures.append(f"{run}: ENA FASTQ requires bytes and MD5 for every file")
-            if any(not re.fullmatch(r"[0-9a-fA-F]{32}", value) for value in md5s):
-                failures.append(f"{run}: ENA FASTQ contains invalid/missing MD5")
-        if source.startswith("ngdc_") and len(sizes) != len(urls):
-            failures.append(f"{run}: NGDC selection requires Content-Length")
-
         reason = (
             f"explicit source preference={preference}"
             if preference != "auto"
             else f"best fidelity rank={selected['fidelity_rank']}; transport rank={selected['transport_rank']}"
         )
+        if rejected:
+            reason += "; rejected: " + " | ".join(rejected)
         legacy_fallback = "" if source.startswith("ngdc_") else f"ngdc_{status}"
         records.append(
             {
