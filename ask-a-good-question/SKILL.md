@@ -19,6 +19,7 @@ Agent 按需承担 **Search**（真实检索）、**Compress**（保留依据与
 
 ## 按需加载
 
+- **使用前置条件**：先安装 bear 系列八个技能并配置 SciMaster 检索环境，步骤见 [README](README.md)。已有准备状态可沿用；未完成时先处理前置任务，不自动安装或写入凭证。配置完成后的服务故障按证据编排降级，不把降级检索视为满足缺失的安装要求。
 - 探索或细化科学问题：读取 [问题框架](references/question-framework.md)。
 - 建立领域认识、查重或核实证据：读取 [证据编排](references/evidence-orchestration.md)。
 - 用公开评审、通讯作者路线或引用网络探索前沿：读取 [前沿追踪](references/frontier-tracking.md)。
