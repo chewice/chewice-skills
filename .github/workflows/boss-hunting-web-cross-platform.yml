@@ -1,9 +1,15 @@
-name: Web cross-platform
+name: Boss Hunting web cross-platform
 
 on:
   pull_request:
+    paths:
+      - "boss-hunting/**"
+      - ".github/workflows/boss-hunting-web-cross-platform.yml"
   push:
     branches: [main, "codex/**"]
+    paths:
+      - "boss-hunting/**"
+      - ".github/workflows/boss-hunting-web-cross-platform.yml"
   workflow_dispatch:
 
 permissions:
@@ -18,7 +24,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     defaults:
       run:
-        working-directory: web
+        working-directory: boss-hunting/web
 
     steps:
       - uses: actions/checkout@v5
@@ -26,7 +32,7 @@ jobs:
         with:
           node-version: 22.13.1
           cache: npm
-          cache-dependency-path: web/package-lock.json
+          cache-dependency-path: boss-hunting/web/package-lock.json
       - run: npm ci
       - run: npm run lint
       - run: npm test
@@ -51,7 +57,7 @@ jobs:
           $PSNativeCommandUseErrorActionPreference = $true
           $archive = Join-Path $env:RUNNER_TEMP "advisor-atlas.zip"
           $installRoot = Join-Path $env:RUNNER_TEMP "新手 下载测试"
-          git archive --format=zip --output=$archive HEAD
+          git archive --format=zip --output=$archive HEAD:boss-hunting
           New-Item -ItemType Directory -Force -Path $installRoot | Out-Null
           Expand-Archive -LiteralPath $archive -DestinationPath $installRoot
           "INSTALL_ROOT=$installRoot" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8

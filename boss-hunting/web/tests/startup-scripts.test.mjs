@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -44,4 +44,8 @@ test("combined dev launcher does not spawn npm or a command shell", async () => 
   assert.doesNotMatch(source, /launch\(["']npm(?:\.cmd)?["']/);
   assert.doesNotMatch(source, /launch\(["']cmd\.exe["']/i);
   assert.match(source, /createVinextLaunch/);
+});
+
+test("Windows lifecycle helper is present for CI Ctrl+C checks", async () => {
+  await access(resolve(webRoot, "scripts", "windows-user-lifecycle.py"));
 });
