@@ -12,13 +12,21 @@
       "diseasesOrMechanisms": [
         "泛癌"
       ],
+      "researchQuestions": [
+        "泛癌层面的肿瘤演化与克隆选择是否存在共享调控机制"
+      ],
+      "researchObjects": [
+        "患者队列多组学"
+      ],
+      "researchScales": [
+        "基因组",
+        "单细胞"
+      ],
       "researchModes": [
         "计算与数据"
       ],
-      "currentSkills": [],
-      "desiredTraining": [
-        "统计研究设计"
-      ],
+      "methodPreferences": [],
+      "adjacentInterests": [],
       "exclusions": [],
       "inputStatus": {
         "regions": "unrestricted",
@@ -33,24 +41,200 @@
       "name": "Fixture PI (fictional)",
       "school": "Fixture Institute (fictional)",
       "homepage": "https://example.org/fictional-advisor",
+      "pi_evidence_level": "B",
+      "discovered_via": "research_seed",
+      "network_round": 0,
+      "back_search": {
+        "window": "2021-2026",
+        "sourceIds": [
+          "fixture-study"
+        ]
+      },
       "evidence_profile": {
-        "scientific_fit": {
-          "status": "strong",
+        "research_question_fit": {
+          "status": "direct",
           "reasons": [
-            "Fictional shared mechanistic question"
+            "Fictional shared pan-cancer evolution question"
           ],
           "source_ids": [
             "fixture-study"
           ]
         },
-        "training_fit": {
-          "status": "unknown"
+        "research_route_continuity": {
+          "status": "sustained_core",
+          "reasons": [
+            "Fictional five-year continuity on tumour evolution"
+          ],
+          "source_ids": [
+            "fixture-study"
+          ]
         },
+        "pi_role_confidence": {
+          "status": "probable",
+          "level": "B",
+          "reasons": [
+            "Fictional corresponding-author role on two studies; ORCID unresolved"
+          ],
+          "source_ids": [
+            "fixture-study"
+          ]
+        },
+        "evidence_sufficiency": "sparse",
+        "current_activity": "recent_signal",
+        "identity": {
+          "current_institution": "Fixture Institute (fictional)",
+          "department": "Fictional Department of Computational Oncology",
+          "current_position": "Fictional Assistant Professor",
+          "official_profile_url": "https://example.org/fictional-advisor",
+          "research_positioning": "Fictional pan-cancer clonal evolution from patient multi-omics",
+          "doctoral_supervision_link": "Listed on a fictional graduate programme faculty page",
+          "source_ids": [
+            "fixture-profile"
+          ]
+        },
+        "research_mainline": {
+          "long_term_question": "Fictional: shared regulatory logic behind clonal selection across cancers",
+          "continuing_themes": [
+            "Fictional tumour evolution",
+            "Fictional multi-omics integration"
+          ],
+          "new_directions": [
+            "Fictional single-cell lineage tracing"
+          ],
+          "research_objects": [
+            "Fictional patient cohorts"
+          ],
+          "methods": [
+            "Fictional statistical genomics"
+          ],
+          "recent_shift": null,
+          "representative_works": [
+            {
+              "title": "Fictional pan-cancer clonal selection study",
+              "year": 2024,
+              "venue": "Fictional Journal",
+              "verified_role": "corresponding_author",
+              "relation_to_mainline": "core",
+              "url": "https://example.org/fictional-study",
+              "source_ids": [
+                "fixture-study"
+              ]
+            }
+          ],
+          "participation_only_works": [],
+          "source_ids": [
+            "fixture-study"
+          ]
+        },
+        "collaboration_network": {
+          "core_collaborators": [
+            {
+              "name": "Fixture Collaborator (fictional)",
+              "collaborator_id": "fixture-collaborator",
+              "current_institution": "Fixture University (fictional)",
+              "collaboration_evidence": [
+                "coauthorship 2023",
+                "coauthorship 2024"
+              ],
+              "first_year": 2023,
+              "last_year": 2024,
+              "shared_topics": [
+                "Fictional tumour evolution"
+              ],
+              "own_core_direction": "Fictional cancer genomics",
+              "relation_to_mainline": "core",
+              "joint_record_count": 2,
+              "source_ids": [
+                "fixture-study"
+              ]
+            }
+          ],
+          "edges": [
+            {
+              "type": "coauthorship",
+              "target": "fixture-collaborator",
+              "count": 2,
+              "source_ids": [
+                "fixture-study"
+              ]
+            }
+          ],
+          "research_neighbors": [
+            {
+              "name": "Fixture Neighbor (fictional)",
+              "type": "co_citation",
+              "note": "Fictional bibliographic proximity only",
+              "source_ids": [
+                "fixture-study"
+              ]
+            }
+          ]
+        },
+        "latest_signals": {
+          "latest_papers": [
+            {
+              "title": "Fictional 2026 preprint on clonal dynamics",
+              "year": 2026,
+              "venue": "Fictional preprint server",
+              "is_preprint": true,
+              "verified_role": "corresponding_author",
+              "source_ids": [
+                "fixture-study"
+              ]
+            }
+          ],
+          "preprints": [],
+          "projects": [
+            {
+              "title": "Fictional pan-cancer evolution project",
+              "project_id": "FIX-0001",
+              "funding_body": "Fictional Funding Body",
+              "pi_role": "PI",
+              "period": "2024-2027",
+              "status": "active",
+              "amount": null,
+              "source_ids": [
+                "fixture-project"
+              ]
+            }
+          ],
+          "registries": [],
+          "trials": []
+        },
+        "doctoral_trajectory": {
+          "current_doctoral": [
+            {
+              "name": "Fictional doctoral student",
+              "supervision_evidence": [
+                "Fictional lab page listing"
+              ],
+              "topic": "Fictional clonal dynamics",
+              "relation_to_mainline": "core",
+              "information_date": "2026-01",
+              "source_ids": [
+                "fixture-profile"
+              ]
+            }
+          ],
+          "former_doctoral": [],
+          "graduate_program": {
+            "graduate_school": "Fictional Graduate School",
+            "doctoral_program": "Fictional Computational Biology PhD",
+            "supervisor_listing": "Fictional faculty listing",
+            "source_ids": [
+              "fixture-profile"
+            ]
+          },
+          "emerging_pi_note": "Fictional emerging PI; no graduated doctoral students yet is not a negative signal"
+        },
+        "formal_records": [],
+        "fit_boundary": "Fictional: focuses on genomic clonal selection rather than immune microenvironment",
         "key_unknowns": [
+          "ORCID 与官方主页身份尚未合并核验",
           "真实博士项目及当批次入口尚未核验"
         ],
         "next_verification": [
-          "先核对项目师资和培养路径"
+          "核对 ORCID 与机构官方页面的当前职位"
         ]
       }
     }
@@ -61,11 +245,45 @@
     {
       "evidence_id": "fixture-study",
       "entity_id": "fixture-institute-fixture-pi",
+      "fields_supported": [
+        "research_mainline_5y",
+        "research_question_fit"
+      ],
       "claim_type": "interpretation",
       "claim": "Fictional fit demonstration only",
       "status": "not_checked",
       "url": "https://example.org/fictional-study",
       "retrieval_method": "static_web",
+      "extraction_status": "partial",
+      "limitations": "No live retrieval performed; fixture only"
+    },
+    {
+      "evidence_id": "fixture-profile",
+      "entity_id": "fixture-institute-fixture-pi",
+      "fields_supported": [
+        "identity_research_positioning",
+        "doctoral_trajectory"
+      ],
+      "claim_type": "fact",
+      "claim": "Fictional official profile page",
+      "status": "not_checked",
+      "url": "https://example.org/fictional-advisor",
+      "retrieval_method": "static_web",
+      "extraction_status": "partial",
+      "limitations": "No live retrieval performed; fixture only"
+    },
+    {
+      "evidence_id": "fixture-project",
+      "entity_id": "fixture-institute-fixture-pi",
+      "fields_supported": [
+        "latest_signals_projects"
+      ],
+      "claim_type": "fact",
+      "claim": "Fictional public project record",
+      "status": "not_checked",
+      "url": "https://example.org/fictional-project",
+      "retrieval_method": "official_api",
+      "retrieval_provider": "anonymous_official_api",
       "extraction_status": "partial",
       "limitations": "No live retrieval performed; fixture only"
     }
@@ -74,6 +292,9 @@
   "audit": {
     "fixture": true,
     "liveResearch": false,
-    "scope": "Local deterministic example only"
+    "scope": "Local deterministic example only",
+    "seedSummary": "Fictional: 1 research seed, 0 map seeds",
+    "networkRounds": 0,
+    "saturation": "not_evaluated_fixture"
   }
 }

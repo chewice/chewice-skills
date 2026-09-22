@@ -21,14 +21,11 @@
       "diseasesOrMechanisms": [
         "炎症机制"
       ],
+      "researchQuestions": [
+        "炎症消退失败如何驱动慢性组织损伤"
+      ],
       "researchModes": [
         "实验机制"
-      ],
-      "currentSkills": [
-        "Fictional microscopy experience"
-      ],
-      "desiredTraining": [
-        "因果实验设计"
       ],
       "exclusions": [],
       "inputStatus": {
@@ -76,8 +73,8 @@
         ]
       },
       "evidenceProfile": {
-        "scientificFit": {
-          "status": "strong",
+        "researchQuestionFit": {
+          "status": "direct",
           "reasons": [
             "Fictional alignment of scientific question"
           ],
@@ -85,40 +82,54 @@
             "fixture-study"
           ]
         },
-        "trainingFit": {
-          "status": "supported",
+        "researchRouteContinuity": {
+          "status": "sustained_core",
           "reasons": [
-            "Fictional programme methods training"
+            "Fictional five-year inflammation resolution mainline"
           ],
           "sourceIds": [
-            "fixture-terms"
+            "fixture-study"
           ]
         },
-        "resources": [
-          {
-            "level": "institution_owned",
-            "doctoral_access": "needs_confirmation"
-          }
-        ],
-        "researchFunding": [
-          {
-            "status": "not_checked"
-          }
-        ],
-        "doctoralFunding": [
-          {
-            "status": "not_checked"
-          }
-        ],
-        "doctoralOutcomes": {
-          "status": "no_historical_sample",
-          "limitation": "No denominator or causal supervision claim"
+        "piRoleConfidence": {
+          "status": "verified",
+          "level": "A",
+          "reasons": [
+            "Fictional official profile plus corresponding-author role"
+          ],
+          "sourceIds": [
+            "fixture-study"
+          ]
+        },
+        "evidenceSufficiency": "adequate",
+        "currentActivity": "active",
+        "latestSignals": {
+          "projects": [
+            {
+              "title": "Fictional inflammation project",
+              "projectId": "FIX-APP-01",
+              "fundingBody": "Fictional Funding Body",
+              "piRole": "PI",
+              "period": "2025-2028",
+              "status": "active",
+              "amount": 1200000,
+              "amountUnit": "fictional_unit",
+              "sourceIds": [
+                "fixture-study"
+              ]
+            }
+          ]
+        },
+        "doctoralTrajectory": {
+          "currentDoctoral": [],
+          "formerDoctoral": [],
+          "emergingPiNote": "Fictional: no verified public doctoral sample yet"
         },
         "keyUnknowns": [
-          "Student funding and resource access need confirmation"
+          "Programme intake terms need confirmation"
         ],
         "nextVerification": [
-          "Verify funding terms for this programme and intake"
+          "Verify programme terms for this intake"
         ]
       }
     }
@@ -136,6 +147,20 @@
       "url": "https://example.org/fictional-terms",
       "title": "Fictional fixture terms",
       "intake": "2027",
+      "limitations": "Simulated local fixture; no real-world verification"
+    },
+    {
+      "evidence_id": "fixture-study",
+      "entity_id": "fixture-school-pi",
+      "fields_supported": [
+        "research_mainline_5y",
+        "research_question_fit",
+        "latest_signals_projects"
+      ],
+      "claim_type": "interpretation",
+      "claim": "Fictional study used for fit demonstration only",
+      "status": "not_checked",
+      "url": "https://example.org/fictional-study",
       "limitations": "Simulated local fixture; no real-world verification"
     },
     {

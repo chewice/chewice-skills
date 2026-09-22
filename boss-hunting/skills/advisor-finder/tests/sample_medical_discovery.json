@@ -9,9 +9,9 @@
       "fields": ["肿瘤学"],
       "diseaseScope": "pan_cancer",
       "diseasesOrMechanisms": ["泛癌"],
+      "researchQuestions": ["Fictional pan-cancer mechanistic question"],
       "researchModes": ["计算与数据"],
-      "currentSkills": [],
-      "desiredTraining": ["统计研究设计"],
+      "methodPreferences": ["统计研究设计"],
       "exclusions": [],
       "inputStatus": {"regions": "unrestricted", "exclusions": "unrestricted"}
     }
@@ -22,9 +22,25 @@
       "name": "Fixture PI (fictional)",
       "school": "Fixture Institute (fictional)",
       "homepage": "https://example.org/fictional-advisor",
+      "pi_evidence_level": "B",
+      "discovered_via": "research_seed",
+      "network_round": 0,
+      "back_search": {"window": "2021-2026", "source_ids": ["fixture-study"]},
       "evidence_profile": {
-        "scientific_fit": {"status": "strong", "reasons": ["Fictional shared mechanistic question"], "source_ids": ["fixture-study"]},
-        "training_fit": {"status": "unknown"},
+        "research_question_fit": {"status": "direct", "reasons": ["Fictional shared mechanistic question"], "source_ids": ["fixture-study"]},
+        "research_route_continuity": {"status": "sustained_core", "reasons": ["Fictional five-year back search"], "source_ids": ["fixture-study"]},
+        "pi_role_confidence": {"status": "probable", "level": "B", "reasons": ["Fictional corresponding-author role"], "source_ids": ["fixture-study"]},
+        "evidence_sufficiency": "sparse",
+        "current_activity": "recent_signal",
+        "identity": {"current_institution": "Fixture Institute (fictional)", "official_profile_url": "https://example.org/fictional-advisor", "source_ids": ["fixture-study"]},
+        "research_mainline": {
+          "long_term_question": "Fictional long-term question",
+          "representative_works": [{"title": "Fictional study", "year": 2025, "url": "https://example.org/fictional-study", "verified_role": "corresponding_author", "relation_to_mainline": "core", "source_ids": ["fixture-study"]}],
+          "source_ids": ["fixture-study"]
+        },
+        "collaboration_network": {"core_collaborators": [], "edges": [], "research_neighbors": []},
+        "latest_signals": {"latest_papers": [], "preprints": [], "projects": []},
+        "doctoral_trajectory": {"current_doctoral": [], "former_doctoral": [], "emerging_pi_note": "Fictional: first doctoral cohort not yet public"},
         "key_unknowns": ["真实博士项目及当批次入口尚未核验"],
         "next_verification": ["先核对项目师资和培养路径"]
       }

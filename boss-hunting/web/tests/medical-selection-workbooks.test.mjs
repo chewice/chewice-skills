@@ -136,11 +136,14 @@ test("production evidence references cannot exclude with missing, stale, inacces
 });
 
 test("T02 T32 discovery records have real advisor identity and no fabricated material target", () => {
-  const input = [{ advisor_id: "fixture-advisor", name: "Fixture Advisor", feasibility: "eligible",
-    evidence_profile: { scientific_fit: { status: "strong" }, training_fit: { status: "unknown" } } }];
+  const input = [{ advisor_id: "fixture-advisor", name: "Fixture Advisor", feasibility: "eligible", discovered_via: "collaboration", network_round: 1,
+    evidence_profile: { research_question_fit: { status: "direct" }, training_fit: { status: "unknown" }, resources: [{ level: "shared" }] } }];
   const rows = buildMedicalDiscoveryView(input, { ...project, searchMode: "discovery" });
   assert.equal(rows[0].advisor_id, "fixture-advisor");
-  assert.equal(rows[0].evidenceProfile.scientificFit.status, "strong");
+  assert.equal(rows[0].evidenceProfile.researchQuestionFit.status, "direct");
+  assert.equal(rows[0].discoveredVia, "collaboration");
+  assert.equal(rows[0].networkRound, 1);
+  assert.ok(!("trainingFit" in rows[0].evidenceProfile) && !("resources" in rows[0].evidenceProfile));
   assert.equal(rows[0].feasibility, "needs_confirmation");
   assert.ok(!("advisorProgramId" in rows[0]));
   assert.ok(!("program" in rows[0]));
@@ -174,22 +177,29 @@ test("medical real program validation rejects invented IDs and mismatched intake
   assert.equal(result.selected[0].overallMatch, null, "stale mode cannot enable old numeric fallback");
 });
 
-test("medical workbook preserves grants, student funding and denominator limitations separately", () => {
+test("T04 T10 medical workbook keeps five-module columns, public project records and no training/resource/funding columns", () => {
   const input = { project, applicationRows: [candidate("funding", {
-    evidenceProfile: { scientificFit: { status: "strong" },
+    evidenceProfile: { researchQuestionFit: { status: "direct" },
+      researchRouteContinuity: { status: "sustained_core" },
+      piRoleConfidence: { status: "verified", level: "A" },
+      latestSignals: { projects: [{ title: "Fixture project", projectId: "FIX-1", fundingBody: "Fixture Funder", piRole: "PI", period: "2024-2027", status: "active", amount: 1000000, amountUnit: "USD" }] },
+      doctoralTrajectory: { formerDoctoral: [{ name: "Fixture graduate", degreeOrYear: "PhD 2024" }], emergingPiNote: "First cohort still in progress" },
+      // Removed dimensions must be dropped, never re-labelled.
       resources: [{ level: "institution_owned", doctoral_access: "unknown" }],
       researchFunding: [{ amount: 1000000, currency: "USD", role: "Co-I", scope: "annual_parent_award" }],
       doctoralFunding: [{ status: "not_checked", tuition: null }],
-      doctoralOutcomes: { sample: "no_historical_sample", denominator: null, limitation: "No success rate can be calculated" },
+      trainingFit: { status: "supported" },
     },
   })] };
   const sheet = buildMedicalWorkbookSheets(input)[0];
   const byHeader = Object.fromEntries(sheet.headers.map((header, index) => [header, sheet.rows[0][index]]));
-  assert.match(byHeader["研究项目经费"], /annual_parent_award/);
-  assert.doesNotMatch(byHeader["博士生资助"], /1000000/);
-  assert.match(byHeader["研究资源及访问证据层级"], /doctoral_access: unknown/);
-  assert.match(byHeader["博士培养公开样本与局限"], /no_historical_sample/);
-  assert.ok(!sheet.headers.some((header) => /综合匹配分|申请定位|QS/.test(header)));
+  assert.match(byHeader["D 公开项目记录"], /FIX-1.*Fixture Funder.*PI.*1000000 USD/);
+  assert.match(byHeader["PI 角色置信 / Level"], /verified[\s\S]*A/);
+  assert.match(byHeader["E 已毕业博士"], /Fixture graduate/);
+  assert.match(byHeader["E Graduate Program"], /First cohort still in progress/);
+  assert.match(byHeader["主线连续性"], /sustained_core/);
+  assert.ok(!sheet.headers.some((header) => /综合匹配分|申请定位|QS|训练|研究资源|博士生资助|培养制度|研究项目经费|培养成功/.test(header)), sheet.headers.join("|"));
+  assert.doesNotMatch(JSON.stringify(sheet.rows[0]), /annual_parent_award|institution_owned|supported/);
 });
 
 test("T42 spreadsheet text and serialized formula objects cannot inject executable formulas", async () => {
