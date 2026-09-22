@@ -8,6 +8,9 @@ __pycache__/
 # Local agent/editor configuration; never distribute machine-specific launch
 # settings or credentials with the project.
 .claude/
+# Real API credentials live in the user config directory, never in the repo.
+config/credentials.env
+*.credentials.env
 
 # Local scratch and browser/test-run artifacts. Regression test source remains
 # tracked under web/tests/.
