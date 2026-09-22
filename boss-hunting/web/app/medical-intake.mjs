@@ -38,10 +38,12 @@ export function medicalDraftReadiness(form, application, previousBackground = {}
   const hasBackground = ["self_reported", "documented"].includes(background.source) &&
     ["education", "researchExperience", "qualifications"].some((key) => background[key].some((item) =>
       typeof item === "string" ? item.trim() : item && typeof item === "object" && Object.keys(item).length));
+  // Three required steps: field -> disease/mechanism/question -> region.
+  // Research object, scale, paradigm and method preference are optional.
   const checks = [
-    [Boolean(form.fields?.trim()), "明确医学领域"],
-    [Boolean(form.diseaseScope?.trim() && form.researchModes?.trim()), "明确疾病/机制和研究方式，或填写未定"],
-    [Boolean(application.target?.trim()), "明确地区或填写不限"],
+    [Boolean(form.fields?.trim()), "明确生物医学领域或大方向，或填写不限"],
+    [Boolean(form.diseaseScope?.trim() || form.researchQuestions?.trim()), "明确希望研究的疾病、机制或科学问题，或填写未定"],
+    [Boolean(application.target?.trim()), "明确目标国家/地区，或填写不限"],
   ];
   const objectiveChecks = [
     [Boolean(application.degree?.trim()), "填写目标学位"],
@@ -72,18 +74,22 @@ export function prefillRequestedInputs(fields, project, current = {}) {
     medicalFields: profileAnswer("fields"),
     diseaseScope: profile.diseaseScope === "unasked" ? "" : profile.diseaseScope,
     researchModes: profileAnswer("researchModes"),
-    desiredTraining: profileAnswer("desiredTraining"),
     interests: (project.interests || []).map((item) => typeof item === "string" ? item : item.name).join("；"),
     applicantBackground: ["education", "researchExperience", "qualifications"].map((key) => backgroundEntriesText(background[key])).filter(Boolean).join("；"),
   };
   return Object.fromEntries(fields.map(({ id }) => [id, current[id] ?? String(stored[id] ?? "")]));
 }
 
+export const MEDICAL_FORM_LIST_KEYS = ["fields", "diseasesOrMechanisms", "researchQuestions", "researchObjects", "researchScales", "researchModes", "methodPreferences", "adjacentInterests", "exclusions"];
+
 export function medicalProfileFromForm(form, previous = {}) {
   const profile = { ...previous, inputStatus: { ...previous.inputStatus } };
-  for (const key of ["fields", "researchModes", "diseasesOrMechanisms", "researchQuestions", "currentSkills", "desiredTraining", "adjacentInterests", "exclusions"]) {
+  // Applicant skills and desired training are no longer part of discovery.
+  delete profile.currentSkills;
+  delete profile.desiredTraining;
+  for (const key of MEDICAL_FORM_LIST_KEYS) {
     profile[key] = listInput(form[key]);
-    if (["fields", "researchModes", "desiredTraining", "exclusions"].includes(key)) {
+    if (["fields", "researchModes", "exclusions"].includes(key)) {
       profile.inputStatus[key] = ["未定", "undecided"].includes(String(form[key]).trim()) ? "undecided"
         : ["不限", "无", "unrestricted"].includes(String(form[key]).trim()) ? "unrestricted"
           : profile[key].length ? "answered" : "unasked";

@@ -9,11 +9,12 @@ Phase 1 启动前只检查：
 严格保留每条关键结论的来源。`;
 
 export function buildPhaseOneTaskPrompt({ project, filePath = "" }) {
-  if (project?.domainProfile === "medical") return `使用 Boss Hunting 的医学 ${project.searchMode || "discovery"} 模式。
-复用已保存画像 ${JSON.stringify(project.medicalProfile || {})}；只补缺失信息，按医学领域、疾病/机制与研究方式及训练、地区、发现筛选四步推进。
+  if (project?.domainProfile === "medical") return `使用 Boss Hunting 的生物医学 ${project.searchMode || "discovery"} 模式。
+复用已保存研究画像 ${JSON.stringify(project.medicalProfile || {})}；只补缺失信息，按 领域 → 疾病/机制/科学问题 → 目标地区 三步推进，研究对象/尺度/范式/方法偏好为可选。
 地区：${project.target || "尚未询问"}；目标数量：${project.shortlistTarget || 10}。
-探索无需 CV；申请筛选接受真实 CV 或结构化背景，未知资格保持待确认。
-研究与训练匹配以证据画像比较，不计算综合分或分配 reach 配额。未映射真实项目的导师保存在 advisor_records 中；深查仍需精确目标和维度确认。`;
+流程：科学问题 → Map/Research Seeds → PI 识别与验证（Level A–D）→ 近五年回查 → 合作网络扩展（≤2 轮，collaboration edge 与 research-neighbor edge 分开）→ 饱和 → shortlist（展示顺序）。
+探索不读取 CV、成绩或申请者能力；申请筛选才使用真实背景，未知资格保持待确认。
+以五维证据画像（研究问题契合 / 主线连续性 / PI 角色置信 / 证据充分度 / 当前活跃度）比较，不计算综合分、引用量排名或 reach 配额；不评估训练匹配、资源、博士资助或培养环境。未映射真实项目的导师保存在 advisor_records 中；深查仍需精确目标和五模块维度确认。凭据只报告状态词，不得输出 key 值。`;
   const interests = project?.interests?.length
     ? project.interests
         .map((interest) => `${interest.name} ${interest.weight}%`)
@@ -45,7 +46,7 @@ export function buildInvestigationTaskPrompt() {
 }
 
 export function buildRankingTaskPrompt(project) {
-  if (project?.domainProfile === "medical") return "使用已有真实候选与已确认调查生成医学证据画像比较及 Excel；展示顺序不是质量排名，不生成综合分或录取概率。";
+  if (project?.domainProfile === "medical") return "使用已有真实候选与已确认的五模块调查生成生物医学五维证据画像比较、HTML 报告及 Excel；展示顺序不是质量排名，不生成综合分、引用量排名或录取概率。";
   return "使用当前项目已有的真实候选导师、客观条件与已确认背调证据生成最终排名。";
 }
 

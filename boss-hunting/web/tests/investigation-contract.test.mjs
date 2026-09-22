@@ -7,15 +7,15 @@ import {
   DEFAULT_DETECTIVE_SECTIONS,
   DETECTIVE_SECTIONS,
 } from "../local-runtime/project-store.mjs";
-import { getDetectiveSectionCatalog, MEDICAL_DEFAULT_DETECTIVE_SECTIONS } from "../../skills/advisor-pipeline/scripts/project-contract.mjs";
+import {
+  getDetectiveSectionCatalog, GENERIC_DETECTIVE_SECTIONS, MEDICAL_DEFAULT_DETECTIVE_SECTIONS, MEDICAL_DETECTIVE_SECTION_CATALOG,
+} from "../../skills/advisor-pipeline/scripts/project-contract.mjs";
 
 const testDirectory = dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = resolve(testDirectory, "../..");
 
-function parseReferenceMenu(reference) {
-  const block = reference.match(
-    /## CLI selection menu([\s\S]*?)## Cost level/,
-  )?.[1];
+function parseReferenceMenu(reference, pattern = /## CLI selection menu([\s\S]*?)## Cost level/) {
+  const block = reference.match(pattern)?.[1];
   assert.ok(block, "canonical CLI selection menu is missing");
   return [...block.matchAll(
     /^\|\s*(\d+)\s*\|\s*`([^`]+)`\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|$/gm,
@@ -46,12 +46,17 @@ test("Web and CLI share one ordered investigation option contract", async () => 
   assert.match(storeSource, /detectiveSectionCatalog: getDetectiveSectionCatalog\(metadata\)/);
   assert.deepEqual(getDetectiveSectionCatalog({ domainProfile: "medical" })
     .filter((section) => section.defaultSelected).map((section) => section.id), MEDICAL_DEFAULT_DETECTIVE_SECTIONS);
+  const medicalReference = parseReferenceMenu(reference, /## Medical five-module menu([\s\S]*?)Module scope/);
+  assert.deepEqual(medicalReference.map(({ id, label, defaultSelected }) => ({ id, label, defaultSelected })),
+    MEDICAL_DETECTIVE_SECTION_CATALOG.map(({ id, label, defaultSelected }) => ({ id, label, defaultSelected })));
+  assert.deepEqual(getDetectiveSectionCatalog({ domainProfile: "medical" }).map(({ id }) => id), medicalReference.map(({ id }) => id));
 
   assert.equal(referenceOptions.length, 11);
   assert.deepEqual(
     referenceOptions.map(({ id }) => id),
-    DETECTIVE_SECTIONS,
+    GENERIC_DETECTIVE_SECTIONS,
   );
+  assert.deepEqual(DETECTIVE_SECTIONS, [...GENERIC_DETECTIVE_SECTIONS, ...MEDICAL_DETECTIVE_SECTION_CATALOG.map(({ id }) => id)]);
   assert.deepEqual(
     referenceOptions.filter(({ defaultSelected }) => defaultSelected).map(({ id }) => id),
     DEFAULT_DETECTIVE_SECTIONS,

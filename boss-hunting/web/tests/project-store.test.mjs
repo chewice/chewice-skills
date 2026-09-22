@@ -36,7 +36,7 @@ test("project store persists exact investigation configuration", async () => {
     );
     assert.deepEqual(project.investigation.draft.selectedAdvisorProgramIds, []);
     assert.equal(project.investigation.confirmed, null);
-    assert.equal(project.schemaVersion, 9);
+    assert.equal(project.schemaVersion, 10);
     assert.equal(project.portfolioStrategy, "balanced");
     assert.equal(project.readiness.phase1Ready, false);
 

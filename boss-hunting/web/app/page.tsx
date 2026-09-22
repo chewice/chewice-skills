@@ -115,8 +115,15 @@ type ProjectReadiness = {
   >;
 };
 
-type MedicalEvidenceProfile = { scientificFit?: { status?: string; reasons?: string[] }; trainingFit?: { status?: string; reasons?: string[] } };
-type MedicalProfile = { fields?: string[]; diseaseScope?: string; diseasesOrMechanisms?: string[]; researchQuestions?: string[]; researchModes?: string[]; currentSkills?: string[]; desiredTraining?: string[]; adjacentInterests?: string[]; exclusions?: string[]; inputStatus?: Record<string, string> };
+type MedicalEvidenceProfile = {
+  researchQuestionFit?: { status?: string; reasons?: string[] };
+  researchRouteContinuity?: { status?: string; reasons?: string[] };
+  piRoleConfidence?: { status?: string; level?: string | null; reasons?: string[] };
+  evidenceSufficiency?: string;
+  currentActivity?: string;
+  fitBoundary?: string | null;
+};
+type MedicalProfile = { fields?: string[]; diseaseScope?: string; diseasesOrMechanisms?: string[]; researchQuestions?: string[]; researchObjects?: string[]; researchScales?: string[]; researchModes?: string[]; methodPreferences?: string[]; adjacentInterests?: string[]; exclusions?: string[]; inputStatus?: Record<string, string> };
 
 type AdvisorProject = {
   domainProfile?: "general" | "medical";
@@ -376,10 +383,9 @@ const runInputFieldLabels: Record<string, string> = {
   target: "目标院校或地区范围",
   applicantName: "申请者真实姓名",
   interests: "研究兴趣（逗号分隔）",
-  medicalFields: "医学领域（可填不限）",
-  diseaseScope: "疾病或机制范围（可填未定）",
-  researchModes: "研究方式（可填未定）",
-  desiredTraining: "希望获得的训练",
+  medicalFields: "生物医学领域或大方向（可填不限）",
+  diseaseScope: "希望研究的疾病、机制或科学问题（可填未定）",
+  researchModes: "研究范式（可选）",
   applicantBackground: "相关真实背景（用户自述）",
   hardConstraints: "资金底线及硬条件（无则明确填写无）",
   shortlistTarget: "shortlist 数量",
@@ -449,7 +455,7 @@ export default function Home() {
   const [deleteProjectBusy, setDeleteProjectBusy] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [projectDraft, setProjectDraft] = useState({ name: "" });
-  const [medicalDraft, setMedicalDraft] = useState({ domainProfile: "general", searchMode: "discovery", fields: "", diseaseScope: "", diseasesOrMechanisms: "", researchQuestions: "", researchModes: "", currentSkills: "", desiredTraining: "", adjacentInterests: "", exclusions: "", education: "", researchExperience: "", qualifications: "", backgroundSource: "self_reported", backgroundEdited: false, browserEnabled: false, browserDownloads: false });
+  const [medicalDraft, setMedicalDraft] = useState({ domainProfile: "general", searchMode: "discovery", fields: "", diseaseScope: "", diseasesOrMechanisms: "", researchQuestions: "", researchObjects: "", researchScales: "", researchModes: "", methodPreferences: "", adjacentInterests: "", exclusions: "", education: "", researchExperience: "", qualifications: "", backgroundSource: "self_reported", backgroundEdited: false, browserEnabled: false, browserDownloads: false });
   const [applicationDraft, setApplicationDraft] = useState<{
     applicantName: string;
     season: string;
@@ -945,7 +951,7 @@ export default function Home() {
         if (Array.isArray(value) && value.length) return value.join("；");
         return mp.inputStatus?.[key] === "undecided" ? "未定" : mp.inputStatus?.[key] === "unrestricted" ? "不限" : "";
       };
-      setMedicalDraft({ domainProfile: activeProject.domainProfile || "general", searchMode: activeProject.searchMode || "discovery", fields: profileText("fields"), diseaseScope: mp.diseaseScope === "unasked" ? "" : mp.diseaseScope || "", diseasesOrMechanisms: profileText("diseasesOrMechanisms"), researchQuestions: profileText("researchQuestions"), researchModes: profileText("researchModes"), currentSkills: profileText("currentSkills"), desiredTraining: profileText("desiredTraining"), adjacentInterests: profileText("adjacentInterests"), exclusions: profileText("exclusions"), education: backgroundEntriesText(bg?.education), researchExperience: backgroundEntriesText(bg?.researchExperience), qualifications: backgroundEntriesText(bg?.qualifications), backgroundSource: bg?.source || "self_reported", backgroundEdited: false, browserEnabled: activeProject.browserResearch?.enabled === true, browserDownloads: activeProject.browserResearch?.allowPublicDownloads === true });
+      setMedicalDraft({ domainProfile: activeProject.domainProfile || "general", searchMode: activeProject.searchMode || "discovery", fields: profileText("fields"), diseaseScope: mp.diseaseScope === "unasked" ? "" : mp.diseaseScope || "", diseasesOrMechanisms: profileText("diseasesOrMechanisms"), researchQuestions: profileText("researchQuestions"), researchObjects: profileText("researchObjects"), researchScales: profileText("researchScales"), researchModes: profileText("researchModes"), methodPreferences: profileText("methodPreferences"), adjacentInterests: profileText("adjacentInterests"), exclusions: profileText("exclusions"), education: backgroundEntriesText(bg?.education), researchExperience: backgroundEntriesText(bg?.researchExperience), qualifications: backgroundEntriesText(bg?.qualifications), backgroundSource: bg?.source || "self_reported", backgroundEdited: false, browserEnabled: activeProject.browserResearch?.enabled === true, browserDownloads: activeProject.browserResearch?.allowPublicDownloads === true });
       setApplicationDraft({
         applicantName: activeProject.applicantName || "",
         season: activeProject.season || "",
@@ -1083,7 +1089,7 @@ export default function Home() {
     {
       number: "01",
       title: "发现候选导师",
-      detail: isMedical ? "按医学研究画像发现导师，比较科学问题与训练支持" : "解析 CV、构建院系名册、完成研究方向匹配",
+      detail: isMedical ? "科学问题 → Seeds → PI 验证 → 合作网络 → 候选导师（展示顺序，非质量排名）" : "解析 CV、构建院系名册、完成研究方向匹配",
       meta:
         displayedDiscoveryCount > 0
           ? isMedical ? `已保存 ${displayedDiscoveryCount} 位导师线索，${candidates.length} 个真实项目机会` : `发现池 ${projectStatus.candidateCount} 位，已筛出 ${candidates.length} 位`
@@ -1132,7 +1138,7 @@ export default function Home() {
       candidates.filter((candidate) =>
         `${candidate.name} ${candidate.school} ${candidate.program} ${candidate.directions.join(" ")}`
           .toLowerCase()
-          .includes(query.toLowerCase()) && (!highFitOnly || (isMedical ? candidate.evidenceProfile?.scientificFit?.status === "strong" : (candidate.fit ?? -1) >= 8)),
+          .includes(query.toLowerCase()) && (!highFitOnly || (isMedical ? candidate.evidenceProfile?.researchQuestionFit?.status === "direct" : (candidate.fit ?? -1) >= 8)),
       ),
     [candidates, highFitOnly, query, isMedical],
   );
@@ -1730,7 +1736,7 @@ export default function Home() {
         else if (field.id === "season") patch.season = value;
         else if (field.id === "target") patch.target = value;
         else if (field.id === "hardConstraints") patch.hardConstraints = value;
-        else if (["medicalFields", "diseaseScope", "researchModes", "desiredTraining", "applicantBackground"].includes(field.id)) Object.assign(patch, medicalInputPatch(field.id, value, { ...activeProject, ...patch }));
+        else if (["medicalFields", "diseaseScope", "researchModes", "applicantBackground"].includes(field.id)) Object.assign(patch, medicalInputPatch(field.id, value, { ...activeProject, ...patch }));
         else if (field.id === "shortlistTarget") {
           patch.shortlistTarget = Number(value) || 10;
         } else if (field.id === "interests") {
@@ -2667,7 +2673,7 @@ export default function Home() {
                 </span>
               </div>
               <p className="intake-guide">
-                {medicalForm ? "医学四步：领域 → 疾病/机制与研究方式及训练 → 地区 → 发现筛选。探索无需 CV；申请筛选可使用真实 CV 或结构化背景。" : "Phase 1 需要目标范围和一份真实 CV。申请者姓名用于后续 RP 与套磁信；学位与申请季最迟在客观条件筛选前补齐。"}
+                {medicalForm ? "生物医学三步：领域 → 疾病/机制/科学问题 → 目标地区。研究对象、尺度、范式与方法偏好为可选。探索不读取 CV、成绩或已有能力；申请筛选才使用真实 CV 或结构化背景。" : "Phase 1 需要目标范围和一份真实 CV。申请者姓名用于后续 RP 与套磁信；学位与申请季最迟在客观条件筛选前补齐。"}
               </p>
               <div className="application-form">
                 <label><span>检索配置</span><select value={medicalDraft.domainProfile} onChange={(event) => {
@@ -2677,13 +2683,14 @@ export default function Home() {
                 {medicalForm && <>
                   <label><span>工作模式</span><select value={medicalDraft.searchMode} onChange={(event) => { setIntakeDirty(true); setMedicalDraft((current) => ({ ...current, searchMode: event.target.value })); }}><option value="discovery">方向探索（无需 CV）</option><option value="application">申请筛选（真实背景）</option></select></label>
                   {([
-                    ["fields", "第 1 步 · 医学领域", "肿瘤、免疫、骨科、公共卫生、交叉方向或不限"],
-                    ["diseaseScope", "第 2 步 · 疾病/机制范围", "单病种、多病种、泛癌、机制优先或未定"],
+                    ["fields", "第 1 步 · 生物医学领域或大方向", "肿瘤、免疫、神经、精神、骨科、公共卫生、交叉方向或不限"],
+                    ["diseaseScope", "第 2 步 · 希望深入研究的疾病、机制或科学问题", "单病种、多病种、泛癌、机制优先或未定"],
                     ["diseasesOrMechanisms", "疾病或机制关键词", "保留你自己的术语，可多项"],
                     ["researchQuestions", "科学问题", "机制、治疗反应、预后、预防、方法开发或未定"],
-                    ["researchModes", "研究方式", "临床、实验、计算/数据、群体/方法学或未定"],
-                    ["currentSkills", "已有能力", "仅填写真实经历；可留空"],
-                    ["desiredTraining", "希望获得的训练", "博士阶段希望学习的能力或未定"],
+                    ["researchObjects", "研究对象（可选）", "患者队列、动物模型、细胞、组织、多组学数据等"],
+                    ["researchScales", "研究尺度（可选）", "分子、细胞、环路、系统、群体等"],
+                    ["researchModes", "研究范式（可选）", "临床、实验、计算/数据、群体/方法学"],
+                    ["methodPreferences", "方法偏好（可选）", "希望研究中出现的技术或方法；不是已有能力"],
                     ["adjacentInterests", "可接受的相邻方向", "可留空"],
                     ["exclusions", "明确排除的研究方向", "可填无"],
                     ["education", "真实学历背景", "申请筛选需相关背景；标记为用户自述"],
@@ -2692,7 +2699,7 @@ export default function Home() {
                   ] as const).map(([key, label, hint]) => <label key={key}><span>{label}</span><textarea value={medicalDraft[key]} placeholder={hint} rows={2} onChange={(event) => { setIntakeDirty(true); setMedicalDraft((current) => ({ ...current, [key]: event.target.value, ...(["education", "researchExperience", "qualifications"].includes(key) ? { backgroundSource: "self_reported", backgroundEdited: true } : {}) })); }} /></label>)}
                   <label><input type="checkbox" checked={medicalDraft.browserEnabled} onChange={(event) => { setIntakeDirty(true); setMedicalDraft((current) => ({ ...current, browserEnabled: event.target.checked })); }} />允许已可用浏览器查询公开资料</label>
                   <label><input type="checkbox" checked={medicalDraft.browserDownloads} onChange={(event) => { setIntakeDirty(true); setMedicalDraft((current) => ({ ...current, browserDownloads: event.target.checked })); }} />允许下载必要公开文件</label>
-                  <small>不包含安装、登录、付费、上传材料或提交申请。第 3 步在下方填写目标地区；第 4 步保存后开始发现，深查另行确认。</small>
+                  <small>不包含安装、登录、付费、上传材料或提交申请。第 3 步在下方填写目标国家/地区；保存后开始发现，五模块深查另行确认。API 凭据放在用户配置目录的 credentials.env，不要在此粘贴。</small>
                 </>}
               </div>
               <div className="intake-progress" aria-label="申请资料完成进度">
@@ -2988,7 +2995,7 @@ export default function Home() {
             {isMedical && Boolean(activeProject?.discoveryAdvisors?.length) && <article className="panel">
               <h2>导师探索视图</h2><p>来自共享导师记录；尚未映射真实项目的导师不能选择生成申请材料。申请字段本次未核验。</p>
               {activeProject?.discoveryAdvisors?.map((advisor) => <p key={advisor.advisor_id}>
-                <strong>{advisor.name || advisor.name_zh || advisor.name_en || advisor.advisor_id}</strong> · {advisor.current_institution || advisor.institution || "当前机构待核验"} · {(advisor.evidence_profile || advisor.evidenceProfile)?.scientificFit?.status || "匹配证据待核验"}
+                <strong>{advisor.name || advisor.name_zh || advisor.name_en || advisor.advisor_id}</strong> · {advisor.current_institution || advisor.institution || "当前机构待核验"} · 方向契合：{(advisor.evidence_profile || advisor.evidenceProfile)?.researchQuestionFit?.status || "insufficient_information"} · 主线：{(advisor.evidence_profile || advisor.evidenceProfile)?.researchRouteContinuity?.status || "unclear"} · PI：{(advisor.evidence_profile || advisor.evidenceProfile)?.piRoleConfidence?.status || "identity_unresolved"}
               </p>)}
             </article>}
             <div className="table-wrap">
@@ -3007,9 +3014,9 @@ export default function Home() {
                     <th scope="col">申请路径 / 下一步</th>
                     <th scope="col">证据</th>
                     <th scope="col">{isMedical ? "行动分组" : "申请定位"}</th>
-                    <th scope="col">研究匹配</th>
-                    <th scope="col">{isMedical ? "训练支持" : "履历匹配"}</th>
-                    <th scope="col">{isMedical ? "匹配依据" : "综合匹配"}</th>
+                    <th scope="col">{isMedical ? "方向契合" : "研究匹配"}</th>
+                    <th scope="col">{isMedical ? "主线连续性" : "履历匹配"}</th>
+                    <th scope="col">{isMedical ? "PI 角色置信" : "综合匹配"}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -3119,23 +3126,23 @@ export default function Home() {
                       </td>
                       <td>
                         <div className="fit-score">
-                          <strong>{isMedical ? candidate.evidenceProfile?.scientificFit?.status || "信息不足" : candidate.fit}</strong>
+                          <strong title={isMedical ? candidate.evidenceProfile?.researchQuestionFit?.reasons?.join("；") || "待核验" : undefined}>{isMedical ? candidate.evidenceProfile?.researchQuestionFit?.status || "insufficient_information" : candidate.fit}</strong>
                           {!isMedical && candidate.fit != null && <span>
                             <i style={{ width: `${(candidate.fit ?? 0) * 10}%` }} />
                           </span>}
                         </div>
                       </td>
                       <td>
-                        <div className="fit-score" title={isMedical ? "与期望获得训练相对应的支持证据" : "基于 CV 中的方法、论文、项目与可迁移能力"}>
-                          <strong>{isMedical ? candidate.evidenceProfile?.trainingFit?.status || "未知" : candidate.profileMatch ?? "—"}</strong>
+                        <div className="fit-score" title={isMedical ? candidate.evidenceProfile?.researchRouteContinuity?.reasons?.join("；") || "近五年回查是否持续在该方向" : "基于 CV 中的方法、论文、项目与可迁移能力"}>
+                          <strong>{isMedical ? candidate.evidenceProfile?.researchRouteContinuity?.status || "unclear" : candidate.profileMatch ?? "—"}</strong>
                           {!isMedical && candidate.profileMatch != null && (
                             <span><i style={{ width: `${candidate.profileMatch * 10}%` }} /></span>
                           )}
                         </div>
                       </td>
                       <td>
-                        <div className="fit-score overall-score" title={isMedical ? candidate.evidenceProfile?.scientificFit?.reasons?.join("；") || "待核验" : candidate.matchReasons?.join("；") || "等待基于 CV 的综合判断"}>
-                          <strong>{isMedical ? candidate.evidenceProfile?.scientificFit?.reasons?.join("；") || "待核验" : candidate.overallMatch ?? "—"}</strong>
+                        <div className="fit-score overall-score" title={isMedical ? candidate.evidenceProfile?.piRoleConfidence?.reasons?.join("；") || "PI 身份与角色证据" : candidate.matchReasons?.join("；") || "等待基于 CV 的综合判断"}>
+                          <strong>{isMedical ? `${candidate.evidenceProfile?.piRoleConfidence?.status || "identity_unresolved"}${candidate.evidenceProfile?.piRoleConfidence?.level ? ` · Level ${candidate.evidenceProfile.piRoleConfidence.level}` : ""}` : candidate.overallMatch ?? "—"}</strong>
                           {!isMedical && candidate.overallMatch != null && (
                             <span><i style={{ width: `${candidate.overallMatch * 10}%` }} /></span>
                           )}
@@ -3494,7 +3501,7 @@ export default function Home() {
                           <h2>{item.name}</h2>
                           <p>{[item.school, item.program].filter(Boolean).join(" · ")}</p>
                         </div>
-                        <strong>{isMedical ? item.evidenceProfile?.scientificFit?.status || "信息不足" : item.totalScore != null ? item.totalScore.toFixed(1) : "—"}</strong>
+                        <strong>{isMedical ? item.evidenceProfile?.researchQuestionFit?.status || "insufficient_information" : item.totalScore != null ? item.totalScore.toFixed(1) : "—"}</strong>
                       </div>
                       <div className="ranking-decision-factors">
                         <span className={`constraint-badge ${item.hardConstraintStatus || "unknown"}`}>

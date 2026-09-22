@@ -8,7 +8,7 @@ import {
   renderInvestigationMenu,
 } from "../../skills/advisor-pipeline/scripts/render_investigation_menu.mjs";
 import {
-  DETECTIVE_SECTIONS,
+  GENERIC_DETECTIVE_SECTIONS,
   DETECTIVE_SECTION_CATALOG,
 } from "../../skills/advisor-pipeline/scripts/project-contract.mjs";
 
@@ -75,7 +75,7 @@ test("the CLI menu always renders the stable advisorProgramId column", async () 
     // All 11 dimensions, canonical order, three defaults.
     assert.deepEqual(
       menu.sections.map((section) => section.id),
-      DETECTIVE_SECTIONS,
+      GENERIC_DETECTIVE_SECTIONS,
     );
     assert.deepEqual(
       menu.sections.filter((section) => section.defaultSelected).map((s) => s.id),
@@ -114,7 +114,7 @@ test("the menu renders from project.json and candidates.json alone", async () =>
     {
       draft: {
         selectedAdvisorProgramIds: ["ap-1"],
-        selectedSections: DETECTIVE_SECTIONS,
+        selectedSections: GENERIC_DETECTIVE_SECTIONS,
         communitySources: { requested: true },
         revision: 1,
       },

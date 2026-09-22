@@ -25,12 +25,12 @@ async function withProject(run) {
     let project = await store.createProject({ name: "Fictional medical project", slug: "medical-gate",
       domainProfile: "medical", searchMode: "application", target: "日本", degree: "PhD", season: "2027",
       hardConstraints: "无自设条件", applicantBackground: { source: "self_reported", education: ["Fixture MSc"] },
-      medicalProfile: { fields: ["免疫"], diseaseScope: "机制优先", researchModes: ["实验"], desiredTraining: ["实验设计"] } });
+      medicalProfile: { fields: ["免疫"], diseaseScope: "机制优先", researchModes: ["实验"] } });
     await writeJson(project, "candidates.json", [normalizeMedicalCandidate(candidate, project)]);
     await writeJson(project, "advisor_records.json", [advisor]);
     await writeJson(project, "program_records.json", [program]);
     project = await store.updateProject(project.id, { investigation: {
-      selectedAdvisorProgramIds: [candidate.advisorProgramId], selectedSections: ["recent_research"],
+      selectedAdvisorProgramIds: [candidate.advisorProgramId], selectedSections: ["research_mainline_5y"],
     } });
     project = await store.confirmInvestigation(project.id, { draftRevision: project.investigation.draft.revision });
     await writeDetective(project);
@@ -48,7 +48,7 @@ async function writeDetective(project) {
     confirmedRevision: confirmed.revision, confirmedFingerprint: confirmed.fingerprint,
     selectedSections: confirmed.selectedSections,
     results: [{ advisorProgramId: candidate.advisorProgramId,
-      sections: { recent_research: { status: "not_completed", summary: "Fictional test; no research performed" } } }],
+      sections: { research_mainline_5y: { status: "not_completed", summary: "Fictional test; no research performed" } } }],
   });
 }
 
@@ -63,7 +63,7 @@ async function writeRanking(project) {
 test("medical comparison rejects changed scope and old Detective results after reconfirmation", () => withProject(async ({ root, store, project }) => {
   assert.equal(project.readiness.modes.ranking.ready, true);
   assert.equal(project.detectiveResults.confirmedFingerprint, project.investigation.confirmed.fingerprint);
-  project = await store.updateProject(project.id, { medicalProfile: { desiredTraining: ["统计设计"] } });
+  project = await store.updateProject(project.id, { medicalProfile: { researchQuestions: ["新的科学问题"] } });
   assert.equal(project.readiness.modes.detective.ready, false);
   assert.equal(project.readiness.modes.ranking.ready, false);
   project = await store.confirmInvestigation(project.id, { draftRevision: project.investigation.draft.revision });
@@ -87,7 +87,7 @@ test("medical application materials cannot reuse an old ranking after renewed in
   } });
   project = await store.confirmApplicationMaterials(project.id, { draftRevision: project.applicationMaterials.draft.revision });
   assert.equal(project.readiness.modes.outreach_email.ready, true);
-  project = await store.updateProject(project.id, { medicalProfile: { desiredTraining: ["统计设计"] } });
+  project = await store.updateProject(project.id, { medicalProfile: { researchQuestions: ["新的科学问题"] } });
   assert.equal(project.rankings.length, 0);
   assert.equal(project.readiness.modes.outreach_email.ready, false);
   project = await store.confirmInvestigation(project.id, { draftRevision: project.investigation.draft.revision });
@@ -105,7 +105,7 @@ test("medical application materials cannot reuse an old ranking after renewed in
 test("medical completion rejects an old launch snapshot and unstamped ranking arrays", () => withProject(async ({ store, project }) => {
   const launched = { confirmedRevision: project.investigation.confirmed.revision,
     confirmedFingerprint: project.investigation.confirmed.fingerprint };
-  project = await store.updateProject(project.id, { medicalProfile: { desiredTraining: ["统计设计"] } });
+  project = await store.updateProject(project.id, { medicalProfile: { researchQuestions: ["新的科学问题"] } });
   project = await store.confirmInvestigation(project.id, { draftRevision: project.investigation.draft.revision });
   await writeDetective(project);
   await writeRanking(project);
@@ -154,7 +154,7 @@ test("medical material completion keeps the investigation snapshot captured at l
   // No applicant material is manufactured here: only freshness diagnostics are compared.
   const initial = await verifyRunArtifacts(launched);
   assert.ok(!initial.missing.some((item) => /比较结果已失效|医学调查确认在材料运行期间/.test(item)));
-  project = await store.updateProject(project.id, { medicalProfile: { desiredTraining: ["统计设计"] } });
+  project = await store.updateProject(project.id, { medicalProfile: { researchQuestions: ["新的科学问题"] } });
   const changed = await verifyRunArtifacts(launched);
   assert.equal(changed.complete, false);
   assert.ok(changed.missing.some((item) => item.includes("比较结果已失效")));

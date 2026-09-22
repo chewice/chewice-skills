@@ -2,7 +2,7 @@ import { readFile, readdir, stat } from "node:fs/promises";
 import { resolve } from "node:path";
 import { verifyApplicationMaterialArtifacts } from "../../skills/advisor-pipeline/scripts/application-materials-artifacts.mjs";
 import { recommendedActionForCandidate, normalizeProjectMetadata, readinessForProject, isMedicalRankingCurrent, isApplicationMaterialsConfirmationCurrent } from "../../skills/advisor-pipeline/scripts/project-contract.mjs";
-import { normalizeMedicalCandidate, buildMedicalDiscoveryView, validateMedicalCandidateMappings, hasReadableProjectCv } from "../../skills/advisor-pipeline/scripts/medical-evidence.mjs";
+import { normalizeMedicalCandidate, buildMedicalDiscoveryView, validateMedicalCandidateMappings, hasReadableProjectCv, REMOVED_MEDICAL_PROFILE_KEYS } from "../../skills/advisor-pipeline/scripts/medical-evidence.mjs";
 import { reportFilename } from "../../skills/advisor-pipeline/scripts/build_advisor_report.mjs";
 import { researchEvidence } from "../../skills/advisor-pipeline/scripts/browser-research.mjs";
 
@@ -417,6 +417,10 @@ async function verifyMedicalArtifacts(projectPath, project, mode, startedAt) {
     if (row.overallMatch !== null || row.profileMatch !== null || row.fit !== null || row.totalScore != null || row.competitiveness !== "unknown")
       missing.push("医学画像不得包含旧综合分、履历分或竞争分组");
     if (!row.evidenceProfile || row.rankingMode !== "evidence_profile") missing.push("缺少医学分维度证据画像");
+    if (row.evidenceProfile && REMOVED_MEDICAL_PROFILE_KEYS.some((key) => key in row.evidenceProfile))
+      missing.push("医学画像包含已删除的训练/资源/资助/环境维度");
+    if (row.evidenceProfile && !row.evidenceProfile.researchQuestionFit && !row.evidenceProfile.research_question_fit)
+      missing.push("医学画像缺少 researchQuestionFit");
     if (["feasibility", "opportunityStatus", "hardConstraintStatus", "recommendedAction"].some((key) => row[key] !== expected[key]))
       missing.push("医学机会、资格或下一步缺少适用的已核实证据");
   }
@@ -550,7 +554,7 @@ export function parseInputRequest(payload) {
     "target",
     "interests",
     "shortlistTarget",
-    "medicalFields", "diseaseScope", "researchModes", "desiredTraining", "applicantBackground", "hardConstraints",
+    "medicalFields", "diseaseScope", "researchModes", "applicantBackground", "hardConstraints",
   ]);
   const fields = rawFields
     .map((field) => ({

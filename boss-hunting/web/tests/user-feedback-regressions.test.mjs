@@ -36,9 +36,10 @@ test("saved projects open their latest result and completed candidates can rerun
 });
 
 test("candidate results separate research, profile, and overall matching", () => {
-  assert.match(pageSource, /<th scope="col">研究匹配<\/th>/);
-  assert.match(pageSource, /<th scope="col">\{isMedical \? "训练支持" : "履历匹配"\}<\/th>/);
-  assert.match(pageSource, /<th scope="col">\{isMedical \? "匹配依据" : "综合匹配"\}<\/th>/);
+  assert.match(pageSource, /<th scope="col">\{isMedical \? "方向契合" : "研究匹配"\}<\/th>/);
+  assert.match(pageSource, /<th scope="col">\{isMedical \? "主线连续性" : "履历匹配"\}<\/th>/);
+  assert.match(pageSource, /<th scope="col">\{isMedical \? "PI 角色置信" : "综合匹配"\}<\/th>/);
+  assert.doesNotMatch(pageSource, /训练支持|希望获得的训练|desiredTraining|currentSkills/);
   assert.match(pageSource, /candidate\.profileMatch \?\? "—"/);
   assert.match(pageSource, /candidate\.overallMatch \?\? "—"/);
   assert.match(pageSource, /verify_constraints: "先核实硬条件"/);

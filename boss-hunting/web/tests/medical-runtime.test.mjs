@@ -21,7 +21,9 @@ const repository = fileURLToPath(new URL("../../", import.meta.url));
 
 // Fictional project inputs. These tests do not query or represent real advisors.
 const input = { name: "Fixture medical discovery", slug: "medical-fixture", domainProfile: "medical", target: "日本; 瑞士",
-  medicalProfile: { fields: ["免疫学"], diseaseScope: "机制优先", researchModes: ["实验机制"], currentSkills: ["数据整理"], desiredTraining: ["实验设计"] } };
+  medicalProfile: { fields: ["免疫学"], diseaseScope: "机制优先", researchQuestions: ["Fixture question"], researchModes: ["实验机制"],
+    // Legacy keys from schema 9 drafts must be dropped, never carried forward.
+    currentSkills: ["数据整理"], desiredTraining: ["实验设计"] } };
 
 async function withStore(run) {
   const root = await mkdtemp(resolve(tmpdir(), "boss-runtime-"));
@@ -36,13 +38,16 @@ test("T02 T05 T07 T09 T44 Web save/restart preserves medical discovery and authe
   assert.equal(created.browserResearch.enabled, false);
   assert.deepEqual(created.investigation.draft.selectedSections, MEDICAL_DEFAULT_DETECTIVE_SECTIONS);
   assert.equal(created.investigation.draft.sourcePolicy, "public_only");
-  const advisor = { advisor_id: "fictional-only", name: "Fictional Advisor", evidence_profile: { scientificFit: { status: "strong" } } };
+  const advisor = { advisor_id: "fictional-only", name: "Fictional Advisor", evidence_profile: { researchQuestionFit: { status: "direct" } } };
   await writeFile(resolve(created.path, "outputs/advisor_records.json"), JSON.stringify([advisor]));
   const restored = await createProjectStore(root).getProject(created.id);
   assert.equal(restored.discoveryAdvisors[0].advisor_id, advisor.advisor_id);
   assert.equal(restored.discoveryAdvisors[0].advisorProgramId, undefined);
   assert.equal(restored.candidates.length, 0);
-  assert.deepEqual(restored.medicalProfile.currentSkills, ["数据整理"]);
+  assert.equal(restored.medicalProfile.currentSkills, undefined);
+  assert.equal(restored.medicalProfile.desiredTraining, undefined);
+  assert.deepEqual(restored.medicalProfile.researchQuestions, ["Fixture question"]);
+  assert.equal(restored.discoveryAdvisors[0].evidenceProfile.researchQuestionFit.status, "direct");
   const changed = await store.updateProject(created.id, { searchMode: "application", degree: "PhD", season: "2027", hardConstraints: "无自设条件",
     applicantBackground: { source: "self_reported", education: [{ degree: "Fictional MSc", provenance: "user" }] } });
   assert.equal(changed.readiness.modes.finder.ready, true);
@@ -74,29 +79,37 @@ test("T44 Web migration backs up old bytes once and preserves unrelated fields",
   assert.equal(restored.domainProfile, "general");
 }));
 
-test("medical form retains undecided versus unasked and never turns desired training into experience", () => {
-  const profile = medicalProfileFromForm({ fields: "肿瘤", diseaseScope: "泛癌", researchModes: "未定", desiredTraining: "统计", currentSkills: "", target: "不限" });
+test("T01 medical form retains undecided versus unasked and never stores skills or desired training", () => {
+  const profile = medicalProfileFromForm({ fields: "肿瘤", diseaseScope: "泛癌", researchModes: "未定", methodPreferences: "单细胞", desiredTraining: "统计", currentSkills: "数据整理", target: "不限" });
   assert.equal(profile.inputStatus.researchModes, "undecided");
   assert.equal(profile.inputStatus.regions, "unrestricted");
-  assert.deepEqual(profile.currentSkills, []);
-  assert.deepEqual(profile.desiredTraining, ["统计"]);
+  assert.deepEqual(profile.methodPreferences, ["单细胞"]);
+  assert.ok(!("currentSkills" in profile) && !("desiredTraining" in profile));
   const cleared = medicalProfileFromForm({ target: "" }, profile);
   assert.equal(cleared.inputStatus.regions, "unasked");
   const patch = medicalInputPatch("medicalFields", "免疫;神经", { medicalProfile: profile });
   assert.deepEqual(patch.medicalProfile.fields, ["免疫", "神经"]);
-  assert.deepEqual(patch.medicalProfile.desiredTraining, ["统计"]);
+  assert.deepEqual(patch.medicalProfile.methodPreferences, ["单细胞"]);
 });
 
 test("medical runtime prompts and continuation do not reinstate CV or numeric selector gates", () => {
-  const project = { ...input, path: "/fictional/project", searchMode: "discovery", evaluationMode: "evidence_profile" };
+  const medicalProfile = Object.fromEntries(Object.entries(input.medicalProfile).filter(([key]) => !["currentSkills", "desiredTraining"].includes(key)));
+  const project = { ...input, medicalProfile, path: "/fictional/project", searchMode: "discovery", evaluationMode: "evidence_profile" };
   const prompt = buildRunPrompt({ project, userPrompt: "Find advisors", runDirectory: "/fictional/run", provider: "codex", mode: "finder" });
-  assert.match(prompt, /discovery 不要求 CV/);
+  assert.match(prompt, /discovery 不读取 CV、成绩或申请者能力/);
+  assert.match(prompt, /Seeds/);
+  assert.match(prompt, /merge_subagent_findings\.mjs/);
+  assert.match(prompt, /credentials\.mjs --json/);
+  assert.match(prompt, /configured \/ unavailable \/ invalid \/ capability-limited/);
+  // Removed dimensions only appear inside the explicit deletion list.
+  assert.match(prompt, /已删除范围：不评估训练匹配/);
+  assert.doesNotMatch(prompt, /trainingFit|desiredTraining|currentSkills|scientificFit/);
   assert.match(prompt, /默认 builtin_web，旧 auto 也优先 GPT 内置网页工具/);
   assert.match(prompt, /retrieval_method=static_web、retrieval_provider=gpt_builtin_web/);
   assert.match(prompt, /保留用户显式 backend 与 enabled\/download 授权/);
   assert.match(prompt, /find 无匹配不等于站点查无/);
   assert.doesNotMatch(prompt, /必须依据 CV 证据把候选标成|会由确定性脚本重算为 60%/);
-  assert.match(buildPhaseOneTaskPrompt({ project }), /探索无需 CV/);
+  assert.match(buildPhaseOneTaskPrompt({ project }), /探索不读取 CV、成绩或申请者能力/);
   const request = parseInputRequest({ type: "input.requested", fields: [{ id: "researchModes", label: "研究方式" }] });
   assert.equal(request.fields[0].id, "researchModes");
 });
@@ -176,11 +189,11 @@ test("CV-only medical application survives selection, export, confirmation and r
   const worksheet = (await readStoredZipEntries(workbookPath)).get("xl/worksheets/sheet1.xml").toString();
   assert.match(worksheet, /<t xml:space="preserve">eligible<\/t>/);
   let report = await exportAdvisorReport(project.path);
-  assert.match(await readFile(report.output, "utf8"), /<td>资格：eligible<br>/);
+  assert.match(await readFile(report.output, "utf8"), /<div class="fact-item">eligible<\/div>/);
   const complete = await verifyRunArtifacts({ projectPath: project.path, mode: "finder" });
   assert.equal(complete.complete, true, complete.missing.join("; "));
   project = await store.updateProject(project.id, { investigation: {
-    selectedAdvisorProgramIds: [candidate.advisorProgramId], selectedSections: ["recent_research"],
+    selectedAdvisorProgramIds: [candidate.advisorProgramId], selectedSections: ["research_mainline_5y"],
   } });
   // confirmInvestigation internally reloads candidates without a caller-provided cvValid.
   project = await store.confirmInvestigation(project.id, { draftRevision: project.investigation.draft.revision });
@@ -198,7 +211,7 @@ test("CV-only medical application survives selection, export, confirmation and r
     assert.equal(restored.readiness.modes.finder.ready, false, state);
     assert.equal(restored.candidates[0].feasibility, "needs_confirmation", state);
     report = await exportAdvisorReport(project.path);
-    assert.doesNotMatch(await readFile(report.output, "utf8"), /<td>资格：eligible<br>/, state);
+    assert.doesNotMatch(await readFile(report.output, "utf8"), /<div class="fact-item">eligible<\/div>/, state);
     const obsolete = await verifyRunArtifacts({ projectPath: project.path, mode: "finder" });
     assert.equal(obsolete.complete, false, state);
     assert.match(obsolete.missing.join("; "), /资格|已核实证据/, state);

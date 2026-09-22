@@ -40,15 +40,16 @@ function medical(patch = {}) {
     id: "medical-fixture", domainProfile: "medical", target: "中国大陆; 日本",
     medicalProfile: {
       fields: ["肿瘤学"], diseaseScope: "pan_disease", diseasesOrMechanisms: ["泛癌"],
+      researchQuestions: ["泛癌克隆演化是否共享调控机制"], researchObjects: ["患者队列"],
       researchModes: ["计算与数据"], currentSkills: ["数据整理"], desiredTraining: ["统计方法"],
     }, ...patch,
   }, { now });
 }
 
-test("medical discovery accepts a completed profile without CV, degree or intake", () => {
+test("T01 medical discovery accepts three required inputs without CV, degree, intake, skills or training", () => {
   const project = medical();
   const ready = readinessForProject({ metadata: project });
-  assert.equal(project.schemaVersion, 9);
+  assert.equal(project.schemaVersion, 10);
   assert.equal(validateProjectMetadata(project).valid, true);
   assert.equal(ready.modes.finder.ready, true);
   assert.equal(ready.objectiveReady, false);
@@ -57,9 +58,23 @@ test("medical discovery accepts a completed profile without CV, degree or intake
   assert.equal(project.cv, null);
   assert.equal(project.season, "");
   assert.equal(project.medicalProfile.diseaseScope, "pan_disease");
-  assert.deepEqual(project.medicalProfile.currentSkills, ["数据整理"]);
-  assert.deepEqual(project.medicalProfile.desiredTraining, ["统计方法"]);
+  assert.deepEqual(project.medicalProfile.researchObjects, ["患者队列"]);
+  assert.deepEqual(project.medicalProfile.researchScales, []);
+  assert.deepEqual(project.medicalProfile.methodPreferences, []);
+  // Applicant skills and desired training were removed from the medical profile.
+  assert.equal("currentSkills" in project.medicalProfile, false);
+  assert.equal("desiredTraining" in project.medicalProfile, false);
   assert.equal(medicalIntakeStatus(project).nextStep, 4);
+  assert.equal(medicalIntakeStatus(project).steps.length, 3);
+});
+
+test("T01 research paradigm is optional and never blocks the three-step intake", () => {
+  const project = medical({ medicalProfile: { fields: ["肿瘤学"], diseaseScope: "pan_disease" } });
+  const status = medicalIntakeStatus(project);
+  assert.equal(status.ready, true);
+  assert.deepEqual(status.steps.map((step) => step.key), ["medical_fields", "medical_research", "medical_regions"]);
+  const questionOnly = medical({ medicalProfile: { fields: ["肿瘤学"], researchQuestions: ["肿瘤演化的共享调控"] } });
+  assert.equal(medicalIntakeStatus(questionOnly).steps[1].complete, true);
 });
 
 test("missing intake answers differ from explicit undecided and unrestricted", () => {
@@ -107,10 +122,15 @@ test("target is authoritative and medical fields survive repeated normalization"
   assert.deepEqual(cleared.medicalProfile.regions, []);
 });
 
-test("medical default sections remain public-only even with community resources requested", () => {
+test("T04 medical default sections are the five modules and remain public-only even with community resources requested", () => {
   const project = medical();
   assert.deepEqual(project.investigation.draft.selectedSections, MEDICAL_DEFAULT_DETECTIVE_SECTIONS);
+  assert.deepEqual(MEDICAL_DEFAULT_DETECTIVE_SECTIONS, [
+    "identity_research_positioning", "research_mainline_5y", "collaboration_network", "latest_signals_projects", "doctoral_trajectory",
+  ]);
+  assert.deepEqual(getDetectiveSectionCatalog(project).map((s) => s.id), MEDICAL_DEFAULT_DETECTIVE_SECTIONS);
   assert.deepEqual(getDetectiveSectionCatalog(project).filter((s) => s.defaultSelected).map((s) => s.id), MEDICAL_DEFAULT_DETECTIVE_SECTIONS);
+  assert.equal(getDetectiveSectionCatalog(project).some((s) => /resources|environment|community|training/.test(s.id)), false);
   let investigation = updateInvestigationDraft(project.investigation, {
     selectedAdvisorProgramIds: ["fixture-real-mapping"], communitySources: { requested: true },
   }, now);
@@ -121,7 +141,11 @@ test("medical default sections remain public-only even with community resources 
   assert.equal(investigation.confirmed.communitySources.consented, false);
   const extension = updateInvestigationDraft(investigation, { sourcePolicy: "community_allowed", communitySources: { requested: true } }, now);
   assert.equal(isInvestigationConfirmationCurrent(extension), false);
-  assert.equal(communityRefreshEligibility(confirmInvestigationDraft(extension, { expectedRevision: extension.draft.revision, now })).allowed, true);
+  // None of the five medical modules is community-relevant, so even an
+  // expanded source policy never downloads community caches for them.
+  const expanded = communityRefreshEligibility(confirmInvestigationDraft(extension, { expectedRevision: extension.draft.revision, now }));
+  assert.equal(expanded.allowed, false);
+  assert.match(expanded.reason, /不需要社区资料/);
 });
 
 test("medical scope changes invalidate confirmation without losing the previous snapshot", () => {
@@ -131,11 +155,26 @@ test("medical scope changes invalidate confirmation without losing the previous 
   assert.equal(isInvestigationConfirmationCurrent(normalizeProjectMetadata(project, { now }).investigation), true);
   for (const patch of [{ searchMode: "application" }, { target: "日本" }, { season: "2028" },
     { cv: { path: "inputs/revised-fixture-cv.txt", name: "Fixture CV", uploadedAt: now } },
-    { medicalProfile: { ...project.medicalProfile, desiredTraining: ["实验技术"] } }]) {
+    { medicalProfile: { ...project.medicalProfile, researchQuestions: ["新的科学问题"] } }]) {
     const changed = normalizeProjectMetadata({ ...project, ...patch }, { now });
     assert.equal(isInvestigationConfirmationCurrent(changed.investigation), false);
     assert.deepEqual(changed.investigation.confirmed, project.investigation.confirmed);
   }
+});
+
+test("T04 T41 legacy medical confirmation with removed sections returns to draft and keeps the old snapshot", () => {
+  const legacySections = ["identity_current_role", "recent_research", "resources_career_support", "group_members_outcomes"];
+  const legacy = medical();
+  legacy.investigation = updateInvestigationDraft(legacy.investigation, {
+    selectedAdvisorProgramIds: ["fixture-real-mapping"], selectedSections: legacySections,
+  }, now);
+  legacy.investigation = confirmInvestigationDraft(legacy.investigation, { expectedRevision: legacy.investigation.draft.revision, now });
+  const migrated = normalizeProjectMetadata({ ...legacy, schemaVersion: 9 }, { now });
+  assert.deepEqual(migrated.investigation.draft.selectedSections, MEDICAL_DEFAULT_DETECTIVE_SECTIONS);
+  assert.equal(isInvestigationConfirmationCurrent(migrated.investigation), false);
+  assert.deepEqual(migrated.investigation.confirmed.selectedSections, legacySections);
+  assert.equal("desiredTraining" in migrated.medicalProfile, false);
+  assert.equal("currentSkills" in migrated.medicalProfile, false);
 });
 
 test("schema 8 general projects retain legacy confirmation and gain no browser authority", () => {
