@@ -1,0 +1,4 @@
+interface:
+  display_name: "Boss Hunting (compatible pipeline)"
+  short_description: "兼容已有项目的导师发现、调查、证据比较与申请材料入口"
+  default_prompt: "使用 $advisor-pipeline 继续当前 Boss Hunting 导师检索项目。"

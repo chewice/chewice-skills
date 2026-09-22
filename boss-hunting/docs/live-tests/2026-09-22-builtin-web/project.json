@@ -1,0 +1,98 @@
+{
+  "name": "公开资料功能测试样本，非个人申请建议",
+  "domainProfile": "medical",
+  "searchMode": "discovery",
+  "evaluationMode": "evidence_profile",
+  "target": "中国大陆、英国（功能抽样）",
+  "browserResearch": {
+    "enabled": true,
+    "backend": "builtin_web",
+    "policy": "public_read_only",
+    "allowPublicDownloads": false
+  },
+  "medicalProfile": {
+    "fields": [
+      "肿瘤免疫",
+      "内置浏览器实测"
+    ],
+    "diseaseScope": "mechanism_first",
+    "diseasesOrMechanisms": [],
+    "researchQuestions": [],
+    "researchModes": [
+      "公开资料读取功能抽样"
+    ],
+    "currentSkills": [],
+    "desiredTraining": [],
+    "exclusions": [],
+    "inputStatus": {
+      "fields": "answered",
+      "diseaseScope": "answered",
+      "researchModes": "answered",
+      "regions": "answered",
+      "desiredTraining": "undecided",
+      "exclusions": "unrestricted"
+    },
+    "regions": [
+      "中国大陆、英国（功能抽样）"
+    ],
+    "researchObjects": [],
+    "adjacentInterests": []
+  },
+  "schemaVersion": 9,
+  "id": "local-project",
+  "slug": "local-project",
+  "applicantName": "",
+  "applicantBackground": {
+    "source": "not_provided",
+    "education": [],
+    "researchExperience": [],
+    "qualifications": [],
+    "notes": ""
+  },
+  "season": "",
+  "degree": "",
+  "hardConstraints": "",
+  "interests": [],
+  "shortlistTarget": 10,
+  "portfolioStrategy": "balanced",
+  "cv": null,
+  "investigation": {
+    "draft": {
+      "sourcePolicy": "public_only",
+      "researchScopeFingerprint": "f7ee62e47c44c39e73c640edb43413ff4f644b7d0cf47f949f125a7e873b1397",
+      "selectedAdvisorProgramIds": [],
+      "selectedSections": [
+        "identity_current_role",
+        "recent_research",
+        "current_projects_recruiting",
+        "research_output_trend",
+        "group_members_outcomes",
+        "resources_career_support",
+        "collaboration_industry_network"
+      ],
+      "communitySources": {
+        "requested": false
+      },
+      "revision": 1,
+      "updatedAt": "2026-09-22T09:26:18.991Z"
+    },
+    "confirmed": null
+  },
+  "applicationMaterials": {
+    "draft": {
+      "advisorProgramId": "",
+      "materials": [],
+      "order": [],
+      "literaturePolicy": {
+        "advisorWorks": true,
+        "fieldWorks": true,
+        "downloadOpenAccess": true
+      },
+      "revision": 0,
+      "updatedAt": "2026-09-22T09:26:18.991Z"
+    },
+    "confirmed": null
+  },
+  "createdAt": "2026-09-22T09:26:18.991Z",
+  "updatedAt": "2026-09-22T09:26:18.991Z"
+}

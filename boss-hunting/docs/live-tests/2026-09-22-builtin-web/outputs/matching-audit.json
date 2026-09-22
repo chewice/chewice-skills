@@ -1,0 +1,8 @@
+{
+  "liveResearch": true,
+  "purpose": "limited_builtin_web_smoke_test",
+  "searchCoverage": "功能抽样：英国博士课程、北大博士目录与导师资料、PubMed、NIH入口；不是全面地域覆盖或正式候选筛选。",
+  "selectedCount": 0,
+  "excludedCount": 0,
+  "deferredCount": 0
+}

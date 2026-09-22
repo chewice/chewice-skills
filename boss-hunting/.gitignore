@@ -1,0 +1,33 @@
+.advisor-atlas/
+projects/
+.pixi/
+.vscode/
+__pycache__/
+*.pyc
+
+# Local agent/editor configuration; never distribute machine-specific launch
+# settings or credentials with the project.
+.claude/
+
+# Local scratch and browser/test-run artifacts. Regression test source remains
+# tracked under web/tests/.
+/tmp/
+/temp/
+/test-results/
+/playwright-report/
+/coverage/
+
+# Local advisor-community knowledge snapshots.
+# Keep volatile anonymous reports out of public Git history; sync them locally.
+skills/advisor-detective/references/community-blacklist-current.pdf
+skills/advisor-detective/references/community-blacklist-current.txt
+skills/advisor-detective/references/community-red-flags-current.txt
+skills/advisor-detective/references/community-knowledge-metadata.json
+skills/advisor-detective/references/community-links.json
+skills/advisor-detective/references/.community-*.tmp
+
+# macOS Finder metadata
+.DS_Store
+
+# Session handoff notes; not part of the shipped documentation.
+HANDOFF.md

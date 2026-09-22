@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+<title>医学博士导师筛选 · Boss Hunting 改造验收</title>
+<style>
+body{max-width:980px;margin:auto;padding:28px 22px;font:16px/1.75 system-ui,sans-serif;color:#242a30;background:#fff}
+h1{font-size:28px}h2{font-size:21px;margin-top:30px;border-bottom:1px solid #ddd;padding-bottom:6px}
+a{color:#155b87}table{border-collapse:collapse;width:100%;font-size:14px}td,th{padding:10px 8px;border-bottom:1px solid #ddd;text-align:left;vertical-align:top}
+code{font-size:13px;overflow-wrap:anywhere}li{margin:8px 0}.muted{color:#59636d}details{margin:20px 0}summary{cursor:pointer}pre{white-space:pre-wrap;overflow-wrap:anywhere}
+@media(max-width:600px){body{padding:18px 14px}table{font-size:13px}td,th{padding:7px 4px}}
+</style>
+</head>
+<body>
+<header>
+<p class="muted">2026-09-22 · 开发验收记录</p>
+<h1>医学博士导师筛选 · Boss Hunting</h1>
+<p>已在 Boss Hunting 技能内实现医学四步交互、公开检索来源路由、浏览器能力与证据检查、医学证据比较及 HTML 主报告。入口显示名为 <strong>Boss Hunting</strong>，调用名为 <code>$boss-hunting</code>；继续使用原 Finder → Detective → Evaluator 及同一组项目记录。</p>
+<p>开发基线：嵌套仓库 <code>c69984af2ba13dbb0c9b6a31e23d534c7ecb863c</code>，开始时工作区干净；父仓库已有无关修改保持原状。未提交、推送或部署。附带说明用作开发需求，初始改造没有发起医学问卷或真实导师搜索；后续按用户要求进行了有限的GPT内置网页工具联网抽样，见下方新增记录。</p>
+</header>
+
+<h2>实际改动</h2>
+<table>
+<thead><tr><th>范围</th><th>实现与行为</th><th>主要文件</th></tr></thead>
+<tbody>
+<tr><td>Skill 入口与流程</td><td>医学领域 → 疾病/机制、研究方式与训练目标 → 地区与申请入口 → 发现、浅筛、确认深查、证据比较。已提供信息复用，已有能力与训练愿望分开；泛癌、机制优先和明确未定均保留。</td><td><a href="../skills/boss-hunting/SKILL.md">Boss Hunting</a>、<a href="../skills/advisor-pipeline/SKILL.md">原 Pipeline</a>及 Finder / Detective / Evaluator</td></tr>
+<tr><td>输入与兼容</td><td>医学探索无需 CV/学位/批次；正式筛选接受可读真实 CV 或注明来源的相关结构化背景。通用项目继续原数值匹配；RP/套磁信继续要求真实 CV、姓名、精确目标与独立确认，不自动发送。</td><td><a href="../skills/advisor-pipeline/scripts/project-contract.mjs">共享契约</a>、<a href="../web/app/medical-intake.mjs">输入投影</a>、<a href="../web/local-runtime/project-store.mjs">项目存储</a></td></tr>
+<tr><td>选择与证据</td><td>医学不使用 60/40 综合分、履历分或 reach 配额；科学匹配、训练支持、资格、资金、资源与未知项分别呈现。已核实证据须对应实体及批次；真实项目未映射时只输出导师级探索，不造项目或 ID。</td><td><a href="../skills/advisor-finder/scripts/apply_matching_strategy.mjs">选择器</a>、<a href="../skills/advisor-pipeline/scripts/medical-evidence.mjs">医学证据投影</a></td></tr>
+<tr><td>来源与浏览</td><td>通用、大陆、香港、台湾、美国、欧洲及国别、澳大利亚、日本、医学资源目录包含入口、查询、字段、边界和回退。公开浏览默认优先宿主实际可调用的GPT内置网页工具（builtin_web，旧auto同样内置优先）；交互浏览器单独检测。只读 POST 在工具支持时可用，受阻/空页面不能写“查无”。医学默认公开来源，不自动获取社区缓存。</td><td><a href="../skills/advisor-pipeline/references/medical-sources.md">国内外来源目录</a>、<a href="../skills/advisor-pipeline/references/browser-research-policy.md">浏览策略</a>、<a href="../skills/advisor-pipeline/scripts/browser-research.mjs">运行辅助检查</a></td></tr>
+<tr><td>报告与导出</td><td>主结果为按学科/方向命名的简单 HTML，直接读取共享记录。研究、经费、培养、资格、截止日期及比较依据旁直接显示对应原始网页超链接，并保留证据状态和详情跳转；缺来源标待核验，原 Excel 是补充。Web 可打开已保存报告并显示文件保存时间。HTML 转义、受限链接与 CSP、表格公式防护已接入。</td><td><a href="../skills/advisor-pipeline/scripts/build_advisor_report.mjs">HTML 生成器</a>、<a href="../skills/advisor-pipeline/scripts/medical-workbook.mjs">共享工作簿投影</a>、<a href="../web/local-runtime/server.mjs">报告路由</a></td></tr>
+<tr><td>确认与完成判定</td><td>画像、批次、约束或 CV 变化会使旧调查确认失效；医学背调、最终评价和材料运行绑定对应版本/指纹。旧评价保留历史痕迹，不支持当前申请判断。缺失、旧版本或不完整产物不能标完成。</td><td><a href="../web/local-runtime/run-artifacts.mjs">产物校验</a>、<a href="../web/tests/medical-confirmation-freshness.test.mjs">确认时效回归</a></td></tr>
+</tbody>
+</table>
+
+<h2>版本与已有项目</h2>
+<p>项目 schema 从 <strong>8 → 9</strong>；status schema 保持 <strong>2</strong>；匹配契约从 <strong>2 → 3</strong>，通用旧版匹配输入及旧排名格式保留兼容。保存会保留扩展字段；迁移前保存原字节备份，重复迁移不重置成果，备份不覆盖。发现高于支持版本的项目时拒绝降级写入。医学的 <code>target</code> 为地区范围权威字段，<code>medicalProfile.regions</code> 为派生值。</p>
+<p>医学排名使用含 <code>rankingMode</code>、<code>confirmedRevision</code>、<code>confirmedFingerprint</code> 和 <code>rankings</code> 的对象。导师级探索不能充当材料目标。测试项目均位于隔离临时目录；没有改写真实申请项目或用户提供的需求文件。</p>
+
+<h2>两条可复现示例</h2>
+<p>以下均明确标记为 <strong>FICTIONAL FIXTURE</strong>，人物、项目、主张与网页观察为测试数据，不能当作真实检索成果。</p>
+<ul>
+<li><a href="examples/肿瘤学-泛癌-导师调研.html">肿瘤学 / 泛癌：方向探索 HTML</a>：无 CV、学位或批次，保留导师层的科学与训练证据，无虚构项目。</li>
+<li><a href="examples/免疫学-炎症机制-导师调研.html">免疫学 / 炎症机制：申请筛选 HTML</a>：复用自述结构化背景和明确批次，分开资格、研究经费、博士生资助、培养证据与待确认事项。</li>
+</ul>
+<p>固定输入见 <a href="../web/tests/fixtures/medical-discovery.json">探索 fixture</a>和 <a href="../web/tests/fixtures/medical-application.json">申请 fixture</a>。实际集成测试执行 initializer → 选择器 CLI → 原工作簿 builder → HTML 导出 → 运行完成校验，并检查重跑不改写共享事实。</p>
+
+<h2>Pixi 环境</h2>
+<p><a href="../pixi.toml">pixi.toml</a> 默认且仅声明 <code>platforms = ["linux-64"]</code>；<a href="../pixi.lock">pixi.lock</a> 已生成。Node.js / Python 由 Pixi 管理，既有前端包仍由 <code>web/package-lock.json</code> 锁定，通过 <code>pixi run web-install</code> 调用 <code>npm ci</code>。不引入第二套 JS 依赖清单。</p>
+<p id="environment-result">Pixi 0.73.0 已成功安装本地环境：Node.js v22.23.2、Python 3.12.14、npm 10.9.8；版本命令均成功。前端 npm ci 已成功安装 513 个原锁定包，生产构建通过。安装继承既有镜像/代理配置，本轮未修改全局配置、包源或锁定的 JS 包版本。</p>
+<p>浏览器与 Cloudflare Worker 源码使用独立的 TypeScript 配置，在同一 <code>typecheck</code> 任务内全部检查。Worker 类型由已有 Wrangler 依据实际构建配置生成，避免干扰浏览器类型；数据库缺失时仍按原逻辑报错，没有新增绑定或部署设置。</p>
+<pre><code>pixi install
+pixi run web-install
+pixi run dev
+pixi run report --project-root /path/to/application</code></pre>
+<p>直接调用复制后的 Skills 时，先用 <code>pixi shell --manifest-path /path/to/boss-hunting/pixi.toml</code> 进入共享环境，再进入申请目录。Windows 默认通过 WSL 使用 Linux 环境。可选 <code>pixi run init</code> 会覆盖编辑器配置，本轮未执行；模板的 R 路径不表示本 Skill 依赖或安装了 R。</p>
+
+<h2>实际执行的验证</h2>
+<table>
+<thead><tr><th>检查</th><th>命令 / 方法</th><th>结果</th></tr></thead>
+<tbody>
+<tr><td>开发前基线</td><td><code>cd web; node --test tests/*.test.mjs</code></td><td>73 项：69 通过、4 失败。失败涉及缺失 pdfjs-dist 和尚未生成的前端构建产物，已记录为环境基线。</td></tr>
+<tr><td>核心与兼容回归</td><td><code>pixi run --locked test-core</code></td><td id="core-result">148 / 148 通过（Pixi Node.js 22.23.2）；此命令排除了依赖构建产物的服务端页面渲染测试，不能当作完整前端验收。</td></tr>
+<tr><td>生产构建与完整回归</td><td><code>pixi run web-build</code>；<code>pixi run --locked node --test web/tests/*.test.mjs</code></td><td>本轮Web重建退出 0；内置网页优先策略修改后，完整测试 154 / 154 通过，包含 server-renders the advisor console，无跳过。与核心批次不叠加计数。</td></tr>
+<tr id="frontend-result"><td>lint / TypeScript</td><td><code>pixi run lint</code>；构建后执行 <code>pixi run typecheck</code></td><td>均退出 0。本轮再次执行 ESLint，零错误、零警告；前轮 Wrangler 生成本地运行时声明后，前端与 Worker / DB / 既有 D1 示例的两个 TypeScript 检查全部通过。未部署或连接真实 D1。</td></tr>
+<tr><td>逐项来源超链接</td><td><code>pixi run --locked node --test web/tests/medical-report.test.mjs</code>；随后重跑完整 Node 测试</td><td>专项 13 / 13 通过。检查正文直达具体网页、来源状态及详情锚点、字段与项目/批次隔离、缺失来源标注和危险链接不可执行；完整回归已含这些测试。两份虚构 HTML 示例同步重导出。</td></tr>
+<tr><td>GPT内置工具联网测试</td><td><a href="live-tests/2026-09-22-builtin-web/医学导师检索-内置浏览器联网验收.html">真实联网验收 HTML</a>；<code>web__run</code>搜索/open/find/click及截图请求</td><td>9批真实调用，保存10条来源证据，实跑同一HTML生成器形成探索样本。公开文字与部分点击可用；JS空壳、验证码、内部错误和截图未能视觉核验均逐项保留。本轮定向ESLint通过，未以本地单测代替联网验证。</td></tr>
+<tr><td>旧 Python 兼容</td><td><code>pixi run --locked python -B -m unittest discover -s skills/advisor-detective/tests -p 'test_*.py'</code></td><td>4 / 4 通过（Pixi Python 3.12.14）；隔离单测，没有下载匿名社区资料。此前系统 Python 的同组测试也通过，不重复计数。</td></tr>
+<tr><td>Skill / 文档结构</td><td>skill-creator 的 <code>quick_validate.py</code>；本地相对链接核验；<code>bash -n setup-vscode.sh</code>；<code>git diff --check</code></td><td>7 个 Skill 入口通过；最终检查 78 个 Markdown 本地引用及 120 个 HTML 本地引用，均无缺失；脚本语法与差异格式通过。</td></tr>
+<tr><td>固定文本行为检查</td><td><a href="MEDICAL_BEHAVIOR_EVALUATION.md">17 个虚构证据场景的逐例判读</a>；另由独立代理对三个新请求作前向复核</td><td>覆盖作者贡献、同名/换机构、预印本版本、基金口径、资源访问、博士培养分母、旧岗位、只读 POST 与提示注入边界。不是自动化模型盲测或真实网页 E2E。</td></tr>
+</tbody>
+</table>
+<p>自动化测试覆盖无 CV 探索、结构化申请、CV-only 实际文件核验、地区/训练保存重开、来源状态、真实项目映射、资格降级、确认失效、迁移备份、旧通用评分/材料流程、HTML 与三类工作簿、安全导出和报告路由。各专项测试与最终批次有重叠，不叠加为总数。</p>
+
+<h2>未验证的限制与运行前提</h2>
+<ul>
+<li>已完成GPT内置工具的真实联网功能抽样，并将一位真实导师的公开资料写入探索报告。独立Browser Use表单、动态翻页、截图视觉读取和下载E2E仍未完成；内置网页工具不等同交互浏览器。</li>
+<li>来源目录以 S / D / R 标注本次静态读取、按说明登记或运行时定位。初始层级之外另附本次真实网页抽样记录；其余站点、动态数据库、地区招生规则和当批次机会须执行时再查，不宣称全站可达。</li>
+<li>浏览辅助函数是能力、动作、证据与文件检查，不是浏览器后端、恶意文件扫描器或宿主沙箱。没有安装 Browser Use、浏览器二进制、个人会话或付费云服务。</li>
+<li>界面状态、HTTP 路由与渲染检查不等于真实桌面/窄屏浏览器交互测试。本轮未启动真实模型提供商执行完整导师流程，也未联网制作实际 RP、文献包或套磁信。</li>
+<li>原生 OOXML 导出已实跑；可选 artifact_tool 高级预览未验证。网页证据的科学解释仍需 Agent 按具体来源判断，固定 fixture 不能保证所有未知网页上的长期一致性。</li>
+<li>当前 Pixi 基础环境提供医学发现、比较、HTML/Excel 和 Web 所需的 Node/Python。原材料流程的 LaTeX/Poppler 等可选工具未安装或实跑；启用时需补入同一 Pixi 工作区并验证，不能将本轮回归当作真实 PDF 材料制作完成。</li>
+</ul>
+
+<details><summary>全部实际修改与新增文件</summary><div id="changed-files"><p>共 88 个修改或新增文件；不含依赖目录、构建产物与临时日志。</p><ul>
+<li><a href="../.gitignore"><code>.gitignore</code></a></li>
+<li><a href="../README.md"><code>README.md</code></a></li>
+<li><a href="../docs/FRONTEND_GUIDE.md"><code>docs/FRONTEND_GUIDE.md</code></a></li>
+<li><a href="../docs/MEDICAL_BEHAVIOR_EVALUATION.md"><code>docs/MEDICAL_BEHAVIOR_EVALUATION.md</code></a></li>
+<li><a href="../docs/examples/免疫学-炎症机制-导师调研.html"><code>docs/examples/免疫学-炎症机制-导师调研.html</code></a></li>
+<li><a href="../docs/examples/肿瘤学-泛癌-导师调研.html"><code>docs/examples/肿瘤学-泛癌-导师调研.html</code></a></li>
+<li><a href="../docs/live-tests/2026-09-22-builtin-web/observations.json"><code>docs/live-tests/2026-09-22-builtin-web/observations.json</code></a></li>
+<li><a href="../docs/live-tests/2026-09-22-builtin-web/outputs/advisor_records.json"><code>docs/live-tests/2026-09-22-builtin-web/outputs/advisor_records.json</code></a></li>
+<li><a href="../docs/live-tests/2026-09-22-builtin-web/outputs/evidence.json"><code>docs/live-tests/2026-09-22-builtin-web/outputs/evidence.json</code></a></li>
+<li><a href="../docs/live-tests/2026-09-22-builtin-web/outputs/matching-audit.json"><code>docs/live-tests/2026-09-22-builtin-web/outputs/matching-audit.json</code></a></li>
+<li><a href="../docs/live-tests/2026-09-22-builtin-web/outputs/肿瘤免疫-内置浏览器实测-导师调研.html"><code>docs/live-tests/2026-09-22-builtin-web/outputs/肿瘤免疫-内置浏览器实测-导师调研.html</code></a></li>
+<li><a href="../docs/live-tests/2026-09-22-builtin-web/project.json"><code>docs/live-tests/2026-09-22-builtin-web/project.json</code></a></li>
+<li><a href="../docs/live-tests/2026-09-22-builtin-web/医学导师检索-内置浏览器联网验收.html"><code>docs/live-tests/2026-09-22-builtin-web/医学导师检索-内置浏览器联网验收.html</code></a></li>
+<li><a href="../docs/医学博士导师筛选-改造验收.html"><code>docs/医学博士导师筛选-改造验收.html</code></a></li>
+<li><a href="../pixi.lock"><code>pixi.lock</code></a></li>
+<li><a href="../pixi.toml"><code>pixi.toml</code></a></li>
+<li><a href="../setup-vscode.sh"><code>setup-vscode.sh</code></a></li>
+<li><a href="../skills/advisor-detective/README.md"><code>skills/advisor-detective/README.md</code></a></li>
+<li><a href="../skills/advisor-detective/SKILL.md"><code>skills/advisor-detective/SKILL.md</code></a></li>
+<li><a href="../skills/advisor-detective/references/investigation-sections.md"><code>skills/advisor-detective/references/investigation-sections.md</code></a></li>
+<li><a href="../skills/advisor-detective/scripts/build_detective_excel.mjs"><code>skills/advisor-detective/scripts/build_detective_excel.mjs</code></a></li>
+<li><a href="../skills/advisor-evaluator/README.md"><code>skills/advisor-evaluator/README.md</code></a></li>
+<li><a href="../skills/advisor-evaluator/SKILL.md"><code>skills/advisor-evaluator/SKILL.md</code></a></li>
+<li><a href="../skills/advisor-evaluator/references/workbook-contract.md"><code>skills/advisor-evaluator/references/workbook-contract.md</code></a></li>
+<li><a href="../skills/advisor-evaluator/scripts/build_application_ready_excel.mjs"><code>skills/advisor-evaluator/scripts/build_application_ready_excel.mjs</code></a></li>
+<li><a href="../skills/advisor-evaluator/tests/sample_medical_records.json"><code>skills/advisor-evaluator/tests/sample_medical_records.json</code></a></li>
+<li><a href="../skills/advisor-finder/README.md"><code>skills/advisor-finder/README.md</code></a></li>
+<li><a href="../skills/advisor-finder/SKILL.md"><code>skills/advisor-finder/SKILL.md</code></a></li>
+<li><a href="../skills/advisor-finder/references/application-facts.md"><code>skills/advisor-finder/references/application-facts.md</code></a></li>
+<li><a href="../skills/advisor-finder/references/matching-strategy.md"><code>skills/advisor-finder/references/matching-strategy.md</code></a></li>
+<li><a href="../skills/advisor-finder/scripts/apply_matching_strategy.mjs"><code>skills/advisor-finder/scripts/apply_matching_strategy.mjs</code></a></li>
+<li><a href="../skills/advisor-finder/scripts/build_advisor_excel.mjs"><code>skills/advisor-finder/scripts/build_advisor_excel.mjs</code></a></li>
+<li><a href="../skills/advisor-finder/tests/sample_medical_discovery.json"><code>skills/advisor-finder/tests/sample_medical_discovery.json</code></a></li>
+<li><a href="../skills/advisor-outreach/README.md"><code>skills/advisor-outreach/README.md</code></a></li>
+<li><a href="../skills/advisor-pipeline/README.md"><code>skills/advisor-pipeline/README.md</code></a></li>
+<li><a href="../skills/advisor-pipeline/SKILL.md"><code>skills/advisor-pipeline/SKILL.md</code></a></li>
+<li><a href="../skills/advisor-pipeline/agents/openai.yaml"><code>skills/advisor-pipeline/agents/openai.yaml</code></a></li>
+<li><a href="../skills/advisor-pipeline/references/browser-research-policy.md"><code>skills/advisor-pipeline/references/browser-research-policy.md</code></a></li>
+<li><a href="../skills/advisor-pipeline/references/core-data-contract.md"><code>skills/advisor-pipeline/references/core-data-contract.md</code></a></li>
+<li><a href="../skills/advisor-pipeline/references/data-contract.md"><code>skills/advisor-pipeline/references/data-contract.md</code></a></li>
+<li><a href="../skills/advisor-pipeline/references/investigation-contract.md"><code>skills/advisor-pipeline/references/investigation-contract.md</code></a></li>
+<li><a href="../skills/advisor-pipeline/references/medical-profile.md"><code>skills/advisor-pipeline/references/medical-profile.md</code></a></li>
+<li><a href="../skills/advisor-pipeline/references/medical-sources.md"><code>skills/advisor-pipeline/references/medical-sources.md</code></a></li>
+<li><a href="../skills/advisor-pipeline/scripts/browser-research.mjs"><code>skills/advisor-pipeline/scripts/browser-research.mjs</code></a></li>
+<li><a href="../skills/advisor-pipeline/scripts/build_advisor_report.mjs"><code>skills/advisor-pipeline/scripts/build_advisor_report.mjs</code></a></li>
+<li><a href="../skills/advisor-pipeline/scripts/confirm_investigation.mjs"><code>skills/advisor-pipeline/scripts/confirm_investigation.mjs</code></a></li>
+<li><a href="../skills/advisor-pipeline/scripts/init_project.mjs"><code>skills/advisor-pipeline/scripts/init_project.mjs</code></a></li>
+<li><a href="../skills/advisor-pipeline/scripts/medical-evidence.mjs"><code>skills/advisor-pipeline/scripts/medical-evidence.mjs</code></a></li>
+<li><a href="../skills/advisor-pipeline/scripts/medical-workbook.mjs"><code>skills/advisor-pipeline/scripts/medical-workbook.mjs</code></a></li>
+<li><a href="../skills/advisor-pipeline/scripts/project-contract.mjs"><code>skills/advisor-pipeline/scripts/project-contract.mjs</code></a></li>
+<li><a href="../skills/advisor-pipeline/scripts/render_investigation_menu.mjs"><code>skills/advisor-pipeline/scripts/render_investigation_menu.mjs</code></a></li>
+<li><a href="../skills/advisor-pipeline/scripts/workbook-runtime.mjs"><code>skills/advisor-pipeline/scripts/workbook-runtime.mjs</code></a></li>
+<li><a href="../skills/advisor-research-proposal/README.md"><code>skills/advisor-research-proposal/README.md</code></a></li>
+<li><a href="../skills/boss-hunting/README.md"><code>skills/boss-hunting/README.md</code></a></li>
+<li><a href="../skills/boss-hunting/SKILL.md"><code>skills/boss-hunting/SKILL.md</code></a></li>
+<li><a href="../skills/boss-hunting/agents/openai.yaml"><code>skills/boss-hunting/agents/openai.yaml</code></a></li>
+<li><a href="../web/.gitignore"><code>web/.gitignore</code></a></li>
+<li><a href="../web/app/medical-intake.mjs"><code>web/app/medical-intake.mjs</code></a></li>
+<li><a href="../web/app/page.tsx"><code>web/app/page.tsx</code></a></li>
+<li><a href="../web/app/run-task-prompts.mjs"><code>web/app/run-task-prompts.mjs</code></a></li>
+<li><a href="../web/db/index.ts"><code>web/db/index.ts</code></a></li>
+<li><a href="../web/eslint.config.mjs"><code>web/eslint.config.mjs</code></a></li>
+<li><a href="../web/local-runtime/cli.mjs"><code>web/local-runtime/cli.mjs</code></a></li>
+<li><a href="../web/local-runtime/community-cache.mjs"><code>web/local-runtime/community-cache.mjs</code></a></li>
+<li><a href="../web/local-runtime/project-store.mjs"><code>web/local-runtime/project-store.mjs</code></a></li>
+<li><a href="../web/local-runtime/run-artifacts.mjs"><code>web/local-runtime/run-artifacts.mjs</code></a></li>
+<li><a href="../web/local-runtime/run-prompt.mjs"><code>web/local-runtime/run-prompt.mjs</code></a></li>
+<li><a href="../web/local-runtime/server.mjs"><code>web/local-runtime/server.mjs</code></a></li>
+<li><a href="../web/scripts/vinext.mjs"><code>web/scripts/vinext.mjs</code></a></li>
+<li><a href="../web/tests/fixtures/medical-application.json"><code>web/tests/fixtures/medical-application.json</code></a></li>
+<li><a href="../web/tests/fixtures/medical-discovery.json"><code>web/tests/fixtures/medical-discovery.json</code></a></li>
+<li><a href="../web/tests/fixtures/medical-evidence-cases.json"><code>web/tests/fixtures/medical-evidence-cases.json</code></a></li>
+<li><a href="../web/tests/fixtures/medical-public-pages.html"><code>web/tests/fixtures/medical-public-pages.html</code></a></li>
+<li><a href="../web/tests/investigation-contract.test.mjs"><code>web/tests/investigation-contract.test.mjs</code></a></li>
+<li><a href="../web/tests/medical-browser.test.mjs"><code>web/tests/medical-browser.test.mjs</code></a></li>
+<li><a href="../web/tests/medical-confirmation-freshness.test.mjs"><code>web/tests/medical-confirmation-freshness.test.mjs</code></a></li>
+<li><a href="../web/tests/medical-contract.test.mjs"><code>web/tests/medical-contract.test.mjs</code></a></li>
+<li><a href="../web/tests/medical-report.test.mjs"><code>web/tests/medical-report.test.mjs</code></a></li>
+<li><a href="../web/tests/medical-runtime.test.mjs"><code>web/tests/medical-runtime.test.mjs</code></a></li>
+<li><a href="../web/tests/medical-selection-workbooks.test.mjs"><code>web/tests/medical-selection-workbooks.test.mjs</code></a></li>
+<li><a href="../web/tests/medical-ui-state.test.mjs"><code>web/tests/medical-ui-state.test.mjs</code></a></li>
+<li><a href="../web/tests/project-bootstrap.test.mjs"><code>web/tests/project-bootstrap.test.mjs</code></a></li>
+<li><a href="../web/tests/project-store.test.mjs"><code>web/tests/project-store.test.mjs</code></a></li>
+<li><a href="../web/tests/run-lifecycle.test.mjs"><code>web/tests/run-lifecycle.test.mjs</code></a></li>
+<li><a href="../web/tests/runtime-api.test.mjs"><code>web/tests/runtime-api.test.mjs</code></a></li>
+<li><a href="../web/tests/user-feedback-regressions.test.mjs"><code>web/tests/user-feedback-regressions.test.mjs</code></a></li>
+<li><a href="../web/tsconfig.json"><code>web/tsconfig.json</code></a></li>
+<li><a href="../web/tsconfig.worker.json"><code>web/tsconfig.worker.json</code></a></li>
+</ul></div></details>
+<p class="muted">项目入口与使用方式见 <a href="../README.md">README</a>；Web 行为见 <a href="FRONTEND_GUIDE.md">前端使用与维护指引</a>。</p>
+</body>
+</html>

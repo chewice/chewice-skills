@@ -1,0 +1,79 @@
+{
+  "project": {
+    "domainProfile": "medical",
+    "searchMode": "discovery",
+    "evaluationMode": "evidence_profile",
+    "target": "不限",
+    "medicalProfile": {
+      "fields": [
+        "肿瘤学"
+      ],
+      "diseaseScope": "pan_cancer",
+      "diseasesOrMechanisms": [
+        "泛癌"
+      ],
+      "researchModes": [
+        "计算与数据"
+      ],
+      "currentSkills": [],
+      "desiredTraining": [
+        "统计研究设计"
+      ],
+      "exclusions": [],
+      "inputStatus": {
+        "regions": "unrestricted",
+        "exclusions": "unrestricted"
+      }
+    },
+    "fixtureNotice": "FICTIONAL LOCAL TEST DATA. No real advisor, project, applicant or source verification is represented."
+  },
+  "advisors": [
+    {
+      "advisor_id": "fixture-institute-fixture-pi",
+      "name": "Fixture PI (fictional)",
+      "school": "Fixture Institute (fictional)",
+      "homepage": "https://example.org/fictional-advisor",
+      "evidence_profile": {
+        "scientific_fit": {
+          "status": "strong",
+          "reasons": [
+            "Fictional shared mechanistic question"
+          ],
+          "source_ids": [
+            "fixture-study"
+          ]
+        },
+        "training_fit": {
+          "status": "unknown"
+        },
+        "key_unknowns": [
+          "真实博士项目及当批次入口尚未核验"
+        ],
+        "next_verification": [
+          "先核对项目师资和培养路径"
+        ]
+      }
+    }
+  ],
+  "programs": [],
+  "candidates": [],
+  "evidence": [
+    {
+      "evidence_id": "fixture-study",
+      "entity_id": "fixture-institute-fixture-pi",
+      "claim_type": "interpretation",
+      "claim": "Fictional fit demonstration only",
+      "status": "not_checked",
+      "url": "https://example.org/fictional-study",
+      "retrieval_method": "static_web",
+      "extraction_status": "partial",
+      "limitations": "No live retrieval performed; fixture only"
+    }
+  ],
+  "ranking": [],
+  "audit": {
+    "fixture": true,
+    "liveResearch": false,
+    "scope": "Local deterministic example only"
+  }
+}

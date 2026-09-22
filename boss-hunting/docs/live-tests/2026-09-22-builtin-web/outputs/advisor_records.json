@@ -1,0 +1,65 @@
+[
+  {
+    "advisor_id": "pku-chuanhui-han",
+    "name": "韩传辉",
+    "current_institution": "官方资料记录：北京大学国际癌症研究院；此处为读取测试样本",
+    "homepage": "https://sbms.bjmu.edu.cn/jsdw/bssds/Chuanhui_Han.html",
+    "source_ids": [
+      "live-pku-advisor",
+      "live-pku-postdoc"
+    ],
+    "last_verified_at": "2026-09-22",
+    "recent_papers": [
+      {
+        "summary": "官方简介记录肿瘤免疫研究方向；本轮未逐篇核验论文或作者贡献。",
+        "sourceIds": [
+          "live-pku-advisor"
+        ]
+      }
+    ],
+    "evidence_profile": {
+      "scientificFit": {
+        "status": "insufficient_information",
+        "reasons": [
+          "本轮是网页能力测试，没有个人科学匹配评估；官方研究方向可读取。"
+        ],
+        "sourceIds": [
+          "live-pku-advisor"
+        ]
+      },
+      "trainingFit": {
+        "status": "unknown",
+        "reasons": [
+          "未调查博士训练方案和学生资源可用性。"
+        ]
+      },
+      "researchFunding": [
+        {
+          "status": "not_checked",
+          "summary": "简介列有2023–2027基金条目；项目号、金额、角色及资金状态均未独立核对。",
+          "sourceIds": [
+            "live-pku-advisor"
+          ]
+        }
+      ],
+      "doctoralFunding": [
+        {
+          "status": "not_checked",
+          "summary": "博士生资助未核验。"
+        }
+      ],
+      "keyUnknowns": [
+        "2027博士机会、个人资格、训练支持、博士生资助与培养成果均未核验。"
+      ],
+      "nextVerification": [
+        {
+          "summary": "需查新的博士招生目录和批次规则；2026目录及过期博士后启事均不能证明2027博士名额开放。",
+          "sourceIds": [
+            "live-pku-2026-catalog",
+            "live-pku-postdoc"
+          ]
+        }
+      ]
+    }
+  }
+]

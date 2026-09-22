@@ -1,0 +1,133 @@
+{
+  "testType": "actual_host_tool_smoke_test",
+  "date": "2026-09-22",
+  "topic": "肿瘤免疫与医学博士公开资料",
+  "tool": "web__run",
+  "startedAt": "2026-09-22T09:13:25Z",
+  "finishedAt": "2026-09-22T09:24:09Z",
+  "hostInventory": {
+    "capturedAt": "2026-09-22 09:16:50 UTC",
+    "tools": [
+      {
+        "name": "web__run",
+        "callable": true
+      }
+    ],
+    "notes": "This is this task's actually exposed tool inventory, not a global installation claim."
+  },
+  "scope": "由本轮Agent真实调用宿主内置工具；不是mock。不是Web控制台发起的provider端到端运行，也不是完整导师筛选。",
+  "counts": {
+    "webToolBatches": 9,
+    "searchQueries": 4,
+    "openCommands": 11,
+    "findCommands": 3,
+    "clickCommands": 4,
+    "screenshotRequests": 2
+  },
+  "queries": [
+    {
+      "query": "site.ox.ac.uk admissions graduate DPhil oncology entry requirements",
+      "domains": [],
+      "at": "2026-09-22 09:13:25 UTC"
+    },
+    {
+      "query": "site.bjmu.edu.cn 博士 招生 医学 2026 简章",
+      "domains": [],
+      "at": "2026-09-22 09:13:25 UTC"
+    },
+    {
+      "query": "site.pubmed.ncbi.nlm.nih.gov cancer immunotherapy single cell",
+      "domains": [],
+      "at": "2026-09-22 09:13:25 UTC"
+    },
+    {
+      "query": "韩传辉 肿瘤免疫 北京大学 基础医学院",
+      "domains": [
+        "bjmu.edu.cn",
+        "pku.edu.cn"
+      ],
+      "at": "2026-09-22 09:15:27 UTC"
+    }
+  ],
+  "checks": [
+    {
+      "capability": "搜索",
+      "outcome": "passed",
+      "observation": "返回海外课程、国内招生PDF、PubMed与北大导师官方页面线索；搜索摘要未单独充当已核实事实。",
+      "urls": [
+        "https://www.ox.ac.uk/admissions/graduate/courses/dphil-oncology",
+        "https://yjsy.bjmu.edu.cn/docs/2025-10/a0e2a1ed91f3416cb672194df65d50bd.pdf",
+        "https://pubmed.ncbi.nlm.nih.gov/34329587/",
+        "https://sbms.bjmu.edu.cn/jsdw/bssds/Chuanhui_Han.html"
+      ]
+    },
+    {
+      "capability": "HTML/PDF打开与文字提取",
+      "outcome": "passed_with_limits",
+      "observation": "11次open中8次有可读正文、2次为同一JS空壳、1次内部错误。PDF只查看有限页窗，未查完25页。",
+      "urls": [
+        "https://www.ox.ac.uk/admissions/graduate/courses/dphil-oncology",
+        "https://yjsy.bjmu.edu.cn/docs/2025-10/a0e2a1ed91f3416cb672194df65d50bd.pdf",
+        "https://pubmed.ncbi.nlm.nih.gov/34329587/",
+        "https://api.reporter.nih.gov/",
+        "https://sbms.bjmu.edu.cn/jsdw/bssds/Chuanhui_Han.html",
+        "https://postdocs.bjmu.edu.cn/zpxx/7b2b654cb17f4525a335c4f8d95655f2.htm",
+        "https://report.nih.gov/faqs"
+      ]
+    },
+    {
+      "capability": "页内查找",
+      "outcome": "partial",
+      "observation": "Oxford硕士条件及PubMed Abstract定位成功；PDF find 肿瘤返回无匹配，但open第1页文本含该词，未记录not_found。",
+      "urls": [
+        "https://www.ox.ac.uk/admissions/graduate/courses/dphil-oncology",
+        "https://pubmed.ncbi.nlm.nih.gov/34329587/",
+        "https://yjsy.bjmu.edu.cn/docs/2025-10/a0e2a1ed91f3416cb672194df65d50bd.pdf"
+      ]
+    },
+    {
+      "capability": "链接跳转",
+      "outcome": "partial",
+      "observation": "4次click：Oxford国际学历页面正文成功；Oxford师资与Medical Sciences链接为Internal Error；PMC全文链接遇reCAPTCHA。",
+      "urls": [
+        "https://www.ox.ac.uk/admissions/graduate/international-applicants/international-qualifications",
+        "https://pmc.ncbi.nlm.nih.gov/articles/PMC8406623/",
+        "https://www.ox.ac.uk/admissions/graduate/courses/dphil-oncology"
+      ]
+    },
+    {
+      "capability": "动态JS搜索",
+      "outcome": "not_supported_by_observed_response",
+      "observation": "NIH RePORTER仅返回JavaScript提示；另一次 reporter.nih.gov/faqs 请求报错。改用目录中的 report.nih.gov/faqs 及API说明可读；文档可读不等于已执行基金检索。",
+      "urls": [
+        "https://reporter.nih.gov/search",
+        "https://api.reporter.nih.gov/",
+        "https://report.nih.gov/faqs"
+      ]
+    },
+    {
+      "capability": "PDF截图",
+      "outcome": "not_visually_verified",
+      "observation": "两次请求只返回结果引用，当前工具桥接没有传回可检视图像；没有检查表格截图，不能报告截图视觉核验通过。",
+      "urls": [
+        "https://yjsy.bjmu.edu.cn/docs/2025-10/a0e2a1ed91f3416cb672194df65d50bd.pdf"
+      ]
+    },
+    {
+      "capability": "岗位与批次区分",
+      "outcome": "passed_for_sample",
+      "observation": "实读2026博士目录和已过截止日的博士后启事；保留历史条目，不将博士后职位或2026目录认定为2027博士开放名额。",
+      "urls": [
+        "https://yjsy.bjmu.edu.cn/docs/2025-10/a0e2a1ed91f3416cb672194df65d50bd.pdf",
+        "https://postdocs.bjmu.edu.cn/zpxx/7b2b654cb17f4525a335c4f8d95655f2.htm"
+      ]
+    }
+  ],
+  "limitations": [
+    "网页工具可能返回索引/缓存内容；报告保存实际访问时间，但不能保证所有页面此刻实时更新。",
+    "未执行登录、验证码绕过、申请、发信、CV上传、API POST或浏览器安装。",
+    "未测试动态表单填写、动态分页、真实文件下载或截图视觉识别。",
+    "仅做少量公开来源功能抽样，不评价导师质量、申请人资格或录取可能性。"
+  ],
+  "documentation": "https://developers.openai.com/api/docs/guides/tools-web-search#output-and-citations"
+}

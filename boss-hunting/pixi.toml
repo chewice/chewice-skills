@@ -1,0 +1,55 @@
+[workspace]
+name = "boss-hunting"
+version = "0.2.0"
+description = "Evidence-based doctoral advisor discovery and comparison"
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[dependencies]
+nodejs = ">=22.13,<23"
+python = ">=3.11,<3.13"
+
+[tasks.init]
+cmd = "bash setup-vscode.sh"
+description = "Optional editor configuration; overwrites .vscode/settings.json"
+
+[tasks.check-runtime]
+cmd = "node --version && python --version"
+
+[tasks.test-core]
+cmd = "node --test --test-skip-pattern='server-renders the advisor console' web/tests/*.test.mjs"
+
+[tasks.web-install]
+cmd = "npm ci --no-audit --no-fund"
+cwd = "web"
+description = "Install the existing locked npm dependencies using Pixi Node.js"
+
+[tasks.web-build]
+cmd = "npm run build"
+cwd = "web"
+
+[tasks.test]
+cmd = "npm test"
+cwd = "web"
+
+[tasks.lint]
+cmd = "npm run lint"
+cwd = "web"
+
+[tasks.typecheck]
+cmd = "node node_modules/wrangler/bin/wrangler.js types worker-runtime.d.ts --include-env false --config dist/server/wrangler.json && node node_modules/typescript/bin/tsc --noEmit --incremental false -p tsconfig.json && node node_modules/typescript/bin/tsc --noEmit --incremental false -p tsconfig.worker.json"
+cwd = "web"
+env = { WRANGLER_SEND_METRICS = "false" }
+description = "After web-build: generate actual Worker runtime declarations, then check browser and Worker sources separately"
+
+[tasks.runtime]
+cmd = "npm run runtime"
+cwd = "web"
+
+[tasks.dev]
+cmd = "npm run dev"
+cwd = "web"
+
+[tasks.report]
+cmd = "node skills/advisor-pipeline/scripts/build_advisor_report.mjs"
+description = "Append --project-root <project>; export a topic-named HTML from shared records"

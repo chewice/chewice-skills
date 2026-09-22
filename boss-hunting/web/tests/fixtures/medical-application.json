@@ -1,0 +1,155 @@
+{
+  "project": {
+    "domainProfile": "medical",
+    "searchMode": "application",
+    "evaluationMode": "evidence_profile",
+    "target": "Fixture region",
+    "degree": "PhD",
+    "season": "2027",
+    "hardConstraints": "无自设硬条件",
+    "applicantBackground": {
+      "source": "self_reported",
+      "education": [
+        "Fictional research master's qualification"
+      ]
+    },
+    "medicalProfile": {
+      "fields": [
+        "免疫学"
+      ],
+      "diseaseScope": "机制优先",
+      "diseasesOrMechanisms": [
+        "炎症机制"
+      ],
+      "researchModes": [
+        "实验机制"
+      ],
+      "currentSkills": [
+        "Fictional microscopy experience"
+      ],
+      "desiredTraining": [
+        "因果实验设计"
+      ],
+      "exclusions": [],
+      "inputStatus": {
+        "exclusions": "unrestricted"
+      }
+    },
+    "fixtureNotice": "FICTIONAL LOCAL TEST DATA. All institutions, applicants, projects and source claims below are simulated."
+  },
+  "advisors": [
+    {
+      "advisor_id": "fixture-school-pi",
+      "name": "Fixture PI (fictional)",
+      "school": "Fixture School (fictional)"
+    }
+  ],
+  "programs": [
+    {
+      "program_id": "fixture-school-phd-2027",
+      "degree": "PhD",
+      "intake": "2027",
+      "program_name_en": "Fictional Biomedical PhD"
+    }
+  ],
+  "candidates": [
+    {
+      "advisorProgramId": "fixture-pi--fixture-school-phd-2027",
+      "advisor_id": "fixture-school-pi",
+      "program_id": "fixture-school-phd-2027",
+      "advisorName": "Fixture PI (fictional)",
+      "schoolName": "Fixture School (fictional)",
+      "programNameEn": "Fictional Biomedical PhD",
+      "degree": "PhD",
+      "intake": "2027",
+      "applicationPathway": "committee_led",
+      "rotation": "Fictional programme rotation",
+      "feasibility": "eligible",
+      "opportunityStatus": "unknown",
+      "eligibilityEvidence": {
+        "status": "verified",
+        "advisorProgramId": "fixture-pi--fixture-school-phd-2027",
+        "intake": "2027",
+        "sourceIds": [
+          "fixture-terms",
+          "fixture-self-report"
+        ]
+      },
+      "evidenceProfile": {
+        "scientificFit": {
+          "status": "strong",
+          "reasons": [
+            "Fictional alignment of scientific question"
+          ],
+          "sourceIds": [
+            "fixture-study"
+          ]
+        },
+        "trainingFit": {
+          "status": "supported",
+          "reasons": [
+            "Fictional programme methods training"
+          ],
+          "sourceIds": [
+            "fixture-terms"
+          ]
+        },
+        "resources": [
+          {
+            "level": "institution_owned",
+            "doctoral_access": "needs_confirmation"
+          }
+        ],
+        "researchFunding": [
+          {
+            "status": "not_checked"
+          }
+        ],
+        "doctoralFunding": [
+          {
+            "status": "not_checked"
+          }
+        ],
+        "doctoralOutcomes": {
+          "status": "no_historical_sample",
+          "limitation": "No denominator or causal supervision claim"
+        },
+        "keyUnknowns": [
+          "Student funding and resource access need confirmation"
+        ],
+        "nextVerification": [
+          "Verify funding terms for this programme and intake"
+        ]
+      }
+    }
+  ],
+  "evidence": [
+    {
+      "evidence_id": "fixture-terms",
+      "entity_id": "fixture-school-phd-2027",
+      "fields_supported": [
+        "eligibility"
+      ],
+      "claim_type": "fact",
+      "claim": "Simulated official terms",
+      "status": "verified",
+      "url": "https://example.org/fictional-terms",
+      "title": "Fictional fixture terms",
+      "intake": "2027",
+      "limitations": "Simulated local fixture; no real-world verification"
+    },
+    {
+      "evidence_id": "fixture-self-report",
+      "claim_type": "fact",
+      "claim": "Simulated self-reported background",
+      "status": "verified",
+      "limitations": "Self-report; no third-party verification"
+    }
+  ],
+  "ranking": [],
+  "audit": {
+    "fixture": true,
+    "liveResearch": false,
+    "scope": "Local deterministic example only"
+  }
+}
