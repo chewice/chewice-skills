@@ -16,7 +16,7 @@ description: Audit existing AGENTS.md instructions for redundancy, repository dr
 ## 按需读取
 
 - 开始审计时读取 [审查指南](references/review-guide.md) 中的范围、判断与报告部分；应用已批准项时读取其中的应用部分。
-- 涉及模型迭代、需要核实指令发现机制或引用官方证据时读取 [来源与证据](references/sources.md)。只检索与目标模型及候选规则相关的材料。
+- 涉及模型迭代时，按 [审查指南](references/review-guide.md#模型升级与指令冲突) 将官方建议对应到具体规则、项目证据和完成条件；与上次依据比较时使用 [来源与证据](references/sources.md#跨次比较)。核实发现机制或引用官方证据时也读取来源说明。
 - 维护或验收本 Skill 时读取 [合成案例与验收记录](tests/cases.md)；日常审计不加载测试答案。
 
 ## 核心判断
@@ -32,9 +32,9 @@ description: Audit existing AGENTS.md instructions for redundancy, repository dr
 
 默认中文报告，先说明审计范围、未覆盖项、运行与目标模型、环境未知项、官方核实状态和源文件未修改，再呈现重要结论。
 
-每条建议使用 `KEEP`、`COMPRESS`、`MOVE`、`UPDATE`、`REMOVE_CANDIDATE` 或 `NEEDS_EVIDENCE`，附原文与真实位置、原意、证据、建议文本、影响和验证状态。报告包含最小 unified diff；仍待验证的行为性删改列为独立的“实验候选”，不混入可直接提出的低风险修改。关键保留项简要解释价值。
+每条建议使用 `KEEP`、`COMPRESS`、`MOVE`、`UPDATE`、`REMOVE_CANDIDATE` 或 `NEEDS_EVIDENCE`，附原文与真实位置、原意、证据、建议文本、影响和验证状态。必要补充使用 `UPDATE` 并标明拟插入位置，不虚构原文。报告包含最小 unified diff；仍待验证的行为性修改（含新增约束）列为独立的“实验候选”，不混入可直接提出的低风险修改。关键保留项简要解释价值。
 
-静态去重、已核实路径更新采用相称检查；减少确认、测试、上下文读取或委派要求等行为改变，说明最小任务对照和成功标准。未运行不声称通过、无性能影响或节省实际会话成本。
+静态去重、已核实路径更新采用相称检查；改变确认、测试、上下文读取、完成条件或委派要求时，说明最小任务对照和成功标准。未运行不声称通过、无性能影响或节省实际会话成本。
 
 默认在对话中交付；用户要求保存时使用指定位置或现有报告目录，避免覆盖旧报告。完整审阅所声明范围后才能称该范围审计完成。
 

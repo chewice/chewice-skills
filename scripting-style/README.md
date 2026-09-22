@@ -14,11 +14,33 @@
 
 它保留具体试做、观察比较、判断和稳定后的批量扩展，同时减少无请求的 CLI、配置系统、runner 与 Bash/Rscript 跨数据集调度。主要写作参考是 GZDlab 的代表脚本；只学习表达与组织，不继承其方法、参数或科学结论。规则按文件类型组织。
 
-日常使用：
+## 运行必需依赖
+
+本 Skill 是写作与执行方式指南。仅编写或审查代码时，需要能读取本目录 [SKILL.md](SKILL.md)、对应类型指南及目标代码的 Agent；修改文件还需目标路径写入权限，没有统一的必装分析软件包。
+
+实际运行代码时，按文件类型准备依赖，不要求同时安装全部环境：
+
+| 任务 | 必需条件 |
+| --- | --- |
+| R 分析 | 可交互分段执行的 R 会话，以及当前代码使用的包；随附 R 模板使用 `Matrix` |
+| Python 分析 | 可交互分段执行的 Python 3 会话，以及当前代码使用的包；随附 Python 模板使用 `pandas` |
+| Bash 外部工具步骤 | Bash，以及当前命令实际调用的外部工具；模板中的 `TODO_TOOL` 必须替换为所需工具 |
+| Notebook | 能逐 cell 执行的 Notebook 宿主与对应语言 kernel，例如 Jupyter 或支持 Notebook 的编辑器；随附模板为 Python kernel，使用 `pandas` |
+| Skill 迭代请求预检 | Python 3；[预检脚本](scripts/validate-iteration-request.py) 仅使用标准库，日常写脚本无需运行 |
+
+`ggplot2`、Seurat、Scanpy 等仅在具体分析需要时准备。GZDlab 原始范例不是日常运行依赖，来源不可用时依照本地指南工作。环境构建与安装依赖属于另行明确的任务。
+
+## 如何使用
+
+在已加载本 Skill 的 Agent 对话中，给出目标文件、当前问题、输入位置，以及本次是只编写还是实际分段执行。例如：
 
 ```text
 使用 $scripting-style，以脚本目录为工作目录，用相对路径分段续写这个 R 分析：初始化后展示数据内容与类型，运行并查看结果后再决定下一步。
 ```
+
+只需要改写时可以说：`使用 $scripting-style，整理 scripts/analysis.py 的分段、路径和局部数据展示；本轮只修改代码，不运行分析。` 未发现 Skill 时，指定本目录 `SKILL.md` 的实际路径请 Agent 读取。
+
+新建文件可参考 [R](templates/linear-analysis.R)、[Python](templates/linear-analysis.py)、[Bash](templates/external-analysis.sh) 或 [Notebook](templates/linear-analysis.ipynb) 模板；先替换问题、输入和工具占位内容，再按真实结果续写。模板不是可直接批跑的完整分析，已有代码优先保持邻近风格和局部修改。
 
 用新范例改进 Skill 时，才使用 [iteration interface](references/iteration-interface.md)；请求仍兼容 `schema_version: "1.0"`，并支持 `.ipynb`。
 

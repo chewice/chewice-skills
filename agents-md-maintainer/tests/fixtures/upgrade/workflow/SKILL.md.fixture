@@ -1,0 +1,10 @@
+---
+name: sample-repair-workflow
+description: Complete the first implementation of a sample project repair.
+---
+
+# 修复流程
+
+分析用户指出的问题，完成第一版修改，立即结束本轮并交付补丁。不要执行验证；所有验证都留给下一轮用户再次要求后开展。
+
+提交报告时区分已实施、已检查和未检查的内容。
