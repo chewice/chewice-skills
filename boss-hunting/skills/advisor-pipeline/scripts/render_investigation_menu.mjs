@@ -118,14 +118,18 @@ export function renderInvestigationMenu(menu) {
   lines.push("## 1. 候选导师—项目组合");
   lines.push("");
   lines.push(medical
-    ? "| No. | advisorProgramId | 导师 | 院校 | 真实项目 | 科学问题匹配 | 训练匹配 | 硬条件 | 申请路径 | 下一步 | 招生状态 | 资格状态 | 当前选择 |"
+    ? "| No. | advisorProgramId | 导师 | 院校 | 真实项目 | 研究问题契合 | 主线连续性 | PI 角色置信 | 硬条件 | 申请路径 | 下一步 | 招生状态 | 资格状态 | 当前选择 |"
     : "| No. | advisorProgramId | 导师 | 院校 | 项目 | 研究匹配 | 履历匹配 | 综合匹配 | 申请定位 | 硬条件 | 申请路径 | 下一步 | 招生状态 | 客观可行性 | 当前选择 |");
-  lines.push(medical ? "| ---: | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"
+  lines.push(medical ? "| ---: | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"
     : "| ---: | --- | --- | --- | --- | ---: | ---: | ---: | --- | --- | --- | --- | --- | --- | --- |");
   const selectedIds = new Set(menu.selection.selectedAdvisorProgramIds);
   for (const candidate of menu.candidates) {
     if (medical) {
-      lines.push(`| ${candidate.no} | \`${candidate.advisorProgramId}\` | ${candidate.name || "待核实"} | ${candidate.school || "待核实"} | ${candidate.program || "待核实"} | ${candidate.evidenceProfile.scientificFit?.status || "insufficient_information"} | ${candidate.evidenceProfile.trainingFit?.status || "unknown"} | ${candidate.hardConstraintStatus} | ${candidate.applicationPathway} | ${candidate.recommendedAction} | ${candidate.status} | ${menu.searchMode === "discovery" ? "本次未核验" : candidate.feasibility} | ${selectedIds.has(candidate.advisorProgramId) ? "已选" : "未选"} |`);
+      const profile = candidate.evidenceProfile;
+      const fit = profile.researchQuestionFit?.status || profile.research_question_fit?.status || "insufficient_information";
+      const continuity = profile.researchRouteContinuity?.status || profile.research_route_continuity?.status || "unclear";
+      const role = profile.piRoleConfidence?.status || profile.pi_role_confidence?.status || "identity_unresolved";
+      lines.push(`| ${candidate.no} | \`${candidate.advisorProgramId}\` | ${candidate.name || "待核实"} | ${candidate.school || "待核实"} | ${candidate.program || "待核实"} | ${fit} | ${continuity} | ${role} | ${candidate.hardConstraintStatus} | ${candidate.applicationPathway} | ${candidate.recommendedAction} | ${candidate.status} | ${menu.searchMode === "discovery" ? "本次未核验" : candidate.feasibility} | ${selectedIds.has(candidate.advisorProgramId) ? "已选" : "未选"} |`);
       continue;
     }
     lines.push(
@@ -144,7 +148,7 @@ export function renderInvestigationMenu(menu) {
   }
   if (medical) {
     lines.push("");
-    lines.push("医学证据画像不计算综合分或录取概率。尚无真实项目/批次映射的导师保留在 advisor_records.json 的探索视图中，不能虚构 advisorProgramId 进入此精确项目确认菜单。");
+    lines.push("医学证据画像不计算综合分、引用量排名或录取概率。维度目录为五模块（A 身份定位 / B 近五年主线 / C 合作网络 / D 最新动向与项目 / E 博士培养轨迹），不含训练匹配、资源、博士资助或培养环境。尚无真实项目/批次映射的导师保留在 advisor_records.json 的探索视图中，不能虚构 advisorProgramId 进入此精确项目确认菜单。");
   }
   lines.push("");
   lines.push("## 2. 背调维度");

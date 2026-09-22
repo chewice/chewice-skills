@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-export const PROJECT_SCHEMA_VERSION = 9;
+export const PROJECT_SCHEMA_VERSION = 10;
 export const STATUS_SCHEMA_VERSION = 2;
 
 export const APPLICATION_MATERIAL_IDS = [
@@ -14,7 +14,7 @@ export const DEFAULT_DETECTIVE_SECTIONS = [
   "current_projects_recruiting",
 ];
 
-export const DETECTIVE_SECTIONS = [
+export const GENERIC_DETECTIVE_SECTIONS = [
   ...DEFAULT_DETECTIVE_SECTIONS,
   "research_output_trend",
   "group_members_outcomes",
@@ -26,7 +26,25 @@ export const DETECTIVE_SECTIONS = [
   "collaboration_industry_network",
 ];
 
-// The single ordered catalog both the Web checkboxes and the CLI menu render.
+// Medical / biomedical discovery investigates exactly five public-evidence
+// modules. Training environment, lab resources, doctoral personal funding,
+// applicant ability and overall quality scores are not selectable here.
+export const MEDICAL_DETECTIVE_SECTION_CATALOG = [
+  { id: "identity_research_positioning", label: "A. 导师身份与当前科研定位", defaultSelected: true },
+  { id: "research_mainline_5y", label: "B. 近五年科研主线与研究路线", defaultSelected: true },
+  { id: "collaboration_network", label: "C. 科研合作网络", defaultSelected: true },
+  { id: "latest_signals_projects", label: "D. 最新公开研究动向与项目支撑", defaultSelected: true },
+  { id: "doctoral_trajectory", label: "E. 博士培养轨迹", defaultSelected: true },
+];
+
+export const MEDICAL_DETECTIVE_SECTIONS = MEDICAL_DETECTIVE_SECTION_CATALOG.map((section) => section.id);
+
+export const DETECTIVE_SECTIONS = [
+  ...GENERIC_DETECTIVE_SECTIONS,
+  ...MEDICAL_DETECTIVE_SECTIONS,
+];
+
+// The single ordered generic catalog both the Web checkboxes and the CLI menu render.
 export const DETECTIVE_SECTION_CATALOG = [
   { id: "identity_current_role", label: "基础身份与当前职位", defaultSelected: true },
   { id: "recent_research", label: "最近三年研究兴趣与方向", defaultSelected: true },
@@ -61,17 +79,16 @@ export const DETECTIVE_SECTION_CATALOG = [
   },
 ];
 
-export const MEDICAL_DEFAULT_DETECTIVE_SECTIONS = [
-  ...DEFAULT_DETECTIVE_SECTIONS,
-  "research_output_trend",
-  "group_members_outcomes",
-  "resources_career_support",
-  "collaboration_industry_network",
-];
+export const MEDICAL_DEFAULT_DETECTIVE_SECTIONS = [...MEDICAL_DETECTIVE_SECTIONS];
 
 export const EVIDENCE_STATUSES = [
-  "verified", "not_found", "not_checked", "inaccessible", "conflict", "stale", "not_applicable",
+  "verified", "not_found", "not_found_in_checked_scope", "not_checked", "inaccessible", "partial",
+  "conflict", "stale", "not_applicable",
 ];
+
+export function isMedicalSection(sectionId) {
+  return MEDICAL_DETECTIVE_SECTIONS.includes(String(sectionId));
+}
 
 export function defaultDetectiveSections(project = {}) {
   return [...(project.domainProfile === "medical"
@@ -80,12 +97,9 @@ export function defaultDetectiveSections(project = {}) {
 
 export function getDetectiveSectionCatalog(project = {}) {
   const defaults = defaultDetectiveSections(project);
-  return DETECTIVE_SECTION_CATALOG.map((section) => ({
-    ...section,
-    label: project.domainProfile === "medical" && section.id === "recent_research"
-      ? "近期科学问题、研究方式与训练匹配" : section.label,
-    defaultSelected: defaults.includes(section.id),
-  }));
+  const catalog = project.domainProfile === "medical"
+    ? MEDICAL_DETECTIVE_SECTION_CATALOG : DETECTIVE_SECTION_CATALOG;
+  return catalog.map((section) => ({ ...section, defaultSelected: defaults.includes(section.id) }));
 }
 
 export function investigationCostLevel(workUnits) {
@@ -116,18 +130,25 @@ function stringList(value) {
     .map((item) => text(item, 500)).filter(Boolean))];
 }
 
+// Discovery is driven by what the user wants to research, never by what they
+// already know. Applicant skills and desired training were removed from the
+// medical profile; legacy values are dropped during normalization.
+export const MEDICAL_PROFILE_LIST_KEYS = ["fields", "diseasesOrMechanisms", "researchQuestions",
+  "researchObjects", "researchScales", "researchModes", "methodPreferences", "adjacentInterests", "exclusions"];
+export const MEDICAL_PROFILE_REMOVED_KEYS = ["currentSkills", "desiredTraining"];
+
 export function normalizeMedicalProfile(input, target = "") {
   const source = input && typeof input === "object" && !Array.isArray(input) ? input : {};
   const normalized = { ...source };
-  for (const key of ["fields", "diseasesOrMechanisms", "researchQuestions", "researchModes",
-    "researchObjects", "currentSkills", "desiredTraining", "adjacentInterests", "exclusions"]) {
+  for (const key of MEDICAL_PROFILE_REMOVED_KEYS) delete normalized[key];
+  for (const key of MEDICAL_PROFILE_LIST_KEYS) {
     normalized[key] = stringList(source[key]);
   }
   normalized.diseaseScope = text(source.diseaseScope, 120) || "unasked";
   // target is the authoritative region/school scope after initial import.
   normalized.regions = target ? stringList(target.split(/[;；\n]+/)) : stringList(source.regions);
   normalized.inputStatus = {};
-  for (const key of ["fields", "diseaseScope", "researchModes", "regions", "desiredTraining", "exclusions"]) {
+  for (const key of ["fields", "diseaseScope", "researchModes", "regions", "exclusions"]) {
     const explicit = source.inputStatus?.[key];
     const hasValue = key === "diseaseScope"
       ? normalized.diseaseScope !== "unasked" : normalized[key].length > 0;
@@ -149,11 +170,14 @@ export function hasStructuredApplicantBackground(project = {}) {
 export function medicalIntakeStatus(project = {}) {
   const profile = normalizeMedicalProfile(project.medicalProfile, project.target);
   const answered = (key) => profile.inputStatus[key] !== "unasked";
+  // Three required inputs only: field, disease/mechanism/question, region.
+  // Research object, scale, paradigm, method preference, adjacent directions
+  // and exclusions are optional refinements and never block discovery.
   const steps = [
-    { key: "medical_fields", label: "明确医学领域或明确不限", complete: answered("fields") },
-    { key: "medical_research", label: "明确疾病/机制和研究方式，或明确未定",
-      complete: answered("diseaseScope") && answered("researchModes") },
-    { key: "medical_regions", label: "明确目标地区或明确不限", complete: answered("regions") },
+    { key: "medical_fields", label: "明确生物医学领域或大方向，或明确不限", complete: answered("fields") },
+    { key: "medical_research", label: "明确希望深入研究的疾病、机制或科学问题，或明确未定",
+      complete: answered("diseaseScope") || profile.researchQuestions.length > 0 },
+    { key: "medical_regions", label: "明确目标国家/地区，或明确不限", complete: answered("regions") },
   ];
   return { ready: steps.every((step) => step.complete), steps,
     nextStep: steps.findIndex((step) => !step.complete) < 0 ? 4 : steps.findIndex((step) => !step.complete) + 1,
@@ -840,14 +864,24 @@ export function normalizeProjectMetadata(
     const draft = source.investigation?.draft ?? source.investigation ?? {};
     const policy = medical ? (draft.sourcePolicy === "community_allowed" ? "community_allowed" : "public_only")
       : "community_allowed";
+    const declaredSections = draft.selectedSections ?? draft.selected_sections;
+    // Medical projects only investigate the five public-evidence modules. A
+    // legacy medical draft that still names generic sections (resources,
+    // environment, community) is re-scoped to the current defaults; the old
+    // confirmed snapshot then no longer matches and returns to the draft gate.
+    const medicalSections = medical && Array.isArray(declaredSections)
+      ? declaredSections.map(String).filter(isMedicalSection) : [];
     normalized.investigation = updateInvestigationDraft(normalized.investigation, {
       sourcePolicy: policy,
       researchScopeFingerprint: medicalScopeFingerprint(normalized),
-      ...(!Array.isArray(draft.selectedSections) && !Array.isArray(draft.selected_sections)
-        ? { selectedSections: defaultDetectiveSections(normalized) } : {}),
+      ...(!Array.isArray(declaredSections)
+        ? { selectedSections: defaultDetectiveSections(normalized) }
+        : medical ? { selectedSections: medicalSections.length ? medicalSections : defaultDetectiveSections(normalized) }
+          : {}),
     }, now);
   }
   if (
+    !medical &&
     Number(source.schemaVersion || 0) < PROJECT_SCHEMA_VERSION &&
     Array.isArray(legacyDetectiveResults?.results) &&
     legacyDetectiveResults.results.length > 0

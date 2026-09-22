@@ -1,7 +1,32 @@
 // Shared projections only; advisor/program/evidence records remain the fact source.
+//
+// Medical / biomedical discovery describes each PI with an evidence profile
+// built from five public-evidence modules (identity, five-year mainline,
+// collaboration network, latest signals/projects, doctoral trajectory).
+// Training fit, lab resources, doctoral personal funding, training environment,
+// applicant ability and overall quality scores are intentionally absent.
 import { hasStructuredApplicantBackground } from "./project-contract.mjs";
 import { open, realpath } from "node:fs/promises";
 import { isAbsolute, relative, resolve } from "node:path";
+
+export const RESEARCH_QUESTION_FIT = ["direct", "partial", "adjacent", "weak", "insufficient_information"];
+export const ROUTE_CONTINUITY = ["sustained_core", "active_emerging", "new_expansion", "occasional_participation", "unclear"];
+export const PI_ROLE_CONFIDENCE = ["verified", "probable", "emerging", "identity_unresolved"];
+export const PI_EVIDENCE_LEVELS = ["A", "B", "C", "D"];
+export const EVIDENCE_SUFFICIENCY = ["strong", "adequate", "sparse", "conflicted"];
+export const CURRENT_ACTIVITY = ["active", "recent_signal", "unclear", "apparently_inactive_in_checked_scope"];
+export const COLLABORATION_EDGE_TYPES = ["coauthorship", "shared_project", "shared_grant", "shared_trial"];
+export const RESEARCH_NEIGHBOR_EDGE_TYPES = ["citation", "co_citation", "bibliographic_coupling", "semantic_similarity", "related_papers"];
+export const DISCOVERY_ROUTES = ["research_seed", "map_seed", "collaboration", "research_neighbor", "official_roster", "unknown"];
+
+// Fields the medical workflow no longer investigates. They are never copied
+// into the current projection even when an older record still stores them.
+export const REMOVED_MEDICAL_PROFILE_KEYS = [
+  "trainingFit", "training_fit", "resources", "doctoralFunding", "doctoral_funding",
+  "trainingEnvironment", "training_environment", "doctoralOutcomes", "doctoral_outcomes",
+  "researchFunding", "research_funding", "supportedRisks", "supported_risks",
+  "overallScore", "qualityScore", "mentoringSuccess", "placementRate",
+];
 
 export async function hasReadableProjectCv(projectRoot, cv) {
   if (!cv || typeof cv.path !== "string" || !cv.path.trim()) return false;
@@ -35,8 +60,238 @@ function list(value) {
   return Array.isArray(value) ? value : [];
 }
 
+function pick(source, ...keys) {
+  for (const key of keys) {
+    if (source && source[key] !== undefined && source[key] !== null) return source[key];
+  }
+  return undefined;
+}
+
+function sourceIds(value) {
+  return [...new Set(list(pick(value || {}, "sourceIds", "source_ids")).map(String).filter((id) => id.trim()))];
+}
+
+function statusBlock(value, vocabulary, fallback, extra = {}) {
+  const source = value && typeof value === "object" ? value : (typeof value === "string" ? { status: value } : {});
+  return {
+    status: vocabulary.includes(source.status) ? source.status : fallback,
+    reasons: list(source.reasons).map(String),
+    sourceIds: sourceIds(source),
+    ...extra,
+  };
+}
+
+function scalar(value, vocabulary, fallback) {
+  const status = value && typeof value === "object" ? value.status : value;
+  return vocabulary.includes(status) ? status : fallback;
+}
+
 export function evidenceProfile(row = {}) {
   return row.evidenceProfile || row.evidence_profile || {};
+}
+
+// Older medical records stored a `scientificFit` block. Direction fit is
+// retained content, so it is carried forward under the new vocabulary.
+const LEGACY_FIT = { strong: "direct", partial: "partial", adjacent: "adjacent", mismatch: "weak", insufficient_information: "insufficient_information" };
+
+function researchQuestionFit(profile) {
+  const current = pick(profile, "researchQuestionFit", "research_question_fit");
+  if (current) return statusBlock(current, RESEARCH_QUESTION_FIT, "insufficient_information");
+  const legacy = pick(profile, "scientificFit", "scientific_fit");
+  if (!legacy) return statusBlock(undefined, RESEARCH_QUESTION_FIT, "insufficient_information");
+  return statusBlock({ ...legacy, status: LEGACY_FIT[legacy.status] || "insufficient_information" },
+    RESEARCH_QUESTION_FIT, "insufficient_information");
+}
+
+function representativeWork(item) {
+  if (!item || typeof item !== "object") return { title: String(item ?? ""), sourceIds: [] };
+  return {
+    title: String(pick(item, "title") ?? ""),
+    year: pick(item, "year", "date") ?? null,
+    venue: pick(item, "venue", "journal", "journal_or_preprint") ?? null,
+    doi: pick(item, "doi", "DOI") ?? null,
+    url: pick(item, "url", "final_url") ?? null,
+    verifiedRole: pick(item, "verifiedRole", "verified_role", "role") ?? "unknown",
+    relationToMainline: pick(item, "relationToMainline", "relation_to_mainline", "relation") ?? null,
+    isPreprint: pick(item, "isPreprint", "is_preprint") === true,
+    sourceIds: sourceIds(item),
+  };
+}
+
+function researchMainline(profile) {
+  const source = pick(profile, "researchMainline", "research_mainline") || {};
+  return {
+    longTermQuestion: pick(source, "longTermQuestion", "long_term_question") ?? null,
+    continuingThemes: list(pick(source, "continuingThemes", "continuing_themes")),
+    newDirections: list(pick(source, "newDirections", "new_directions")),
+    researchObjects: list(pick(source, "researchObjects", "research_objects")),
+    methods: list(pick(source, "methods")),
+    recentShift: pick(source, "recentShift", "recent_shift") ?? null,
+    participationOnlyWorks: list(pick(source, "participationOnlyWorks", "participation_only_works")).map(representativeWork),
+    representativeWorks: list(pick(source, "representativeWorks", "representative_works")).map(representativeWork),
+    backSearchWindow: pick(source, "backSearchWindow", "back_search_window") ?? null,
+    sourceIds: sourceIds(source),
+  };
+}
+
+function collaborator(item) {
+  const source = item && typeof item === "object" ? item : { name: String(item ?? "") };
+  return {
+    name: String(pick(source, "name") ?? ""),
+    collaboratorId: pick(source, "collaboratorId", "collaborator_id", "advisor_id") ?? null,
+    currentInstitution: pick(source, "currentInstitution", "current_institution") ?? null,
+    currentPosition: pick(source, "currentPosition", "current_position") ?? null,
+    collaborationEvidence: list(pick(source, "collaborationEvidence", "collaboration_evidence")),
+    firstYear: pick(source, "firstYear", "first_year") ?? null,
+    lastYear: pick(source, "lastYear", "last_year") ?? null,
+    sharedTopics: list(pick(source, "sharedTopics", "shared_topics")),
+    ownCoreDirection: pick(source, "ownCoreDirection", "own_core_direction") ?? null,
+    recentRoute: pick(source, "recentRoute", "recent_route") ?? null,
+    relationToMainline: pick(source, "relationToMainline", "relation_to_mainline") ?? null,
+    jointRecordCount: Math.max(0, Number(pick(source, "jointRecordCount", "joint_record_count")) || 0),
+    sourceIds: sourceIds(source),
+  };
+}
+
+function edge(item) {
+  const source = item && typeof item === "object" ? item : {};
+  const type = String(pick(source, "type", "edge_type") ?? "");
+  return {
+    type: COLLABORATION_EDGE_TYPES.includes(type) ? type : "coauthorship",
+    target: pick(source, "target", "collaboratorId", "collaborator_id", "name") ?? null,
+    count: Math.max(0, Number(pick(source, "count")) || 0),
+    years: list(pick(source, "years")),
+    sourceIds: sourceIds(source),
+  };
+}
+
+function neighbor(item) {
+  const source = item && typeof item === "object" ? item : { name: String(item ?? "") };
+  const type = String(pick(source, "type", "edge_type") ?? "");
+  return {
+    name: String(pick(source, "name") ?? ""),
+    type: RESEARCH_NEIGHBOR_EDGE_TYPES.includes(type) ? type : "related_papers",
+    note: pick(source, "note", "reason") ?? null,
+    sourceIds: sourceIds(source),
+  };
+}
+
+function collaborationNetwork(profile) {
+  const source = pick(profile, "collaborationNetwork", "collaboration_network") || {};
+  return {
+    depth: 1,
+    coreCollaborators: list(pick(source, "coreCollaborators", "core_collaborators")).map(collaborator),
+    edges: list(pick(source, "edges")).map(edge),
+    researchNeighbors: list(pick(source, "researchNeighbors", "research_neighbors")).map(neighbor),
+    heuristics: pick(source, "heuristics") ?? null,
+    sourceIds: sourceIds(source),
+  };
+}
+
+function project(item) {
+  const source = item && typeof item === "object" ? item : { title: String(item ?? "") };
+  return {
+    title: pick(source, "title", "project_title") ?? null,
+    projectId: pick(source, "projectId", "project_id", "grant_id") ?? null,
+    fundingBody: pick(source, "fundingBody", "funding_body", "funder") ?? null,
+    piRole: pick(source, "piRole", "pi_role", "role") ?? null,
+    period: pick(source, "period", "project_period") ?? null,
+    status: pick(source, "status") ?? "not_checked",
+    amount: pick(source, "amount", "published_amount") ?? null,
+    amountUnit: pick(source, "amountUnit", "amount_unit", "currency") ?? null,
+    amountBasis: pick(source, "amountBasis", "amount_basis") ?? null,
+    source: pick(source, "source", "sourceName") ?? null,
+    sourceIds: sourceIds(source),
+  };
+}
+
+function latestSignals(profile) {
+  const source = pick(profile, "latestSignals", "latest_signals") || {};
+  return {
+    latestPapers: list(pick(source, "latestPapers", "latest_papers")).map(representativeWork),
+    preprints: list(pick(source, "preprints")).map(representativeWork),
+    projects: list(pick(source, "projects", "grants")).map(project),
+    registries: list(pick(source, "registries")),
+    trials: list(pick(source, "trials", "clinical_trials")),
+    sourceIds: sourceIds(source),
+  };
+}
+
+function doctoralPerson(item) {
+  const source = item && typeof item === "object" ? item : { name: String(item ?? "") };
+  return {
+    name: pick(source, "name") ?? null,
+    supervisionEvidence: list(pick(source, "supervisionEvidence", "supervision_evidence")),
+    degreeOrYear: pick(source, "degreeOrYear", "degree_or_year", "year") ?? null,
+    topic: pick(source, "topic", "thesis", "researchTopic") ?? null,
+    relationToMainline: pick(source, "relationToMainline", "relation_to_mainline") ?? null,
+    outputs: list(pick(source, "outputs", "publications")),
+    firstDestination: pick(source, "firstDestination", "first_destination") ?? null,
+    latestPublicRole: pick(source, "latestPublicRole", "latest_public_role") ?? null,
+    informationDate: pick(source, "informationDate", "information_date", "asOf") ?? null,
+    sourceIds: sourceIds(source),
+  };
+}
+
+function doctoralTrajectory(profile) {
+  const source = pick(profile, "doctoralTrajectory", "doctoral_trajectory") || {};
+  const graduate = pick(source, "graduateProgram", "graduate_program") || {};
+  return {
+    currentDoctoral: list(pick(source, "currentDoctoral", "current_doctoral")).map(doctoralPerson),
+    formerDoctoral: list(pick(source, "formerDoctoral", "former_doctoral")).map(doctoralPerson),
+    graduateProgram: {
+      graduateSchool: pick(graduate, "graduateSchool", "graduate_school") ?? null,
+      doctoralProgram: pick(graduate, "doctoralProgram", "doctoral_program") ?? null,
+      department: pick(graduate, "department") ?? null,
+      supervisorListing: pick(graduate, "supervisorListing", "supervisor_listing") ?? null,
+      institutionalRelationship: pick(graduate, "institutionalRelationship", "institutional_relationship") ?? null,
+      sourceIds: sourceIds(graduate),
+    },
+    emergingPiNote: pick(source, "emergingPiNote", "emerging_pi_note") ?? null,
+    sampleLimitation: pick(source, "sampleLimitation", "sample_limitation")
+      ?? "已核实的公开案例，不代表完整 cohort；不计算毕业率、去向率或培养成功率",
+    sourceIds: sourceIds(source),
+  };
+}
+
+function identity(profile, candidate) {
+  const source = pick(profile, "identity") || {};
+  return {
+    currentInstitution: pick(source, "currentInstitution", "current_institution")
+      ?? pick(candidate, "current_institution", "currentInstitution", "school", "schoolName") ?? null,
+    department: pick(source, "department") ?? pick(candidate, "department") ?? null,
+    currentPosition: pick(source, "currentPosition", "current_position") ?? pick(candidate, "title") ?? null,
+    officialProfileUrl: pick(source, "officialProfileUrl", "official_profile_url") ?? pick(candidate, "homepage", "advisorHomepage") ?? null,
+    researchPositioning: pick(source, "researchPositioning", "research_positioning") ?? null,
+    doctoralSupervisionLink: pick(source, "doctoralSupervisionLink", "doctoral_supervision_link") ?? null,
+    nameVariants: list(pick(source, "nameVariants", "name_variants")),
+    identifiers: pick(source, "identifiers") && typeof source.identifiers === "object" ? source.identifiers : {},
+    affiliationAsOf: pick(source, "affiliationAsOf", "affiliation_as_of") ?? null,
+    sourceIds: sourceIds(source),
+  };
+}
+
+export function normalizeMedicalEvidenceProfile(candidate = {}) {
+  const profile = evidenceProfile(candidate);
+  const role = pick(profile, "piRoleConfidence", "pi_role_confidence") || {};
+  const level = String(pick(role, "level") ?? pick(candidate, "pi_evidence_level", "piEvidenceLevel") ?? "").toUpperCase();
+  return {
+    researchQuestionFit: researchQuestionFit(profile),
+    researchRouteContinuity: statusBlock(pick(profile, "researchRouteContinuity", "research_route_continuity"), ROUTE_CONTINUITY, "unclear"),
+    piRoleConfidence: statusBlock(role, PI_ROLE_CONFIDENCE, "identity_unresolved",
+      { level: PI_EVIDENCE_LEVELS.includes(level) ? level : null }),
+    evidenceSufficiency: scalar(pick(profile, "evidenceSufficiency", "evidence_sufficiency"), EVIDENCE_SUFFICIENCY, "sparse"),
+    currentActivity: scalar(pick(profile, "currentActivity", "current_activity"), CURRENT_ACTIVITY, "unclear"),
+    identity: identity(profile, candidate),
+    researchMainline: researchMainline(profile),
+    collaborationNetwork: collaborationNetwork(profile),
+    latestSignals: latestSignals(profile),
+    doctoralTrajectory: doctoralTrajectory(profile),
+    formalRecords: list(pick(profile, "formalRecords", "formal_records")),
+    fitBoundary: pick(profile, "fitBoundary", "fit_boundary") ?? null,
+    keyUnknowns: [...new Set(list(pick(profile, "keyUnknowns", "key_unknowns")).map(String))],
+    nextVerification: list(pick(profile, "nextVerification", "next_verification")).map(String),
+  };
 }
 
 function scopedEvidence(row, field, options = {}) {
@@ -69,16 +324,14 @@ function scopedEvidence(row, field, options = {}) {
 }
 
 export function normalizeMedicalCandidate(candidate, options = {}, index = 0) {
-  const profile = evidenceProfile(candidate);
-  const scientific = profile.scientificFit || profile.scientific_fit || {};
-  const training = profile.trainingFit || profile.training_fit || {};
+  const profile = normalizeMedicalEvidenceProfile(candidate);
   const discovery = options.searchMode === "discovery";
   const constraints = String(options.hardConstraints || "").trim();
   const hasAdditionalConstraints = Boolean(constraints) && !new Set([
     "无自设硬条件", "无自设条件", "无附加约束", "无附加硬约束", "none", "no additional constraints",
   ]).has(constraints.toLowerCase());
   const hasBackground = options.cvValid === true || hasStructuredApplicantBackground(options);
-  const reasons = list(profile.keyUnknowns || profile.key_unknowns).slice();
+  const reasons = profile.keyUnknowns.slice();
   let feasibility = ["eligible", "ineligible", "needs_confirmation"].includes(candidate.feasibility) ? candidate.feasibility : "needs_confirmation";
   let hardConstraintStatus = ["pass", "fail", "unknown"].includes(candidate.hardConstraintStatus) ? candidate.hardConstraintStatus : "unknown";
   let opportunityStatus = ["verified_open", "verified_closed", "signal_only", "unknown"].includes(candidate.opportunityStatus) ? candidate.opportunityStatus : "unknown";
@@ -99,18 +352,19 @@ export function normalizeMedicalCandidate(candidate, options = {}, index = 0) {
   const actionable = !discovery && !excluded && feasibility === "eligible" &&
     (hardConstraintStatus === "pass" || !hasAdditionalConstraints) &&
     pathway !== "unknown" && usablePathway;
-  const scientificStatus = ["strong", "partial", "adjacent", "mismatch", "insufficient_information"].includes(scientific.status)
-    ? scientific.status : "insufficient_information";
   let action = "verify_eligibility";
   if (excluded) action = "exclude";
-  else if (discovery) action = "verify_research_or_pathway";
+  else if (discovery) action = "continue_investigation";
   else if (pathway === "unknown") action = "verify_pathway";
   else if (hasAdditionalConstraints && hardConstraintStatus === "unknown") action = "verify_constraints";
   else if (actionable) action = pathway === "advertised_position" ? "apply_vacancy" :
     pathway === "supervisor_led" ? "contact_supervisor" : "apply_program";
   else if (feasibility === "eligible") action = "verify_opportunity";
+  const discoveredVia = String(candidate.discovered_via || candidate.discoveredVia || "unknown");
+  const row = { ...candidate };
+  for (const key of REMOVED_MEDICAL_PROFILE_KEYS) delete row[key];
   return {
-    ...candidate,
+    ...row,
     rank: index + 1,
     rankingMode: "evidence_profile",
     rankSemantics: "display_order",
@@ -124,21 +378,11 @@ export function normalizeMedicalCandidate(candidate, options = {}, index = 0) {
     opportunityStatus,
     applicationPathway: pathway,
     recommendedAction: action,
+    discoveredVia: DISCOVERY_ROUTES.includes(discoveredVia) ? discoveredVia : "unknown",
+    networkRound: Math.max(0, Number(candidate.network_round ?? candidate.networkRound) || 0),
     comparisonGroup: excluded ? "not_applicable" : actionable ? "actionable" :
-      scientificStatus === "mismatch" ? "follow_up" : "needs_verification",
-    evidenceProfile: {
-      ...profile,
-      scientificFit: { ...scientific, status: scientificStatus },
-      trainingFit: { ...training, status: ["supported", "partial", "unknown"].includes(training.status) ? training.status : "unknown" },
-      resources: list(profile.resources || candidate.resources),
-      researchFunding: list(profile.researchFunding || profile.research_funding || candidate.research_funding),
-      doctoralFunding: list(profile.doctoralFunding || profile.doctoral_funding || candidate.doctoral_funding),
-      doctoralOutcomes: profile.doctoralOutcomes || profile.doctoral_outcomes || candidate.doctoral_outcomes || null,
-      trainingEnvironment: profile.trainingEnvironment || profile.training_environment || candidate.training_environment || null,
-      supportedRisks: list(profile.supportedRisks || profile.supported_risks || candidate.risksAndGaps),
-      nextVerification: list(profile.nextVerification || profile.next_verification),
-      keyUnknowns: [...new Set(reasons)],
-    },
+      profile.researchQuestionFit.status === "weak" ? "follow_up" : "needs_verification",
+    evidenceProfile: { ...profile, keyUnknowns: [...new Set(reasons)] },
   };
 }
 
@@ -162,13 +406,14 @@ export function validateMedicalCandidateMappings(candidates, { advisorRecords = 
   return errors;
 }
 
-// Research/desired training take priority over webpage volume or applicant scores.
-// Categories are an explicit investigation order, never an overall quality score.
+// Research-question fit and route continuity define the display /
+// further-investigation order. This is never a PI quality ranking; citations,
+// H-index, prestige, grant totals and network centrality do not participate.
 export function compareMedicalCandidates(left, right) {
-  const scientific = ["strong", "partial", "adjacent", "insufficient_information", "mismatch"];
-  const training = ["supported", "partial", "unknown"];
-  return scientific.indexOf(left.evidenceProfile.scientificFit.status) - scientific.indexOf(right.evidenceProfile.scientificFit.status) ||
-    training.indexOf(left.evidenceProfile.trainingFit.status) - training.indexOf(right.evidenceProfile.trainingFit.status) ||
+  const fit = RESEARCH_QUESTION_FIT;
+  const continuity = ROUTE_CONTINUITY;
+  return fit.indexOf(left.evidenceProfile.researchQuestionFit.status) - fit.indexOf(right.evidenceProfile.researchQuestionFit.status) ||
+    continuity.indexOf(left.evidenceProfile.researchRouteContinuity.status) - continuity.indexOf(right.evidenceProfile.researchRouteContinuity.status) ||
     String(left.name || left.advisorName || left.advisor_id || "").localeCompare(String(right.name || right.advisorName || right.advisor_id || "")) ||
     String(left.advisorProgramId || left.advisor_id || "").localeCompare(String(right.advisorProgramId || right.advisor_id || ""));
 }

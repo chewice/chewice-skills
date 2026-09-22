@@ -4,6 +4,8 @@ import { constants } from "node:fs";
 import { resolve } from "node:path";
 import {
   confirmInvestigationDraft,
+  isMedicalSection,
+  MEDICAL_DETECTIVE_SECTIONS,
   PROJECT_SCHEMA_VERSION,
   normalizeProjectMetadata,
   updateInvestigationDraft,
@@ -73,6 +75,12 @@ async function confirmInvestigationInProjectUnlocked(
     candidates,
   );
   if (!validation.valid) throw new Error(validation.errors.join("；"));
+  if (metadata.domainProfile === "medical") {
+    const foreign = investigation.draft.selectedSections.filter((section) => !isMedicalSection(section));
+    if (foreign.length) {
+      throw new Error(`医学项目只能确认五模块维度（${MEDICAL_DETECTIVE_SECTIONS.join("、")}）；不支持：${foreign.join("、")}`);
+    }
+  }
   const confirmedInvestigation = confirmInvestigationDraft(investigation, {
     expectedRevision: investigation.draft.revision,
     now,

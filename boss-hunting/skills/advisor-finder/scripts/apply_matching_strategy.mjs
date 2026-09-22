@@ -200,7 +200,7 @@ export function buildEvidenceProfileShortlist(rawCandidates, options = {}) {
       matchingContractVersion: MATCHING_CONTRACT_VERSION,
       rankingMode: "evidence_profile",
       rankSemantics: "display_order",
-      strategy: "research_and_training_evidence",
+      strategy: "research_question_evidence",
       shortlistTarget,
       inputCount: normalized.length,
       selectedCount: selected.length,
@@ -209,7 +209,7 @@ export function buildEvidenceProfileShortlist(rawCandidates, options = {}) {
       reachCap: null,
       reachCount: null,
       competitivenessAssessed: false,
-      selectionBasis: "scientificFit, trainingFit; ties use stable names; evidence coverage is not a quality score",
+      selectionBasis: "researchQuestionFit, researchRouteContinuity; ties use stable names; display order is not a PI quality ranking",
     },
   };
 }
