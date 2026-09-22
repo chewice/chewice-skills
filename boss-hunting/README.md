@@ -26,11 +26,14 @@ Evaluator；`advisor-pipeline` 保留兼容。安装时复制完整 `skills/`，
 [国内外来源目录](skills/advisor-pipeline/references/medical-sources.md)、
 [Browser Use 策略](skills/advisor-pipeline/references/browser-research-policy.md)。
 目录按地区/任务给出入口、查询、字段、边界和回退，并注明本次实测/未复测范围。
-默认先用 GPT 宿主实际提供的内置搜索/网页浏览工具（如 `web.run` 或 `web_search`），
-按当前工具支持的动作查找并打开具体来源。内置能力不足时回退官方静态页/API；动态
-JS 表单才按需使用已有交互式浏览器。`backend` 默认 `builtin_web`，旧 `auto` 同样
-内置优先，用户显式选择的后端保留。enabled 不自动安装工具、连接付费云或上传CV。
-内置网页检索记录实际工具/提供方和 `static_web`，不冒称安装或实测了 Browser Use。
+默认先用宿主实际提供的联网工具：GPT/Codex 宿主的 `web.run`、`web_search` 等内置搜索与
+网页阅读，或 Wisp Science 的浏览器工具组（`web_open_tab`、`web_scan`、`web_execute_js`、
+`web_screenshot`、`web_save_assets`），按当前工具支持的动作查找并打开具体来源。内置
+能力不足时回退官方静态页/API；动态 JS 表单才按需使用已有交互式浏览器。`backend` 默认
+`builtin_web`，旧 `auto` 同样内置优先，用户显式选择的后端保留。enabled 不自动安装工具、
+连接付费云或上传 CV。内置网页检索记录实际工具/提供方和 `static_web`；Wisp Science
+浏览器属交互式浏览器，记录 `browser` 与 `retrieval_provider: wisp_science_browser`，
+两者都不冒称安装或实测了 Browser Use。
 深查候选与维度确认保留，医学公开资源调查不自动下载社区资料。
 
 最终导师调研结果以 **HTML** 为主，按学科领域/研究方向命名，例如

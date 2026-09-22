@@ -30,9 +30,14 @@ read [browser-research-policy.md](references/browser-research-policy.md).
 Discover actual host tools and default to built-in web/search capabilities
 (`backend: builtin_web`; legacy `auto` is also built-in-first). Follow the real
 schema for search/open/find/link access; do not assume every host has all actions.
-Official static pages/APIs are fallback routes, and existing interactive browsers
-are for dynamic JS/forms that need them. Record built-in retrieval as `static_web`
-with the real tool/provider; this does not claim Browser Use is installed.
+Under Wisp Science, its host browser tools (`browser_setup`, `web_open_tab`,
+`web_scan`, `web_execute_js`, `web_screenshot`, `web_save_assets`) are the
+interactive-browser route; connect with `browser_setup` first and stop for human
+verification when the host asks for it. Official static pages/APIs are fallback
+routes, and existing interactive browsers are for dynamic JS/forms that need them.
+Record built-in retrieval as `static_web` and Wisp Science browser retrieval as
+`browser` with `retrieval_provider: wisp_science_browser`; this does not claim
+Browser Use is installed.
 Public research is allowed within scope, but installs, paid services and deep
 investigation confirmation remain separate. Preserve an explicitly chosen backend.
 

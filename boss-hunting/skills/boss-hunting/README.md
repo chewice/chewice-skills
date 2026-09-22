@@ -11,7 +11,7 @@
 - 可加载本地 Skills、读写项目文件并检索公开网页的 Agent，例如 Codex 或 Claude Code。
 - 完整的同级技能集合，尤其是 `advisor-pipeline` 及 Finder、Detective、Evaluator；安装时复制整个 `skills/`。
 - [项目 Pixi 环境](../../pixi.toml)：默认平台为 `linux-64`，Windows 使用 WSL；Node.js `>=22.13,<23` 用于初始化和导出。该环境同时声明 Python `>=3.11,<3.13`，用于按需社区同步。
-- 事实核验默认先用 GPT 宿主实际暴露的内置搜索/网页工具，按真实 schema 执行。官方静态页/API作为回退，动态JS表单才使用已有交互浏览器；没有固定必装的 Browser Use 服务。
+- 事实核验默认先用宿主实际暴露的联网工具，按真实 schema 执行：GPT/Codex 宿主的内置搜索与网页阅读（`web.run`、`web_search`），或 Wisp Science 的浏览器工具组（`browser_setup`、`web_open_tab`、`web_scan`、`web_execute_js`、`web_screenshot`、`web_save_assets`）。官方静态页/API 作为回退，动态 JS 表单才使用已有交互浏览器。Wisp Science 浏览器复用真实 Chrome 会话，证据记 `retrieval_method: browser` 与 `retrieval_provider: wisp_science_browser`；没有固定必装的 Browser Use 服务。
 
 直接使用 Skills 不要求安装 Web 的 npm 包、R 或 Excel 库。社区 PDF 检索、RP 编译等依赖仅在进入相应阶段时需要，见 [完整依赖与安装说明](../../README.md#按使用方式准备依赖)。
 

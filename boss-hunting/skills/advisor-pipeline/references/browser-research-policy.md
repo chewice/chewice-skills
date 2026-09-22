@@ -1,6 +1,6 @@
 # 内置网页工具与 Browser Use：公开调查权限和实际能力
 
-在用户已选定的导师检索范围内，默认先使用 GPT 宿主实际暴露的内置搜索/网页浏览工具，例如 `web.run`、`web_search` 或宿主返回的等效工具。仅在动态 JS 表单等确实需要交互时，才使用已可用的 Browser Use、MCP 浏览器或等效交互能力。公开网页查询、筛选、翻页、展开、截图及必要合法公开文件下载在任务范围内可执行；普通公开点击不逐次询问许可。宿主审批、沙箱、站点规则继续有效；深查候选/维度确认与网页工具权限是独立 gate。
+在用户已选定的导师检索范围内，默认先使用宿主实际暴露的检索工具：GPT/Codex 宿主的内置搜索与网页阅读（例如 `web.run`、`web_search` 或宿主返回的等效工具），Wisp Science 宿主则使用其浏览器工具组（`web_open_tab`、`web_scan`、`web_execute_js`、`web_screenshot` 等）。仅在动态 JS 表单等确实需要交互时，才使用已可用的 Browser Use、MCP 浏览器或等效交互能力。公开网页查询、筛选、翻页、展开、截图及必要合法公开文件下载在任务范围内可执行；普通公开点击不逐次询问许可。宿主审批、沙箱、站点规则继续有效；深查候选/维度确认与网页工具权限是独立 gate。
 
 ## 每次运行的能力发现
 
@@ -26,6 +26,33 @@
 内置网页工具联网成功只证明该工具与本次动作可用，不证明安装了 Browser Use，
 也不证明动态 JS 表单或交互浏览器 E2E 已通过。
 
+## Wisp Science 宿主浏览器通道
+
+Wisp Science 不提供内置网页搜索，联网能力来自宿主自带的浏览器桥接工具。按其真实
+schema 调用，并映射到本策略已有的动作：
+
+| 工具 | 用途 | 记录方式 |
+| --- | --- | --- |
+| `browser_setup` | 只检查/连接浏览器会话，不检索 | 不产生证据 |
+| `web_open_tab` | 打开确切 URL | 记 `final_url`、`page_title` |
+| `web_scan` | 读取当前标签页可见文本与可操作元素 | 主要读取路径，记 `page_locator` |
+| `web_execute_js` | 页内只读脚本：翻页、筛选、展开、读取 DOM | 只做公开只读操作 |
+| `web_screenshot` | 页面或元素截图 | 视觉核验；只证明当时显示 |
+| `web_save_assets` | 经浏览器会话下载公开文件到项目缓存 | 仍受本文件下载格式/大小/路径校验 |
+| `web_agent_send`/`web_agent_wait`/`web_agent_read` | 驱动浏览器中已登录的对话式检索页 | 会话级搜索结果，属搜索层 |
+
+这些工具复用用户日常 Chrome 配置与登录态，因此是交互式浏览器而不是内置网页读取：
+证据一律记 `retrieval_method: browser`、`retrieval_provider: wisp_science_browser`，
+`retrieval_tool` 为实际调用的工具名（例如 `web_scan`），不得记成 `static_web` 或
+`gpt_builtin_web`。共享辅助函数同样按此区分校验。
+
+运行顺序：先 `browser_setup` 确认会话状态；未连接时不编造访问记录，按静态/官方来源
+回退，并把这部分留作未完成缺口。用 `web_open_tab` 打开确切 URL 后用 `web_scan` 读取，
+确需交互时才 `web_execute_js`；关键词/页内定位失败不等于站点查无。宿主报告需要人工验证
+（human_intervention）时立即停止自动化，把页面交回用户，不代替用户完成验证码、登录、
+授权或同意；不输入密码，不读取或导出 cookies，不把个人登录态用于范围外访问或需单独
+授权的机构资源。`web_agent_*` 返回的是会话级回答与引用，不能作为已核实事实。
+
 ## 共享运行辅助函数
 
 [scripts/browser-research.mjs](../scripts/browser-research.mjs) 提供可复用的
@@ -33,7 +60,7 @@
 `researchEvidence(observation)` 和 `savePublicResearchDownload({projectRoot, filename, data, contentType})`。
 调用方须传入实际 callable 工具。发现结果区分 `builtinWeb` / `builtinWebTools` 和
 `interactiveBrowser` / `browserTools`（`browser` 是交互浏览器的兼容别名），另列
-`staticTools`、`requestedBackend`、`preferredBackend`。`available` 只表示发现候选能力，
+`staticTools`、`browserProvider`（Wisp Science 工具为 `wisp_science_browser`）、`requestedBackend`、`preferredBackend`。`available` 只表示发现候选能力，
 返回仍为 `liveTested: false`；不会由文档或后端偏好生成成功访问记录。
 动作核验区分公开只读 POST 与外部变更；证据函数防止空框架/403被标为已核验或查无；
 下载辅助函数限制类型/大小、安全文件名和项目内 `outputs/browser-cache`，不会自动访问网络。
@@ -68,7 +95,7 @@
 
 ```text
 retrieval_method: static_web | official_api | browser
-retrieval_provider: 实际提供方，GPT宿主内置工具用gpt_builtin_web
+retrieval_provider: 实际提供方，GPT宿主内置工具用gpt_builtin_web，Wisp Science浏览器工具用wisp_science_browser
 retrieval_tool: 实际调用的工具名，例如web__run；不得按文档猜测
 accessed_at: ISO-8601
 final_url: 实际最终记录URL
@@ -82,8 +109,9 @@ snapshot_path: 可选的项目内本地路径，默认不提交
 
 通过宿主内置搜索、页面打开、页内查找或链接访问获得的证据记录
 `retrieval_method: static_web`，另存 `retrieval_tool` 和 `retrieval_provider`；使用官方 API 才记
-`official_api`，实际使用交互式浏览器才记 `browser`。内置工具的名称包含“浏览”或
-支持PDF截图不改变此区分。不得用项目backend的偏好代替实际检索方法。
+`official_api`，实际使用交互式浏览器才记 `browser`；Wisp Science 浏览器工具属于交互式
+浏览器，一律记 `browser` 和 `retrieval_provider: wisp_science_browser`。内置工具的名称
+包含“浏览”或支持PDF截图不改变此区分。不得用项目backend的偏好代替实际检索方法。
 
 再按共享证据契约附具体主张、实体、支持字段、来源更新时间/批次、片段、读取深度、状态和同源分组。`partial`/`blocked` 绝不代表完整搜索或查无记录。下载/截图能证明当时页面显示，不自动证明该主张正确、资源可用或申请开放。
 
@@ -117,6 +145,12 @@ snapshot_path: 可选的项目内本地路径，默认不提交
 - NIH RePORTER 搜索页仅返回 JS 空壳，记 `partial` / `not_checked`。
 - PMC 链接出现 reCAPTCHA，记 `blocked` / `inaccessible`，没有绕过访问控制。
 - 两次 PDF `screenshot` 仅得到结果引用，没有可检查图像；没有将截图视觉核验标为通过。
+
+同日在 Wisp Science 宿主上另做了一次同样有限的检查：`browser_setup` 报告共享浏览器
+会话已连接，`web_open_tab` 打开 PubMed 用户指南，`web_scan` 读回可见正文（页面自述
+Last update: September 1, 2026）。这只证明该宿主的打开与文本读取可用；`web_execute_js`、
+`web_screenshot`、`web_save_assets` 与 `web_agent_*` 本次未执行，动态表单、筛选、分页和
+下载仍未验证，也没有新增凭据、登录或个人会话配置。
 
 初次文档核验另读取了 Browser Use quickstart 和 Agent Skills 规范。上述有限内置
 工具检查不证明目录内所有网站可达，也不是全面 E2E；独立 Browser Use/交互浏览器

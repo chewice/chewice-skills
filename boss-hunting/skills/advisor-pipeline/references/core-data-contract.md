@@ -181,8 +181,11 @@ static_web|official_api|browser`, `final_url`, `page_title`,
 Record the actual `retrieval_provider` and `retrieval_tool` when a tool is used.
 GPT host built-in search/open/find/link access is `retrieval_method: static_web`,
 `retrieval_provider: gpt_builtin_web`, with its real tool name (for example,
-`web__run` only when that is the tool actually invoked). `official_api` and
-`browser` remain for actual API and interactive-browser use respectively.
+`web__run` only when that is the tool actually invoked). Wisp Science host browser
+tools (`web_open_tab`, `web_scan`, `web_execute_js`, `web_screenshot`,
+`web_save_assets`, `web_agent_*`) are an interactive browser:
+record `retrieval_method: browser`, `retrieval_provider: wisp_science_browser` and
+the real tool name. `official_api` remains for actual API use.
 Capability discovery is not a retrieval; do not create successful evidence or
 claim Browser Use installation from a backend preference or callable tool alone.
 Store only actual observations. `partial`/`blocked` extraction cannot establish

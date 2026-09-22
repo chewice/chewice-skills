@@ -20,14 +20,18 @@ disease/mechanism, research approach and training goals; regions and applicable
 entry routes; discovery and evidence comparison. Do not infer existing experience
 from desired training. Exploration does not require a CV or an invented program.
 
-Default to the actual GPT host's built-in web/search tools (`web.run`,
-`web_search`, or an exposed equivalent), following their current schema. Use
-official static pages/APIs as fallback and an already available interactive
-browser only when dynamic JS/forms require it. Follow the pipeline capability
-detection and evidence rules; built-in web retrieval is `static_web`, not proof
-that Browser Use is installed. Public browsing does not
-authorize deep investigation of unconfirmed targets, personal uploads, messages,
-applications, installations or paid services. Application materials retain their
+Default to the actual host's web tools, following their current schema: a GPT
+host's built-in web/search tools (`web.run`, `web_search`, or an exposed
+equivalent), or under Wisp Science its browser tools (`browser_setup`,
+`web_open_tab`, `web_scan`, `web_execute_js`, `web_screenshot`,
+`web_save_assets`). Use official static pages/APIs as fallback and an already
+available interactive browser only when dynamic JS/forms require it. Follow the
+pipeline capability detection and evidence rules; built-in web retrieval is
+`static_web`, and Wisp Science browser retrieval is `browser` with
+`retrieval_provider: wisp_science_browser` — neither proves that Browser Use is
+installed.
+Public browsing does not authorize deep investigation of unconfirmed targets,
+personal uploads, messages, applications, installations or paid services. Application materials retain their
 original exact-target, real-CV and explicit-confirmation gates.
 
 Use the repository's Pixi environment (`platforms = ["linux-64"]`) for executable

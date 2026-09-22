@@ -53,6 +53,34 @@ test("built-in web discovery accepts exact callable host names, not MCP names or
   assert.equal(discoverResearchCapabilities().preferredBackend, "unavailable");
 });
 
+test("Wisp Science host browser tools are an interactive browser, never built-in web", () => {
+  const wispTools = Object.fromEntries(["browser_setup", "web_open_tab", "web_scan", "web_execute_js",
+    "web_screenshot", "web_save_assets", "web_agent_send", "web_agent_wait", "web_agent_read"]
+    .map((name) => [name, () => { throw new Error("Discovery must not call tools"); }]));
+  const found = discoverResearchCapabilities(wispTools);
+  assert.equal(found.builtinWeb, "unavailable");
+  assert.deepEqual(found.builtinWebTools, []);
+  assert.equal(found.browser, "available");
+  assert.equal(found.interactiveBrowser, "available");
+  assert.equal(found.browserProvider, "wisp_science_browser");
+  assert.deepEqual(found.browserTools, Object.keys(wispTools).filter((name) => name !== "browser_setup"));
+  assert.equal(found.preferredBackend, "browser");
+  assert.equal(found.liveTested, false);
+  assert.equal(discoverResearchCapabilities(wispTools, { backend: "builtin_web" }).preferredBackend, "browser");
+  assert.equal(discoverResearchCapabilities(wispTools, { backend: "wisp_science_browser" }).preferredBackend, "browser");
+  // browser_setup reports connection state only; declarations and generic tools stay separate.
+  assert.equal(discoverResearchCapabilities({ browser_setup() {} }).browser, "unavailable");
+  assert.equal(discoverResearchCapabilities({ browser_setup() {} }).browserProvider, null);
+  assert.equal(discoverResearchCapabilities({ browser_setup: "connected", web_scan: "available" }).browser, "unavailable");
+  assert.equal(discoverResearchCapabilities({ browser_click() {} }).browserProvider, "host_interactive_browser");
+  assert.equal(researchEvidence({ ...baseObservation, retrieval_tool: "web_scan",
+    retrieval_provider: "wisp_science_browser" }).retrieval_method, "browser");
+  assert.throws(() => researchEvidence({ ...baseObservation, retrieval_method: "static_web",
+    retrieval_tool: "web_scan" }), /must use browser/);
+  assert.throws(() => researchEvidence({ ...baseObservation, retrieval_method: "static_web",
+    retrieval_provider: "wisp_science_browser" }), /must use browser/);
+});
+
 test("auto prefers built-in web while requested backends and interaction needs use available tools", () => {
   const hostTools = { web__run() {}, http_fetch() {}, browser_click() {} };
   assert.equal(discoverResearchCapabilities(hostTools, { backend: "auto" }).preferredBackend, "builtin_web");

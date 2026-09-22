@@ -5,6 +5,12 @@ import { basename, extname, resolve, sep } from "node:path";
 // These helpers inspect host-provided capabilities; they never install tools,
 // attach personal sessions, or infer availability from project/allowed-tools text.
 const builtinWebToolNames = new Set(["web__run", "web.run", "web_run", "web_search", "web_search_preview"]);
+// Wisp Science drives a real Chrome session through these bridge tools, so they are
+// an interactive browser, never a stateless built-in web fetch. browser_setup only
+// reports connection state and establishes no retrieval capability by itself.
+const wispScienceBrowserTools = new Set(["web_open_tab", "web_scan", "web_execute_js", "web_screenshot",
+  "web_save_assets", "web_agent_send", "web_agent_wait", "web_agent_read"]);
+const wispScienceSetupTools = new Set(["browser_setup"]);
 
 export function discoverResearchCapabilities(hostTools = {}, { backend = "builtin_web", requiresInteraction = false } = {}) {
   const names = Object.entries(hostTools).filter(([, tool]) => typeof tool === "function")
@@ -12,21 +18,27 @@ export function discoverResearchCapabilities(hostTools = {}, { backend = "builti
   // Only exact, host-owned callable names establish the built-in capability.
   // MCP names and documentation/configuration text do not establish provenance.
   const builtinWebTools = names.filter((name) => builtinWebToolNames.has(name));
-  const browserTools = names.filter((name) => /browser|playwright|puppeteer/i.test(name) &&
-    /navigate|search|click|snapshot|screenshot|evaluate|read|extract|html|tabs|browser_use|(?:^|_)browser$/i.test(name) &&
-    !/open_in_codex|(?:^|_)(?:install|configure|config|upload|send|purchase|create_account)(?:_|$)/i.test(name));
+  const browserTools = names.filter((name) => wispScienceBrowserTools.has(name) ||
+    (/browser|playwright|puppeteer/i.test(name) &&
+      /navigate|search|click|snapshot|screenshot|evaluate|read|extract|html|tabs|browser_use|(?:^|_)browser$/i.test(name) &&
+      !/open_in_codex|(?:^|_)(?:install|configure|config|upload|send|purchase|create_account)(?:_|$)/i.test(name)));
   const staticTools = names.filter((name) => !builtinWebTools.includes(name) && !browserTools.includes(name) &&
     /web.*(run|fetch|search)|fetch|http/i.test(name));
   const requestedBackend = backend || "builtin_web";
-  const wantsBrowser = requiresInteraction || ["browser", "browser_use", "host-browser", "interactive_browser"].includes(requestedBackend) || browserTools.includes(requestedBackend);
+  const wantsBrowser = requiresInteraction ||
+    ["browser", "browser_use", "host-browser", "interactive_browser", "wisp_science_browser"].includes(requestedBackend) ||
+    browserTools.includes(requestedBackend);
   const wantsStatic = ["static_web", "official_api"].includes(requestedBackend) || staticTools.includes(requestedBackend);
   const order = wantsBrowser ? ["browser", "builtin_web", "static_web"]
     : wantsStatic ? ["static_web", "builtin_web", "browser"] : ["builtin_web", "static_web", "browser"];
   const available = { builtin_web: builtinWebTools.length, static_web: staticTools.length, browser: browserTools.length };
   const preferredBackend = order.find((name) => available[name]) || "unavailable";
+  const wispHost = names.some((name) => wispScienceBrowserTools.has(name) || wispScienceSetupTools.has(name));
   return { builtinWeb: builtinWebTools.length ? "available" : "unavailable", builtinWebTools,
     interactiveBrowser: browserTools.length ? "available" : "unavailable",
-    browser: browserTools.length ? "available" : "unavailable", browserTools, staticTools,
+    browser: browserTools.length ? "available" : "unavailable", browserTools,
+    browserProvider: browserTools.length ? (wispHost ? "wisp_science_browser" : "host_interactive_browser") : null,
+    staticTools,
     requestedBackend, preferredBackend, liveTested: false, fallback: "static_web_or_official_api",
     limitations: browserTools.length ? [] : ["动态表单与渲染内容尚未通过交互浏览器核验"] };
 }
@@ -57,6 +69,8 @@ export function researchEvidence(observation) {
   }
   if ((builtinWebToolNames.has(row.retrieval_tool) || row.retrieval_provider === "gpt_builtin_web") && row.retrieval_method !== "static_web")
     throw new Error("GPT built-in web evidence must use static_web, not interactive browser");
+  if ((wispScienceBrowserTools.has(row.retrieval_tool) || row.retrieval_provider === "wisp_science_browser") && row.retrieval_method !== "browser")
+    throw new Error("Wisp Science browser evidence must use browser, not a static route");
   if (!Number.isFinite(Date.parse(row.accessed_at))) throw new Error("Actual accessed_at required");
   const url = new URL(row.final_url || row.source_url);
   if (!["http:", "https:"].includes(url.protocol)) throw new Error("Public source URL required");
