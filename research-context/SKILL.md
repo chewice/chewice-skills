@@ -1,6 +1,6 @@
 ---
 name: research-context
-description: 维护科研项目的短上下文入口与可追溯研究记录，用于接管或恢复项目、维护或精简 context.md、长期项目管理、总结与交接研究上下文。支持按需读取、超长记录整理及证据核验；不负责环境构建、分析脚本风格或正式报告。
+description: 按请求生成或更新科研项目 AGENTS.md，维护短上下文入口与可追溯研究记录。用于项目指令初始化、接管或恢复项目、维护或精简 context.md、长期项目管理、总结与交接。支持按需读取、超长记录整理及证据核验；不负责环境构建、分析脚本风格或正式报告。
 ---
 
 # 科研上下文
@@ -18,6 +18,15 @@ description: 维护科研项目的短上下文入口与可追溯研究记录，�
 
 ## 按需加载
 
+- 用户要求生成或更新项目 `AGENTS.md`：按下节生成规则使用 [`assets/AGENTS.md.template`](assets/AGENTS.md.template)。
 - 恢复、更新或总结上下文：读取 [`references/context.md`](references/context.md)。
 - 入口、主题或索引超预算，需要拆分归档：再读取 [`references/long-projects.md`](references/long-projects.md)。
 - 委派、交接或核验：读取 [`references/delegation.md`](references/delegation.md)。
+
+## 生成项目指令
+
+- 模板是生成起点，按用户约定和项目事实调整。沿用指定的指令位置，否则使用项目根 `AGENTS.md`；已有文件只合并授权内容，保留有效项目规则与例外，不整份覆盖。
+- 定向核对用户指定或项目既定的唯一上下文入口。把模板中的 `{{CONTEXT_ENTRY_RULE}}` 替换为包含实际项目相对路径的入口规则；路径以生成的 `AGENTS.md` 所在目录为基准，不迁移或重命名既有入口。
+- 只有请求包含建立上下文时才创建缺失的 `context.md`，位置与最小内容见 [`references/context.md`](references/context.md)。若仅生成指令且尚无入口，替换为“当前尚未建立上下文入口；继续有依据的工作，仅在用户要求建立上下文后创建”，不声称默认路径已经存在，不留下占位符。
+- `AGENTS.md` 保存稳定协作约定，研究进展、当前结果和下一步放入上下文。缺少具体项目资料时不虚构数据路径、分析方案或已批准决定。
+- 生成后检查入口和约束与项目一致。日常恢复或单独维护上下文不重建 `AGENTS.md`；不把本次模板审查变成每次生成的必经流程，也不自动安装模板引用的 Skill。

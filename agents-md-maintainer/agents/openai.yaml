@@ -1,0 +1,4 @@
+interface:
+  display_name: "AGENTS.md 维护"
+  short_description: "结合项目证据与适用的 OpenAI 模型指南，审查指令并提出最小修改"
+  default_prompt: "使用 $agents-md-maintainer 审查当前项目的 AGENTS.md，结合仓库证据和适用的 OpenAI 模型指南给出逐条建议与最小 diff，保留项目约束和授权边界，默认不修改文件。"

@@ -1,4 +1,4 @@
 interface:
   display_name: "科研上下文"
-  short_description: "维护有长度预算的上下文入口，按需恢复长期研究记录、证据与 Agent 交接"
-  default_prompt: "使用 $research-context 在已有项目中维护有长度预算的唯一 context.md 入口，按第一性原理与 Occam's razor 围绕当前问题按需加载研究记录、核验证据并保存恢复点；超长内容先保留依据再拆分，不默认搭建脚手架或生成正式报告。"
+  short_description: "按请求生成项目 AGENTS.md，维护有长度预算的上下文入口与科研交接"
+  default_prompt: "使用 $research-context 按当前请求生成或更新项目 AGENTS.md，或维护唯一 context.md 入口；结合项目实际路径和已有约定，按需读取研究记录、核验证据并保存恢复点。小型入口直接读取，超长内容先保留依据再拆分；不默认生成正式报告。"
