@@ -23,7 +23,7 @@ test("refresh status has visible pending and completion feedback", () => {
 
 test("reselecting a project no longer clears its saved CV presentation", () => {
   const selectProject = pageSource.match(
-    /function selectProject\([\s\S]*?\n  }\n\n  function hideProject/,
+    /function selectProject\([\s\S]*?\r?\n  }\r?\n\r?\n  function hideProject/,
   )?.[0] || "";
   assert.ok(selectProject);
   assert.doesNotMatch(selectProject, /setFileName|setFilePath|setUploadState/);
