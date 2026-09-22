@@ -70,6 +70,31 @@ schema 调用，并映射到本策略已有的动作：
 `allowPublicDownloads`，backend 默认 `builtin_web`；旧 `auto` 内置优先，用户显式指定的其他值保留。
 旧项目迁移不自动启用浏览/下载权限。backend只声明选用顺序，不安装工具、不提升权限；真实能力与权限仍以宿主和用户范围为准。
 
+## 凭据与来源四级降级
+
+凭据是可选加速器，不是运行前提。[scripts/credentials.mjs](../scripts/credentials.mjs) 按固定顺序解析：进程环境 → `BOSS_HUNTING_CREDENTIALS_FILE` → OS 用户配置文件（Windows `%APPDATA%\boss-hunting\credentials.env`；Linux/macOS `${XDG_CONFIG_HOME:-~/.config}/boss-hunting/credentials.env`），支持 `OPENALEX_API_KEY`、`NCBI_API_KEY`、`ORCID_CLIENT_ID`/`ORCID_CLIENT_SECRET`、`CINII_APP_ID`、`SEMANTIC_SCHOLAR_API_KEY`、`WOS_API_KEY`。**不扫描磁盘找 `.env`**，不让用户把 key 贴进对话；模板见 `config/credentials.example.env`，真实文件已在 `.gitignore`。
+
+对外只暴露状态词 `configured | unavailable | invalid | capability-limited`（`node scripts/credentials.mjs --check|--json`）。key 值不进 prompt、Subagent 输出、evidence、run 日志、HTML 或 Markdown；`merge_subagent_findings.mjs` 拒收含 secret 值的输出文件，`provider-capabilities.mjs` 拒写疑似含 secret 的 metadata。
+
+每个来源按 [scripts/provider-capabilities.mjs](../scripts/provider-capabilities.mjs) 的状态机选择路线，并写入 `runs/<run-id>/provider-capabilities.json`：
+
+```text
+认证 API 可用？          → authenticated_api
+匿名/无 key 官方 API 可用？ → anonymous_api
+官方公开网页可用？        → browser（Browser Use / 内置网页工具）
+否则                     → alternative_sources（其他权威来源）
+```
+
+运行模式 `api_enriched | hybrid | public_only | browser_fallback` 只描述本次实际路线。Browser fallback 追求"足够支持科学问题的证据"，不复现 API 的每个字段；所有 key 缺失时 Skill 仍以 `public_only` 启动并完成 public-only investigation。
+
+来源特例：
+
+- NCBI：key 缺失用匿名 E-utilities（低速率），**不改为抓取 PubMed 网页**。
+- CiNii/KAKEN：无 `CINII_APP_ID` 时用 CiNii Research / KAKEN 官方网站 Browser Use，如实记 `retrieval_method: browser`，不声称 API 等价。
+- Web of Science：`WOS_API_KEY` ≠ 完整 API 权限，web 订阅 ≠ API 权限；分层 `starter | researcher | expanded | limited | unavailable`，未探测前记 `unknown_until_probed`，不假定 expanded。API 不可用时不得用 Browser 假装拥有付费 API 数据；只有用户自有且已明确授权的合法网页访问才使用 WoS Web。
+- Google Scholar：只做 discovery / backcheck，不是权威来源；线索回到 PubMed、DOI/出版商、ORCID、当前机构或官方基金记录核实。遇 CAPTCHA/登录立即停止。
+- API（OpenAlex 等）暂时不可用属合法降级，`probe.authenticatedApi=false` 只记录真实观测；失败不解释为记录不存在。API 与官方网页的 affiliation 不一致时保留两条带时点的主张与 `conflict`，由 Main Agent 用当前官方机构页裁决。
+
 ## 操作边界
 
 | 操作 | 权限与要求 |

@@ -10,8 +10,8 @@ It requires no external website assets or browser package. Re-exporting reads
 local records and does not repeat the investigation.
 
 In the HTML comparison and each information section, place direct, concrete
-source links beside each study, resource, research grant, doctoral funding
-claim, training outcome, eligibility condition, deadline and comparison reason.
+source links beside each study, project record, collaborator, doctoral record,
+eligibility condition, deadline and comparison reason.
 Resolve each item's `sourceIds` / `source_ids` through the shared evidence
 records using the field-level rules in
 `../../advisor-pipeline/references/core-data-contract.md`. Show short linked
@@ -46,24 +46,36 @@ reach/match/safer quotas. `rank` is only `display_order`; `rankingMode` is
 - Real mapped `candidates` / `applicationRows` / `advisors` use the separate
   program comparison sheet. Application rows require `advisorProgramId`.
   One advisor with two real programs/intakes remains two rows.
-- Columns cover current role/homepage; disease/mechanism, research approach,
-  scientific question; scientific fit and desired training support; recent
-  studies; actual program, degree, intake, route, rotation and contact rules;
-  eligibility and opportunity; resource access levels; separate research
-  funding and doctoral funding; doctoral outcomes and sample limits; training
-  environment; unknowns, supported risks, next verification, sources and dates.
+- Columns (in order): 展示序号（非质量排名）, `advisor_id`, `advisorProgramId`,
+  导师姓名, 当前机构 / 院系 / 职位, 官方主页, 真实项目, 学位, 入学批次, 发现路径,
+  PI 角色置信 / Level, 证据充分度, 当前活跃度, 研究问题契合, 契合理由与证据,
+  主线连续性, 连续性理由, A 当前科研定位, A 博士指导关联, B 长期科学问题,
+  B 持续主题 / 新方向 / 近期转向, B 代表性工作（已核实角色）, C 核心合作者,
+  C 研究邻居, D 最新论文 / 预印本, D 公开项目记录 (title | id | funder | PI role
+  | period | status | amount unit), E 当前博士生, E 已毕业博士, E Graduate
+  Program (incl. emerging-PI note), 正式记录, 方向契合边界, 关键未知, 下一步核验,
+  项目/岗位路径, 申请资格, 招生机会, 硬条件状态与依据, 比较分组, 最后核验日期,
+  来源. There are no training-fit, resource, research-funding,
+  doctoral-funding, training-environment or success-rate columns; legacy
+  values in those removed keys are dropped by `normalizeMedicalCandidate`.
 - Exploration application fields say `本次未核验`. Missing numeric values are
   blank, never zero. Missing section results remain `not_checked`; selecting
   a section does not prove it was researched.
-- `evidenceProfile.scientificFit.status` is `strong`, `partial`, `adjacent`,
-  `mismatch`, or `insufficient_information`; `trainingFit.status` is
-  `supported`, `partial`, or `unknown`. Each includes reasons and source IDs.
-  Existing researched records use the `evidence_profile` projection spelling.
+- `evidenceProfile.researchQuestionFit.status` is `direct`, `partial`,
+  `adjacent`, `weak`, or `insufficient_information` (legacy `scientificFit`
+  is mapped strong→direct, mismatch→weak); `researchRouteContinuity.status`
+  is `sustained_core`, `active_emerging`, `new_expansion`,
+  `occasional_participation`, or `unclear`; `piRoleConfidence` is
+  `verified|probable|emerging|identity_unresolved` with `level A–D`;
+  `evidenceSufficiency` is `strong|adequate|sparse|conflicted`;
+  `currentActivity` is `active|recent_signal|unclear|apparently_inactive_in_checked_scope`.
+  Each block includes reasons and source IDs. Existing researched records use
+  the `evidence_profile` projection spelling.
 - `comparisonGroup` is `actionable`, `needs_verification`, `follow_up`, or
-  `not_applicable`. Sort by supported scientific/desired-training relevance,
-  then stable name. Evidence coverage and prior numeric scores do not sort.
-  Strong relevant sparse records stay pending; budget-deferred records are
-  distinct from explicit inapplicability.
+  `not_applicable`. Sort by research-question fit, then route continuity, then
+  stable name. Evidence coverage, citations, prior numeric scores and network
+  centrality do not sort. Strong relevant sparse records and emerging PIs stay
+  visible; budget-deferred records are distinct from explicit inapplicability.
 - Eligibility, hard constraints and open/closed claims require their matching
   `eligibilityEvidence` / `hardConstraintEvidence` / `opportunityEvidence`:
   verified status, source IDs and this exact `advisorProgramId`; an intake
@@ -87,8 +99,8 @@ Advisor-only exploration may export without a ranking and never contributes
 fake IDs to this material-selection artifact.
 The HTML exporter merges a current confirmed evaluation into the matching
 candidate by ID, preserving real advisor/program/degree/intake identity. Its
-updated research/training reasons, risks, unknowns and next actions appear in
-both the comparison and the advisor brief. Unknown or repeated evaluation IDs
+updated fit / continuity reasons, boundary, unknowns and next actions appear in
+both the overview table and the advisor's five-module section. Unknown or repeated evaluation IDs
 and identity changes are rejected. The comparison shows readable reasons and
 evidence links rather than raw source-ID objects.
 

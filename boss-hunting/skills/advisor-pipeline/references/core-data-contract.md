@@ -64,19 +64,21 @@ is `weighted_score` for general and `evidence_profile` for medical. This release
 does not expose a medical numerical-scoring mode. Keep `portfolioStrategy` for
 compatibility, but medical selection never uses its quotas or old scores.
 
-`medicalProfile` contains arrays `fields`, `diseasesOrMechanisms`,
-`researchQuestions`, `researchModes`, `researchObjects`, `currentSkills`,
-`desiredTraining`, `adjacentInterests`, `exclusions`, `regions`, and a
-`diseaseScope` string (`unasked`, `undecided`, `single_disease`, `multiple_diseases`,
-`pan_disease`, `mechanism_first`, or the user's more precise scope).
-Do not equate future training goals with current skills.
+`medicalProfile` (schema 10) contains arrays `fields`, `diseasesOrMechanisms`,
+`researchQuestions`, `researchObjects`, `researchScales`, `researchModes`
+(research paradigm), `methodPreferences`, `adjacentInterests`, `exclusions`,
+`regions`, and a `diseaseScope` string (`unasked`, `undecided`, `single_disease`,
+`multiple_diseases`, `pan_disease`, `mechanism_first`, or the user's more precise
+scope). `currentSkills` and `desiredTraining` were removed
+(`MEDICAL_PROFILE_REMOVED_KEYS`); migration deletes them and never carries them
+forward.
 
 `medicalProfile.inputStatus` tracks `fields`, `diseaseScope`, `researchModes`,
-`regions`, `desiredTraining`, and `exclusions`: `unasked`, `answered`, `undecided`,
-or `unrestricted`. Non-empty input becomes answered; only a user's explicit
-choice permits undecided/unrestricted. Three intake checks implement the four-step
-interaction: fields, disease/mechanism plus research mode, then region; step 4 is
-discovery. `medicalIntakeStatus(project)` reports the next missing step.
+`regions`, and `exclusions`: `unasked`, `answered`, `undecided`, or
+`unrestricted`. Non-empty input becomes answered; only a user's explicit choice
+permits undecided/unrestricted. `medicalIntakeStatus(project)` checks exactly
+three steps: fields → disease / mechanism / question → regions. Research
+paradigm, objects, scales and method preferences are optional and never block.
 
 `target` is the single authoritative region/school scope. At initial import only,
 an empty target is filled from `medicalProfile.regions`. Subsequently update
@@ -215,20 +217,53 @@ link does not by itself upgrade an unknown, stale, conflicting or blocked claim.
 
 ### Medical evidence comparison
 
-Candidates use `evidenceProfile`; advisor records use `evidence_profile`. The
-projection contains `scientificFit` (`status: strong|partial|adjacent|mismatch|
-insufficient_information`, `reasons`, `sourceIds`), `trainingFit`
-(`status: supported|partial|unknown`, `reasons`, `sourceIds`), `resources`,
-`researchFunding`, `doctoralFunding`, `doctoralOutcomes`, `keyUnknowns`,
-`supportedRisks`, and `nextVerification`. Facts retain source IDs and unknown
-states; resource access levels, research grants and student support stay separate.
-Training samples distinguish doctoral students from postdocs/residents/masters;
-unknown denominators do not justify outcome rates.
+Candidates use `evidenceProfile`; advisor records use `evidence_profile`
+(camelCase or snake_case keys are both accepted by `normalizeMedicalEvidenceProfile`).
+The projection contains:
+
+- `researchQuestionFit` `{status: direct|partial|adjacent|weak|insufficient_information, reasons, sourceIds}`
+  (legacy `scientificFit` statuses are mapped: strong→direct, mismatch→weak).
+- `researchRouteContinuity` `{status: sustained_core|active_emerging|new_expansion|occasional_participation|unclear, reasons, sourceIds}`.
+- `piRoleConfidence` `{status: verified|probable|emerging|identity_unresolved, level: A|B|C|D, reasons, sourceIds}`.
+- `evidenceSufficiency: strong|adequate|sparse|conflicted`; `currentActivity: active|recent_signal|unclear|apparently_inactive_in_checked_scope`.
+- `identity` (current institution / department / position, official profile URL,
+  research positioning, doctoral supervision link, name variants, identifiers,
+  `affiliationAsOf`).
+- `researchMainline` (`longTermQuestion`, `continuingThemes`, `newDirections`,
+  `researchObjects`, `methods`, `recentShift`, `participationOnlyWorks`,
+  `representativeWorks[{title, year, venue, doi, url, verifiedRole, relationToMainline, isPreprint, sourceIds}]`,
+  `backSearchWindow`).
+- `collaborationNetwork` (`depth: 1`, `coreCollaborators[]`,
+  `edges[{type: coauthorship|shared_project|shared_grant|shared_trial, target, count, years, sourceIds}]`,
+  `researchNeighbors[{type: citation|co_citation|bibliographic_coupling|semantic_similarity|related_papers}]`,
+  `heuristics`).
+- `latestSignals` (`latestPapers`, `preprints`,
+  `projects[{title, projectId, fundingBody, piRole, period, status, amount, amountUnit, amountBasis, source, sourceIds}]`,
+  `registries`, `trials`).
+- `doctoralTrajectory` (`currentDoctoral[]`, `formerDoctoral[]` with
+  supervision evidence / degree or year / topic / outputs / first destination /
+  latest public role / information date, `graduateProgram`, `emergingPiNote`,
+  `sampleLimitation`).
+- `formalRecords[]`, `fitBoundary`, `keyUnknowns[]`, `nextVerification[]`.
+
+Every sub-item carries `sourceIds` into shared evidence. Removed and never
+projected: `trainingFit`, `resources`, `researchFunding`, `doctoralFunding`,
+`doctoralOutcomes`, `trainingEnvironment`, `supportedRisks`, `overallScore`,
+`qualityScore`, `mentoringSuccess`, `placementRate` (`REMOVED_MEDICAL_PROFILE_KEYS`).
+Older stored records keep these keys untouched. Doctoral samples distinguish
+doctoral students from postdocs / residents / masters; no graduation, placement
+or success rate is ever computed.
+
+Advisor records additionally carry `pi_evidence_level: A|B|C|D`,
+`discovered_via: research_seed|map_seed|collaboration|research_neighbor|official_roster|unknown`,
+`network_round`, `back_search {window, sourceIds}` and, after a merge,
+`source_task_ids[]`.
 
 In medical mode `fit`, `profileMatch`, `overallMatch` are null;
-`competitiveness` is unknown. Scientific/explicit training fit may prioritize
-research, never source count, prestige or a reach quota. Stable tied order is a
-display order, not a quality rank. Strong but sparse evidence stays pending.
+`competitiveness` is unknown. Display order is `researchQuestionFit` →
+`researchRouteContinuity` → stable name; it is never a PI quality ranking and
+citations, h-index, prestige, grant totals and network centrality do not
+participate. Strong but sparse evidence stays pending.
 
 To exclude an exact opportunity for a hard constraint, ineligibility or closure,
 use the applicable `hardConstraintEvidence`, `eligibilityEvidence`, or
@@ -309,6 +344,20 @@ they remain `unknown` when the route or opening cannot be established.
   "source_ids": []
 }
 ```
+
+## Run-local files (medical)
+
+`runs/<run-id>/` holds per-run, non-authoritative material:
+
+- `provider-capabilities.json` — routes, run mode and credential status words
+  written by `provider-capabilities.mjs`; never secret values.
+- `subagents/<task_id>.json` — subagent outputs (schema in
+  investigation-contract.md); only the merge script reads them into `outputs/`.
+- `merge-report.json` — validation errors, duplicates, conflicts, gaps and
+  dropped removed fields for that merge.
+
+Evidence statuses are `verified`, `partial`, `not_found`, `not_checked`,
+`inaccessible`, `conflict`, `stale`, `not_applicable` (`EVIDENCE_STATUSES`).
 
 ## Cache and freshness
 

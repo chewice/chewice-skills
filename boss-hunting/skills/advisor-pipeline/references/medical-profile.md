@@ -1,95 +1,114 @@
-# 医学配置：四步交互与公开证据
+# 医学配置：三步输入、Seeds → PI 验证 → 合作网络 → 五模块深查
 
-适用于 `domainProfile: medical`。沿用同一项目契约与 Finder → Detective → Evaluator，不另建数据库。网站路由见 [medical-sources.md](medical-sources.md)，浏览器执行见 [browser-research-policy.md](browser-research-policy.md)。开发/修改 Skill 本身时不运行以下问卷或搜索。
+适用于 `domainProfile: medical`。沿用同一项目契约与 Finder → Detective → Evaluator，不另建数据库。来源能力注册表见 [medical-sources.md](medical-sources.md)，凭据/降级与浏览器执行见 [browser-research-policy.md](browser-research-policy.md)。开发/修改 Skill 本身时不运行以下问卷或搜索。
 
 ## 两种模式
 
 | 模式 | 最低输入 | 结论边界 |
 | --- | --- | --- |
-| `discovery` 方向探索 | 医学领域、疾病/机制及研究方式可明确未定、地区可明确不限 | 无 CV 可开始；可比较方向、训练与真实导师线索；不得判断个人竞争力、资格全部通过或录取概率 |
+| `discovery` 方向探索 | 医学领域、疾病/机制/科学问题、目标地区（可明确不限） | 无 CV、成绩、论文或申请者能力即可开始；产出导师级 Evidence Profile 与五模块调研；不判断个人竞争力、资格全部通过或录取概率 |
 | `application` 申请筛选 | 前述画像、目标学位与批次、资金/其他硬约束、与条件有关的真实背景 | 可用真实 CV 或足够的结构化背景；只核对有依据的条件，缺失项为 `needs_confirmation` |
 
-结构化背景写入 `applicantBackground`，标明 `source` 为 `self_reported`、`documented` 或 `not_provided`，保存 `education`、`researchExperience`、`qualifications`、`notes`。自述不能伪装成外部验证。只索取会影响当前条件判断的背景。RP/套磁信继续执行原真实 CV、姓名、确切导师—项目与材料确认条件。
+结构化背景写入 `applicantBackground`，标明 `source` 为 `self_reported`、`documented` 或 `not_provided`。自述不能伪装成外部验证。只索取会影响当前条件判断的背景。RP/套磁信继续执行原真实 CV、姓名、确切导师—项目与材料确认条件。
 
-## 第一步：医学领域
+## 三步输入
 
-只补问未提供的信息。复用对话和 `project.json` 已确认内容；一次完整输入不拆成重复问答。询问医学/生物医学领域（可多选）：精神、神经、肿瘤、血液、免疫、骨科、基础医学、公共卫生或其他交叉方向。不用所在科室代替研究方向，允许非医院团队。
+只补问未提供的信息；复用对话和 `project.json` 已确认内容；一次完整输入不拆成重复问答。`medicalIntakeStatus` 只检查这三步，`researchModes` 等可选项从不阻塞。
 
-`medicalProfile.fields` 保存领域，`inputStatus` 区分 `unasked`、`answered`、`undecided`、`unrestricted`。空值不是用户已明确未定/不限。
+1. **医学领域** `medicalProfile.fields`（可多选）：精神、神经、肿瘤、血液、免疫、骨科、基础医学、公共卫生或其他交叉方向。不用所在科室代替研究方向，允许非医院团队。
+2. **疾病/机制/科学问题** `diseaseScope` / `diseasesOrMechanisms` / `researchQuestions`：单病种、多病种、泛癌/泛疾病、机制优先或未定；病因、机制、分型、治疗反应、预后、预防、方法开发或未定。保留"泛癌"，不强迫改成单病种。
+3. **目标地区** `target`（权威字段）→ `medicalProfile.regions` 派生：大陆、香港、台湾、美国、澳大利亚、日本、欧盟/具体欧洲国家、其他或不限，可多选。宽泛欧洲探索需报告实际覆盖国家；英国、瑞士各走其国家来源。
 
-## 第二步：疾病/机制、研究方式和训练
+可选、不阻塞：`researchObjects`（物种/组织/人群/数据类型）、`researchScales`（分子/细胞/个体/群体）、`researchModes`（研究范式：临床队列/试验、实验机制、计算与数据、群体/方法学）、`methodPreferences`（希望研究中出现的方法，不是已有能力）、`adjacentInterests`、`exclusions`。
 
-依次补齐影响发现范围的内容；用户已给出则直接整理：
+`inputStatus` 区分 `unasked`、`answered`、`undecided`、`unrestricted`；空值不是用户已明确未定/不限。**不再收集** `currentSkills`、`desiredTraining`；schema 10 迁移时删除旧值。
 
-1. `diseaseScope` / `diseasesOrMechanisms`：单病种、多病种、泛癌/泛疾病、机制优先或未定。保留“泛癌”，不强迫改成单病种。
-2. `researchQuestions`：病因、机制、分型、治疗反应、预后、预防、方法开发或未定。
-3. `researchModes`：临床队列/试验、实验机制、计算与数据、群体/流行病学/统计方法，可组合。
-4. `desiredTraining`、`adjacentInterests` 与 `hardConstraints`：希望学习什么、可接受的相邻方向、明确排除什么。
+申请模式补 `degree`、`season`、资金底线及必要背景。核实研究型 PhD/DPhil、临床专业/职业训练、联合培养的区别；医院主任、教授或研究所职位不证明博士指导资格。
 
-`currentSkills` 只记录已有能力，愿望只进 `desiredTraining`；暂不会某项方法，不排除提供相应训练的项目。物种、组织、人群、数据类型、必需方法仅在会改变检索时补问。不默认单细胞、组学、动物实验、人脑或精神疾病，不要求先写完整博士课题。
+## 发现流程：先宽后窄
 
-向用户展示紧凑画像：领域；疾病/机制；科学问题；研究方式；已有能力或未提供；希望训练；相邻方向；硬性排除。
+```text
+科学问题 → Seeds（并行按子方向）→ PI 提取 → 身份消歧（Level A–D）→ 5 年回查
+→ Validated PI 池 → 合作网络扩展（≤2 轮）→ 饱和判断 → Shortlist（展示顺序）→ 五模块深查
+```
 
-## 第三步：地区与申请入口
+### Seeds
 
-先选地区再发现导师：大陆、香港、台湾、美国、澳大利亚、日本、欧盟/具体欧洲国家、其他或不限，均可多选。`target` 是地域范围的权威字段，`medicalProfile.regions` 由其归一化派生；不要分别维护两个范围。宽泛欧洲探索需报告实际覆盖国家；英国、瑞士各走其国家来源，不假定欧盟目录完整覆盖。
+按子方向并行产生两类种子；由 Seed Scouts 完成，Main Agent 规划子方向：
 
-申请模式补 `degree`、`season`、资金底线及必要背景。只有官方资格条款需要时才问申请身份；不从姓名、语言、所在地猜国籍、居留、学费身份。
+- **Map Seeds**：综述、指南、共识。只用于概念版图、术语与子方向划分，**不直接产生 PI**；一篇热门综述不能使其作者成为核心 PI（T19）。
+- **Research Seeds**：近五年原创研究（默认窗口按运行日期生成，参数不是质量标准）。从 Research Seeds 提取 PI 候选。
 
-核实研究型 PhD/DPhil、临床专业/职业训练、联合培养的区别。读具体项目条款，不因 `Clinical`/`MD`/医学院名称推断执业资格。医院主任、教授或研究所职位不证明博士指导资格。导师支持、委员会、岗位、结构化培养按官方流程分类；轮转单独记录。项目、奖学金、岗位截止日分别保留批次、时区与来源。
+覆盖 + 饱和停止：每个子方向至少一组 Research Seeds；当新查询不再产生新 PI 或新子方向时停止，不凑数、不声称穷尽。
 
-## 第四步：发现、浅筛、深查、比较
+### PI 识别与 Level A–D
 
-三路发现：近期原创论文 → 当前团队；官方机构/博士项目 → 研究者；基金/研究项目/公开博士岗位 → 正式入口。不限知名 PI 或特定期刊。
+禁止"末位作者 = PI"自动规则。PI 候选来自通讯作者、贡献声明（CRediT 的 supervision / conceptualization / funding acquisition）、官方 PI/实验室页面、基金 PI 记录。
 
-小范围覆盖合理官方名单；跨机构可发现约 `shortlistTarget` 的 2–3 倍，不凑数、不声称穷尽。每位先记当前身份、2–3 项近期研究、初步匹配和易得入口；不提前对所有人查全资金/校友。沿用用户数量与预算，范围足够或新检索不再改变判断时停止；延后不是不合格。
+| Level | 含义 | 最低证据 |
+| --- | --- | --- |
+| A | verified | 官方机构页面 + 至少一项已核实 PI 角色（通讯/贡献声明/基金 PI） |
+| B | probable | 多篇末位/通讯但无贡献声明，或官方页面存在而角色未读全文（T23 上限） |
+| C | emerging | 近期独立建组、首批论文以通讯出现、无毕业博士；过去主要一作者可进入此层（T24） |
+| D | identity_unresolved | 同名未消歧、机构不一致、无官方页面 |
 
-无真实项目/批次时，探索候选只进 `advisor_records.json`，从它派生探索表；不虚构 `program_id`、`advisor_program_id` 或 intake。`candidates.json` 只接收真实映射机会。探索可以在 `research_discovery` 完成，申请条件标“本次未核验”。深查继续要求确切导师—项目 ID、维度、版本/指纹确认；无映射候选保留浅查，不绕过现有 gate。
+Identity Resolver 用 OpenAlex / ORCID / 官方页面消歧，记录 `nameVariants`、`identifiers`、`affiliationAsOf`。旧机构与当前机构不同的同名作者必须写明时点，不错误映射 affiliation（T07）。API 与官方页面不一致时保留冲突，由 Main Agent 用当前官方机构页裁决并说明（T40）。
 
-## 科研证据
+### 5 年回查（back_search）
 
-默认原创研究窗约最近 3–5 年，前沿补充约最近 1–2 年的预印本、基金与招聘；按运行日期生成窗口，参数不是质量标准。通讯/末位作者用于发现，不能独立证明科学主导。重要论文查贡献声明，区分概念、监督、方法、分析、资源、资金；没读到就未知。参照 [CRediT](https://credit.niso.org/) 的公开角色分类，不用作者位置推断学生自主权。
+每位 PI 独立回查近五年产出，判断 `researchRouteContinuity`：`sustained_core`（持续主线）、`active_emerging`（活跃新兴）、`new_expansion`（新扩展）、`occasional_participation`（偶发参与）、`unclear`。最初只命中一篇同病种论文的 PI 必须回查后才能声称主线（T06）。回查窗口写入 `back_search.window` 与 `sourceIds`。
 
-按 DOI、标题、作者、版本关系将预印本与正式版归入同一研究，保留首次公开/发表日期及同行评议状态；无预印本不扣分。只读摘要/元数据就如实记录，不能声称审阅 Methods/贡献声明。研究轨迹说明科学问题和证据推进，不以热点数量或技术升级排序衡量进步。同名作者需机构/标识/研究交叉核验，换机构后保留历史映射，旧资源不自动迁移。
+### 合作网络
 
-## 资源、研究经费和博士资助
+深度固定为 1（ego network）。两类边严格分开（T21）：
 
-按路线查：临床关注队列、随访、统计指导与数据角色；实验关注模型、平台、方法指导、合作；计算/组学/影像关注数据权限、计算存储、统计训练、验证合作；群体/方法学关注研究设计、数据治理和方法团队。
+- **collaboration edge**：共同发表、共同项目/基金、共同试验、共同 consortium 领导。
+- **research-neighbor edge**：引用、共被引、文献耦合、语义相似、related papers。只表示科学邻近，不是合作。
 
-资源四层分列：机构拥有 → PI 可证实的负责/使用关系 → 当前课题使用 → 新博士可使用的明确证据或待确认。联盟成员、试验联系人、分中心角色都不证明总牵头或全资源控制。
+核心合作者 heuristic（`collaboration-network.mjs` 可配置工程默认值，不是科学标准）：A. ≥2 篇方向相关共同研究；B. ≥1 篇共同研究 + 共同项目/基金/试验；C. ≥2 个不同年份且主题连续。单篇 300+ 作者 consortium 论文不产生数百核心合作者（T20）；只有重复合作、consortium 领导或贡献声明才保留。边权 = 方向相关共同记录数。
 
-每项基金保存项目号、主题、PI/Co-I/多 PI/分中心角色、币种和金额口径、预算期、项目期、当前状态、来源。母子项目不重复相加，联盟总额不当作个人可支配额。NIH 年度经费不是全周期总额，active 可含无新增经费延期；NSFC 人员查询有公开权限边界，查不到不代表无经费。具体方法见来源目录。
+Network Expander 最多两轮；新线索回到身份消歧与回查，**不递归调查合作者本身的网络**（T25）。饱和：本轮新增 validated PI 为 0，或增长 < 10%（可配置）且无新子方向/聚类，或达轮次上限即停止（T26）。
 
-研究经费与学生资助分列。学生资助另查学费、生活费、期限、条件、资格、是否明确承诺。资助项目规模/到期年不能证明覆盖整个博士周期。
+### Shortlist 与展示顺序
 
-## 博士培养与不可识别内容
+按 `researchQuestionFit` → `researchRouteContinuity` → 稳定名称排序，是展示顺序，不是导师质量排名。引用量、H 指数、机构声望、基金总额、网络中心度不参与排序（T22 Emerging PI 保护）。
 
-建立“明确博士指导关系 → 学位论文/主题 → 公开成果 → 毕业/去向”链；区分博士、硕士、博士后、住院医师、访问生、RA。合作者/第一作者本身不证明博士指导关系。采用预先说明的时间窗/可见样本，记录论文、代码、数据、方法等产物，不只挑明星校友。
+## Evidence Profile（五维）
 
-缺少全体入组人数、退出者和时间，不计算毕业率、退出率、成功率或平均学制。新 PI 无毕业博士记“尚无历史样本”；职业目标按用户选择理解。输出聚合描述与最小公开学术证据，不收集学生私人联系方式、住址、健康、家庭资料。
+每位 PI 记录 `evidence_profile`（导师记录）/ `evidenceProfile`（候选）：
 
-反馈速度、实际工时、尊重程度、内部署名争议、压毕业等公开不足就未知；不从实验室规模、姓名构成、行政职位、引用量推测人格。医学默认 `sourcePolicy: public_only`，不下载匿名名单。用户显式扩展公开争议调查时，仍区分机构认定、更正/撤稿、实名陈述、匿名线索及个人责任；同源转载不算独立证据。
+| 维度 | 词表 |
+| --- | --- |
+| `researchQuestionFit` | `direct` / `partial` / `adjacent` / `weak` / `insufficient_information` |
+| `researchRouteContinuity` | `sustained_core` / `active_emerging` / `new_expansion` / `occasional_participation` / `unclear` |
+| `piRoleConfidence` | `verified` / `probable` / `emerging` / `identity_unresolved` + `level: A–D` |
+| `evidenceSufficiency` | `strong` / `adequate` / `sparse` / `conflicted` |
+| `currentActivity` | `active` / `recent_signal` / `unclear` / `apparently_inactive_in_checked_scope` |
 
-## 分维度比较
+每个子项带 `sourceIds` 指向 `evidence.json`；reasons 必须有来源。另有 `formalRecords[]`（更正/撤稿/机构公告，精确绑定，不推断个人不端）、`fitBoundary`、`keyUnknowns[]`、`nextVerification[]`。不再有 `trainingFit`、`resources`、`researchFunding`、`doctoralFunding`、`doctoralOutcomes`、`trainingEnvironment`、总分。
 
-默认 `evaluationMode: evidence_profile`：展示科学问题匹配、训练支持、资格、机会、资源与学生资助、公开培养样本、关键未知和下一步，均附来源。科学匹配使用强/部分/相邻/不匹配/信息不足等有解释的状态，不自动制造总分。
+## 五模块内容
 
-`fit`、`profileMatch`、`overallMatch` 可为 `null`，`competitiveness` 为 `unknown`；旧 0.6/0.4 与 reach/match/safer 配额不参与医学选择。明确、适用的资格/硬约束失败或确切批次关闭才排除机会。无额外用户硬条件不等于官方资格通过。旧岗位过期只关闭旧机会。
+| 模块 | Section ID | 内容 | 不做 |
+| --- | --- | --- | --- |
+| A 导师身份与当前科研定位 | `identity_research_positioning` | 当前机构/院系/职位、官方页面、研究定位、姓名变体与标识、最低限度博士指导关联、Graduate Program 映射（研究生院/博士项目/导师名册） | 不评估人格、指导风格 |
+| B 近五年科研主线与研究路线 | `research_mainline_5y` | 长期科学问题、持续主题、新方向、研究对象、方法、近期转向、代表性工作（已核实角色、与主线关系）、仅参与工作单列、预印本与正式版去重（T09） | 不做方法质量审计（T05），不按热点数量排序 |
+| C 科研合作网络 | `collaboration_network` | 核心合作者（当前机构/职位、合作证据、年份、共享主题、其自身核心方向）、边类型与计数、研究邻居单列 | 不递归、不作中心度排名 |
+| D 最新公开研究动向与项目支撑 | `latest_signals_projects` | 最新论文、预印本、公开项目（项目名称 / 编号 / 资助机构 / PI 角色 / 期限 / 状态 / 公开金额与口径）、注册与试验 | 金额不重复累计、不转成博士个人资助（T10）；试验招募不等于博士招生（T11）；公开库查无 ≠ 无基金（T29） |
+| E 博士培养轨迹 | `doctoral_trajectory` | 当前博士生 / 已毕业博士（指导证据、学位/年份、课题、与主线关系、产出、首个去向、最新公开角色、信息日期）、Graduate Program、Emerging PI 说明 | 不计算毕业率、去向率、培养成功率（T31）；仅姓名无指导证据不计入（T30）；博士后不混入 alumni（T12） |
 
-可按下一步可行动、关键条件待核实、后续关注、明确不适用分组；分组不是质量等级。核心兴趣/训练目标相同且证据足够时才解释优先级；强相关但稀疏的证据保留待核实，不能因网页数量输给弱相关候选。同组无依据时并列或稳定名称顺序，序号只是展示顺序。用户另要数字评分须显式讨论锚点/权重，未知不填零，仍不输出未校准录取概率。
+Barres 式"导师应做什么"的吸收边界：只取可公开核验的科研主线、指导关系与产出证据；不评价关怀、氛围、工时或人格（T32）。
+
+## 来源优先级
+
+身份与任职：当前官方机构页 > ORCID > OpenAlex；论文与角色：PubMed/DOI 出版商页 > Europe PMC > OpenAlex > Semantic Scholar；项目：所选地区官方基金库（NIH RePORTER、NSFC、RGC、UKRI GtR、DFG GEPRIS、KAKEN、CORDIS 等）> 机构公告 > 论文致谢基金号；博士培养：研究生院/学位论文库 > 官方实验室页 > 正式履历。Google Scholar 只作 discovery / backcheck，遇 CAPTCHA/登录即停。凭据缺失按四级降级，只用状态词，不进 prompt/evidence。
 
 ## 证据与续跑
 
-最终结果以简洁、内容为主的 HTML 报告交付，按用户学科领域/方向命名为
-`outputs/{topic}-导师调研.html`。使用共享 `build_advisor_report.mjs --project-root PATH`
-直接读取同一记录；Excel保留补充兼容，不单独作为最终完成标准。报告包括候选
-比较、重点候选短评、可点击证据、缺口、下一步和实际覆盖；不写成技术实现展示页。
-每项研究、资源/经费、博士资助、培养记录、资格、截止日期及比较理由旁，直接附其
-具体记录或官方文件的 HTTP(S) 链接，便于逐项复核；页尾来源汇总或内部证据跳转
-仅作补充。各项 `sourceIds` / `source_ids` 关联共享 evidence 中相同实体、字段和批次
-的证据。无具体来源或未知项写“待核验/来源待补”，不造网址，不拿数据库首页或无关
-导师资料替代。链接保留原证据状态，样式保持简洁。
+最终结果以简洁、内容为主的 HTML 报告交付：`outputs/{topic}-导师调研.html`（`build_advisor_report.mjs --project-root PATH`）。首页紧凑表（导师 | 核心研究问题 | 近五年科研主线 | 核心合作生态 | 最新研究信号 | 方向契合与边界）→ 每位导师 A–E → 方向契合与主要边界 → 来源及检索覆盖说明（含 seed / 网络轮次 / 饱和 / provider-capabilities）。Excel 保留补充兼容。
 
-每项重要主张以 `fact`、`interpretation`、`question` 区分，关联实体、字段、具体 URL、标题、源日期、访问日期、批次、片段/页码、读取深度、检索方式、限制、同源组。状态区分 `verified`、`not_found`、`not_checked`、`inaccessible`、`conflict`、`stale`、`not_applicable`；`verified` 只表明该来源支持该主张。`not_found` 需说明查过哪些来源；摘要、空框架、403 不足以标 verified 或查无。
+每项研究、项目、培养记录及比较理由旁直接附其具体记录的 HTTP(S) 链接（item-level）；数据库首页或搜索页不算（T13）；页尾证据编号仅作补充。无具体来源写"来源待补/待核验"，不造网址（T14）。
 
-复用当前适用证据；从探索转申请只补批次/资格缺口。行动前重核任职、招生、截止和资助。Excel 丢失从共享 JSON 重导出，不重新爬全部来源。最终报告范围、窗口、实际来源/查询、数量预算、未查/受阻、排除与延后原因；不把 fixture 当真实检索。
+每项主张以 `fact` / `interpretation` / `question` 区分，关联实体、字段、URL、标题、源日期、访问日期、片段/页码、读取深度、检索方式、限制。状态 `verified` / `partial` / `not_found` / `not_checked` / `inaccessible` / `conflict` / `stale` / `not_applicable`；`not_found` 需说明查过哪些来源与查询；摘要、空框架、403 不足以标 verified 或查无（T08、T15）。
+
+Subagent 输出只写 `runs/<run-id>/subagents/`，由 Main Agent 用 `merge_subagent_findings.mjs` 合并；完成度分 `complete` / `partial` / `blocked`，不把 fixture 当真实检索。从探索转申请只补批次/资格缺口；Excel 丢失从共享 JSON 重导出。

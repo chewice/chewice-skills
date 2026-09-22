@@ -14,21 +14,29 @@ official application eligibility is established.
 
 Use `evidenceProfile` (`evidence_profile` in advisor records is also accepted):
 
-- `scientificFit`: status `strong|partial|adjacent|mismatch|insufficient_information`,
-  `reasons`, `sourceIds`.
-- `trainingFit`: status `supported|partial|unknown`, `reasons`, `sourceIds`.
-- `resources`, `researchFunding`, `doctoralFunding`, `doctoralOutcomes`,
-  `keyUnknowns`, `supportedRisks`, `nextVerification`.
+- `researchQuestionFit`: status `direct|partial|adjacent|weak|insufficient_information`,
+  `reasons`, `sourceIds` (legacy `scientificFit` is mapped strong→direct,
+  mismatch→weak).
+- `researchRouteContinuity`: status `sustained_core|active_emerging|new_expansion|occasional_participation|unclear`.
+- `piRoleConfidence`: status `verified|probable|emerging|identity_unresolved`, `level A–D`.
+- `evidenceSufficiency`, `currentActivity`, module blocks `identity`,
+  `researchMainline`, `collaborationNetwork`, `latestSignals`,
+  `doctoralTrajectory`, plus `formalRecords`, `fitBoundary`, `keyUnknowns`,
+  `nextVerification`.
+- Removed and dropped on normalization: `trainingFit`, `resources`,
+  `researchFunding`, `doctoralFunding`, `doctoralOutcomes`, `supportedRisks`.
 
 Keep `fit`, `profileMatch`, `overallMatch` null and `competitiveness: unknown`.
 Never apply 0.6/0.4, missing-value fallback or reach/match/safer quotas. Numeric
 legacy values cannot silently order the medical shortlist. Rank denotes stable
-display order, not quality or admission probability.
+display order (research-question fit → route continuity → name), not quality
+or admission probability; citations, h-index and network centrality never sort.
 
-Compare the user's core question and desired training with cited evidence. Keep
-strong but sparsely documented relevance for verification; source count and web
-coverage cannot substitute for fit. Explain action/verification grouping, then
-use stable names for otherwise tied rows. Do not label unexplored fields poor.
+Compare the user's scientific question with cited evidence of the PI's
+five-year mainline. Keep strong but sparsely documented relevance and emerging
+PIs for verification; source count and web coverage cannot substitute for fit.
+Explain action/verification grouping, then use stable names for otherwise tied
+rows. Do not label unexplored fields poor.
 Known ineligibility/closed opportunities retain reasons; quantity/budget deferral
 is distinct from an exclusion. Old expired adverts do not close a new intake.
 

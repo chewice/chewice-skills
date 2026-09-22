@@ -1,5 +1,38 @@
 # 医学文本 fixture 前向判读记录
 
+## 2026-09-23 更新：五模块迭代后的适用范围
+
+医学 discovery 已按 `Boss_Hunting_Biomedical_Advisor_Discovery_Final_Spec.md` 改为
+「科学问题 → Seeds → PI 验证（Level A–D）→ 近五年回查 → 合作网络（≤2 轮）→ 饱和 →
+Shortlist → 五模块深查（A 身份与科研定位 / B 近五年主线 / C 合作网络 / D 最新动向与
+项目 / E 博士培养轨迹）」。输入只需三项（领域、疾病/机制/科学问题、地区），不读 CV、
+成绩或申请者能力。**训练匹配、实验室资源分级、博士生个人资助、培养环境、培养成功率、
+综合分与引用量排名已从流程、契约、报告与工作簿中删除**；相关字段在旧项目中只保留、
+不再渲染。
+
+因此下表中 T12「资源未随人迁移」、T16「不证明四年学生资助」、T18「样本库四层」、
+T14「训练目标」等判读，如今只在以下意义上仍然成立：
+
+- 机构变更、项目金额口径/单位、母子项目不相加、site PI ≠ 总负责人等规则继续适用于
+  模块 A（身份历史）与模块 D（公开项目记录：title / project id / funder / PI role /
+  period / status / amount + unit）；
+- 「资源访问层级」「博士资助」「训练支持」本身不再作为结论字段输出；
+- 博士后不计入博士培养样本、不算成功率、新 PI 不判培养差（T20–T22）直接对应模块 E
+  与 Emerging PI 保护规则；
+- 同名消歧（T11）、通讯/末位作者不等于 PI（T15）、预印本版本去重（T13/T14）对应 PI
+  身份验证 Level 与模块 B 的「已核实角色」要求。
+
+确定性可验证部分现由 `web/tests/medical-acceptance.test.mjs`（T01–T40）覆盖；依赖真实
+联网、真实 Subagent 行为或人工判读的用例在该文件中标为 `test.todo` 并注明原因。凭据
+只以 `configured / unavailable / invalid / capability-limited` 状态出现，四级降级
+（认证 API → 匿名官方 API → Browser Use → 其他权威来源）由 `provider-capabilities.mjs`
+记录到 `runs/<run-id>/provider-capabilities.json`；公开数据库 `not_found` 不等于
+「该 PI 没有基金」。
+
+以下为迭代前的原始判读记录，保留作历史依据。
+
+## 2026-09-22 原始判读
+
 日期：2026-09-22。输入为 [medical-evidence-cases.json](../web/tests/fixtures/medical-evidence-cases.json)，所有人物、单位、项目、DOI 和页面均为虚构测试材料，`example.invalid` 从未作为外网来源访问。依据本次修改的医学画像、来源与申请事实规则，逐条阅读原始 text/HTML 后做如下实际判读；没有以匹配规则词的正则测试代替科学判断。
 
 这是文档实现子代理的逐例推理检查，不是独立盲评、自动化模型评测、真实导师调查或 live Browser Use E2E。它检查当前例子中的结论边界，不证明未来模型执行必然可靠；自动选择器、迁移、界面与导出测试另由执行日志报告。

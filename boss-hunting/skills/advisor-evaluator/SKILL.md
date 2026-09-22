@@ -46,16 +46,24 @@ Check:
 ## Decision model
 
 Medical `evaluationMode: evidence_profile` uses this branch in place of the
-numeric model below: display `scientificFit` and `trainingFit` with reasons and
-sources, eligibility, opportunity, resource access levels, research funding,
-doctoral funding, visible doctoral outcomes, unknowns, supported risks and next
-verification. Keep `fit`, `profileMatch`, `overallMatch` null and competitiveness
-unknown. Never call the old formula or portfolio quotas as fallback. Rank is
-display order only. Use action/verification groups, preserve sparse strong-fit
-candidates, and use stable name order for ties. Missing/blocked facts are not
-zero; no implicit admission probability or safer-advisor promise. Digital
-scoring, if separately requested, needs explicit anchors/weights and cannot
-replace unknown evidence.
+numeric model below. Display the five evidence dimensions per PI with reasons
+and item-level sources — `researchQuestionFit`, `researchRouteContinuity`,
+`piRoleConfidence` (Level A–D), `evidenceSufficiency`, `currentActivity` — plus
+the module content (identity, five-year mainline, collaboration network,
+latest signals and project records, doctoral trajectory), `formalRecords`,
+`fitBoundary`, `keyUnknowns` and `nextVerification`. Application mode adds
+eligibility and opportunity for the exact programme and intake. Never produce
+a total score, training-fit, resource, doctoral personal funding, training
+environment, mentoring style or success-rate judgement; old records that still
+store such fields are left untouched and not rendered. Keep `fit`,
+`profileMatch`, `overallMatch` null and competitiveness unknown. Never call the
+old formula or portfolio quotas as fallback. Order is research-question fit →
+route continuity → stable name and is display order only; citations, h-index,
+prestige, grant totals and network centrality do not participate. Use
+action/verification groups, preserve sparse strong-fit and emerging PIs, and
+keep missing/blocked facts as unknown, not zero. No implicit admission
+probability or safer-advisor promise. Digital scoring, if separately requested,
+needs explicit anchors/weights and cannot replace unknown evidence.
 
 For generic mode show seven separate layers:
 
@@ -103,8 +111,9 @@ Use a simple layout centered on concise evidence comparison, key unknowns,
 sources and next steps. Generate from shared state, not a second maintained
 report database. The following Excel output remains supplemental; HTML is
 required for a completed advisor research deliverable.
-Each study, funding/training finding, qualification, deadline and comparison
-reason must have its corresponding direct HTTP(S) source link beside it, using
+Each study, project record, doctoral record, qualification, deadline and
+comparison reason must have its corresponding direct HTTP(S) source link beside
+it, using
 item-level source IDs in shared evidence. Follow the report contract for safe
 links and pending-source labels; a final source list alone is insufficient.
 
@@ -117,11 +126,17 @@ portable OOXML otherwise. Do not install packages or create and patch an ad-hoc
 workbook builder. The primary sheet must be usable without manually joining
 other sheets.
 
-Medical tables include question/method scope, training support, representative
-DOIs, verified route/rotation/contact rules, separate eligibility/opportunity,
-resource access level, separate research/doctoral funding, doctoral samples and
-limits, unknowns, supported risks, next verification, dates and clickable sources.
-Do not fetch QS or H-index by default to fill generic columns.
+Medical tables follow `references/workbook-contract.md`: display order, real
+IDs, identity, discovery route, PI role confidence / Level, evidence
+sufficiency, current activity, research-question fit and route continuity with
+reasons, the module columns A–E (positioning and supervision link, long-term
+question and representative works with verified roles, core collaborators and
+research neighbours, latest papers and public project records, current and
+former doctoral students and graduate programme), formal records, fit boundary,
+unknowns, next verification, application route / eligibility / opportunity for
+application rows, dates and clickable sources. No training, resource,
+doctoral-funding, environment or success-rate columns exist. Do not fetch QS or
+H-index by default to fill generic columns.
 
 For generic/application tables include:
 

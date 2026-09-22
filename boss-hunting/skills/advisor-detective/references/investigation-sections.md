@@ -84,37 +84,48 @@ is selected, ask a separate yes/no question about local third-party
 community-source download and parsing. The default is no. Declining does not
 remove the section and does not block research from other public sources.
 
-Medical `sourcePolicy: public_only` never triggers this question or cache
-download merely because `resources_career_support` is selected. A user must
-explicitly expand the source policy before the independent community consent
-mechanism applies. Browser permission does not bypass either the candidate/
-section confirmation or source-policy gate.
+Medical projects never trigger this question: none of the five medical modules
+is community-relevant, and medical `sourcePolicy` defaults to `public_only`.
+A user must explicitly expand the source policy before the independent
+community consent mechanism applies. Browser permission does not bypass either
+the candidate/section confirmation or source-policy gate.
 
-## Medical preset and section interpretation
+## Medical five-module menu
 
-The actual menu/defaults come from `advisor-pipeline/scripts/project-contract.mjs`;
-do not maintain a second executable preset here or hand-build CLI/Web menus.
-Medical defaults reuse identity, recent research, current projects, output
-trajectory, doctoral outcomes, resources and collaboration (IDs 1,2,3,4,5,8,11).
-The table above describes generic initial states; the renderer chooses the
-mode-specific preset. Read [medical-profile.md](../../advisor-pipeline/references/medical-profile.md)
-for detailed evidence boundaries and only look up selected sections:
+Medical / biomedical projects do not use the generic catalog above. The
+renderer (`getDetectiveSectionCatalog`) returns exactly these five public-
+evidence modules, all selected by default. Training fit, lab resources,
+doctoral personal funding, training environment / atmosphere, applicant
+ability and overall quality scores are not selectable and are not investigated.
 
-| Existing ID | Medical public-evidence scope |
+| No. | ID | Label | Initial state |
+| ---: | --- | --- | --- |
+| 1 | `identity_research_positioning` | A. 导师身份与当前科研定位 | selected by default |
+| 2 | `research_mainline_5y` | B. 近五年科研主线与研究路线 | selected by default |
+| 3 | `collaboration_network` | C. 科研合作网络 | selected by default |
+| 4 | `latest_signals_projects` | D. 最新公开研究动向与项目支撑 | selected by default |
+| 5 | `doctoral_trajectory` | E. 博士培养轨迹 | selected by default |
+
+Module scope (details in
+[medical-profile.md](../../advisor-pipeline/references/medical-profile.md)):
+
+| ID | Public-evidence scope |
 | --- | --- |
-| `identity_current_role` | Current institutional identity, name disambiguation, verified doctoral supervision route; preserve earlier institutions without transferring their resources |
-| `recent_research` | Scientific questions and training route, roughly 3–5 years of original work; the historical menu label “最近三年” does not force a fixed window |
-| `current_projects_recruiting` | Current projects, exact degree/intake/vacancy, funding roles and periods, official application route and separate deadlines |
-| `research_output_trend` | How evidence advances the question; contribution statements, preprint/published version relation, reading depth; no automatic authorship leadership or preprint penalty |
-| `group_members_outcomes` | Verified doctoral relationship→thesis→outputs→graduation/outcome; distinguish postdocs/masters/RA, state visible sample and missing denominator; new PI has no historical sample, not poor training |
-| `resources_career_support` | Four resource-access levels; separate research grant/doctoral support, methods supervision, courses, thesis committee/co-supervision, stated resource rules; no personality inference or default community sources |
-| `collaboration_industry_network` | Public sustained complementary supervision and research roles; consortium/facility affiliation is not unrestricted access |
+| `identity_research_positioning` | Current institution / department / position, official profile, identifiers and name variants, current research positioning, the minimum doctoral-supervision link (graduate school / doctoral programme / supervisor listing); earlier institutions are preserved as history |
+| `research_mainline_5y` | Long-term scientific question, continuing themes, new directions, research objects and methods, recent shift, representative works with verified roles; participation-only works listed separately and not counted as the mainline; five-year back-search window |
+| `collaboration_network` | Depth-1 ego network of core collaborators using the repeated-collaboration heuristic; collaboration edges (co-authorship / shared project / grant / trial) kept apart from research-neighbour edges (citation / co-citation / similarity); consortium papers filtered; collaborators are described, never investigated recursively |
+| `latest_signals_projects` | Latest papers and preprints (flagged), public project records with the fixed field list (title, project id, funding body, PI role, period, status, published amount + unit), registries and trials; `not_found` in a public database never means "no funding" |
+| `doctoral_trajectory` | Verified current and former doctoral students, supervision evidence, topics, outputs, first public destination, latest public role and information date; graduate-programme mapping; no graduation rate, destination rate or training success rate; an emerging PI without graduates is not a negative signal |
 
-Feedback speed, respect, actual hours, internal authorship disputes and delayed
-graduation remain unknown when public evidence cannot identify them. Do not
-infer these from lab size, title, names, citations or platform presence. Public
-controversy research is optional, explicitly scoped, and preserves corrections,
-institutional findings, individual responsibility and source independence.
+Mentoring style, feedback speed, working hours, atmosphere, resources,
+personal funding and applicant fit remain out of scope; do not infer them from
+lab size, title, names, citations or platform presence. Corrections,
+retractions and institutional announcements are recorded as formal records
+with source independence preserved.
+
+Legacy medical drafts that still name generic section IDs are re-scoped to the
+five modules during normalization; the earlier confirmed snapshot is kept as
+history but no longer counts as current confirmation.
 
 ## Guidance and group ecology subdimensions
 

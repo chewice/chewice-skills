@@ -15,18 +15,23 @@ description: >
 
 The original `advisor-pipeline` module remains the compatible orchestrator.
 For medical/biomedical work set `domainProfile: medical` and read
-[medical-profile.md](references/medical-profile.md): medical field → disease or
-mechanism, research mode and desired training → regions and application route
-→ discovery, screening, confirmed investigation and evidence comparison.
+[medical-profile.md](references/medical-profile.md). Medical intake is three
+steps: medical field → disease / mechanism / scientific question → target
+regions. Research objects, scales, paradigm (`researchModes`) and method
+preferences are optional and never block. Discovery then runs scientific
+question → Seeds → PI validation → collaboration network → five-module deep
+dive (see "Medical discovery orchestration" below).
 Ask only missing questions; development of this Skill is not an intake request.
 Choose `searchMode: discovery|application`; medical discovery needs no CV,
-degree or intake. Application screening accepts a real CV or sufficient
-attributed `applicantBackground`. Use `evaluationMode: evidence_profile`.
+grades, degree, intake, applicant skills or desired training. Application
+screening accepts a real CV or sufficient attributed `applicantBackground`.
+Use `evaluationMode: evidence_profile`.
 Keep existing non-medical behavior below unless a medical branch says otherwise.
 
-Read [medical-sources.md](references/medical-sources.md) only for common,
-selected-region and relevant research-route entries. For public web research
-read [browser-research-policy.md](references/browser-research-policy.md).
+Read [medical-sources.md](references/medical-sources.md) (Source Capability
+Registry) only for the global core and the selected-region adapters. For public
+web research and the credential / provider fallback rules read
+[browser-research-policy.md](references/browser-research-policy.md).
 Discover actual host tools and default to built-in web/search capabilities
 (`backend: builtin_web`; legacy `auto` is also built-in-first). Follow the real
 schema for search/open/find/link access; do not assume every host has all actions.
@@ -175,12 +180,92 @@ starts the objective application-feasibility pass, then query only missing
 official application facts for the shortlist.
 
 Medical discovery instead completes after a real advisor-level exploration
-view, sourced question/training comparison, and an explicit coverage/gap report.
-Keep unmapped advisors in `advisor_records.json`; do not invent programs,
-intakes or candidate IDs to satisfy the application route. Derive an exploration
-workbook and the field-named HTML report, then mark `research_discovery`, with unperformed eligibility checks
-explicit. A real program and intake are required only for program-level rows.
-Moving to application reuses research facts and fills only the missing inputs.
+view with a five-dimension evidence profile per PI (research-question fit,
+route continuity, PI role confidence, evidence sufficiency, current activity),
+the five public-evidence modules, and an explicit seed / network / saturation /
+coverage report. Keep unmapped advisors in `advisor_records.json`; do not
+invent programs, intakes or candidate IDs to satisfy the application route.
+Derive an exploration workbook and the field-named HTML report, then mark
+`research_discovery`, with unperformed eligibility checks explicit. A real
+program and intake are required only for program-level rows. Moving to
+application reuses research facts and fills only the missing inputs.
+
+## Medical discovery orchestration
+
+The Main Agent (this Skill's runner) is the only orchestration owner. It reads
+the user's scientific question, plans the seed sub-directions, dispatches
+subagents, adjudicates conflicts, runs the deterministic merge and writes the
+report. No subagent owns the plan or the authoritative JSON.
+
+Flow (details in `references/medical-profile.md`):
+
+```text
+Scientific question
+  -> Seed Scouts (parallel per sub-direction): Map Seeds (reviews) + Research Seeds (5-year originals)
+  -> PI extraction from Research Seeds (no "last author = PI" rule)
+  -> Identity Resolver: OpenAlex / ORCID / official page, pi_evidence_level A–D
+  -> Trajectory Mappers: 5-year back-search per PI -> route continuity
+  -> Network Expander (max 2 rounds): collaboration edges vs research-neighbor edges
+  -> saturation check -> shortlist (display order, not quality ranking)
+  -> five-module deep dive A–E -> merge -> {topic}-导师调研.html
+```
+
+Subagent roles: Seed Scouts, Identity Resolver, Trajectory Mappers, Network
+Expander, Regional Project Investigator, Doctoral Trajectory Investigator,
+Evidence Auditor. Schedule them mixed: independent sub-directions and
+independent PIs run in parallel; identity resolution precedes back-search and
+network expansion for the same PI; the Evidence Auditor runs last.
+
+Write rules:
+
+- Subagents write only `runs/<run-id>/subagents/<task_id>.json` with the fields
+  `task_id, agent_role, scope, findings, new_entities, conflicts, gaps,
+  queries_executed, sources_checked`. They never touch `outputs/`.
+- The Main Agent merges with
+  `node scripts/merge_subagent_findings.mjs --root "$PWD" --run-id <run-id>`
+  (use `--dry-run` first). The script validates the schema, refuses any file
+  containing a credential value, deduplicates advisors by `advisor_id` / ORCID /
+  OpenAlex id and evidence by URL + entity + fields + claim, writes field
+  disagreements as `status: conflict` evidence, strips removed fields, and is
+  the single writer of `outputs/advisor_records.json` and `outputs/evidence.json`
+  under the project file lock. It also writes `runs/<run-id>/merge-report.json`.
+- Conflicts (for example API affiliation vs official page) stay recorded with
+  their as-of dates; the Main Agent adjudicates using the current official
+  institution page and says so.
+
+Credentials and providers:
+
+- Run `node scripts/credentials.mjs --json` and
+  `node scripts/provider-capabilities.mjs --project-root "$PWD" --run-id <run-id>`
+  at start. Credentials are optional accelerators resolved from the process
+  environment, `BOSS_HUNTING_CREDENTIALS_FILE`, or the OS user config file
+  (`%APPDATA%\boss-hunting\credentials.env`,
+  `${XDG_CONFIG_HOME:-~/.config}/boss-hunting/credentials.env`). Never scan the
+  disk for `.env` files and never ask the user to paste keys into chat.
+- Only the status words `configured | unavailable | invalid | capability-limited`
+  may appear in prompts, subagent outputs, evidence, logs, HTML or Markdown.
+  Secret values never leave the loader.
+- Per provider fall back in order: authenticated API → anonymous / keyless
+  official API → Browser Use on official public pages → alternative
+  authoritative sources. `runs/<run-id>/provider-capabilities.json` records the
+  chosen routes and the run mode (`api_enriched | hybrid | public_only |
+  browser_fallback`). A missing NCBI key means anonymous E-utilities, not PubMed
+  scraping; a missing CiNii App ID means the CiNii / KAKEN websites; a WoS key
+  never implies the Expanded tier; Google Scholar is discovery / backcheck
+  only. `not_found` in a public database never becomes "the PI has no funding".
+
+Removed from the medical workflow (do not investigate, render or rank on
+them; old stored fields stay untouched): training fit / desired training /
+applicant skills, lab resources and access tiers, doctoral personal funding
+and tuition, training environment / atmosphere / mentoring style, mentoring
+success or placement rates, composite quality scores, citation or h-index
+ranking, and any resource or student-funding source entries.
+
+Completion tiers for a medical discovery run: `complete` (every shortlisted PI
+has all five modules with a result or explicit gap, provider metadata and merge
+report saved), `partial` (some modules or PIs unfinished but reported as such),
+`blocked` (identity unresolved or every route inaccessible for the required
+evidence). Never report a higher tier than the artifacts support.
 
 Generic/application-stage completion requires:
 
@@ -210,8 +295,9 @@ For direct CLI users, perform the following steps in order:
    ```
 
    It prints the candidate table (including the stable `advisorProgramId`
-   column), all 11 ordered sections with mode-specific defaults, and the current work
-   unit / cost level. Show its output verbatim. You may explain it, but you must
+   column), the ordered section catalog for the project's mode (11 generic
+   sections, or the five medical modules A–E, all selected by default) and the
+   current work unit / cost level. Show its output verbatim. You may explain it, but you must
    not reorder, rename, drop, or summarize away any column or row — a
    free-form menu has already shipped without `advisorProgramId`.
 2. **Read scope while selecting**: only `project.json`,
@@ -227,10 +313,9 @@ For direct CLI users, perform the following steps in order:
 5. The script already prints the Web-equivalent cost level, calculated as
    selected advisor-program rows multiplied by selected sections: `<= 8` is
    low, `9-24` is medium, and `> 24` is high.
-6. Medical `investigation.draft.sourcePolicy: public_only` uses public evidence even
-   when a resource section is selected; do not ask about/download community
-   snapshots merely because that section is selected. Only an explicit change
-   to `community_allowed` activates the separate community gate.
+6. Medical `investigation.draft.sourcePolicy: public_only` uses public evidence
+   only; none of the five medical modules is community-relevant, so no community
+   snapshot question or download is triggered for medical projects.
    For generic or explicitly community-enabled investigations, if a community-relevant section listed in the canonical section reference
    is selected, ask separately whether the user consents to downloading and
    parsing third-party community material in this local project. Default to no.
@@ -279,11 +364,15 @@ Completion requires:
 
 - Separate research fit, profile match, hard constraints, application pathway,
   opportunity evidence, objective feasibility, and advisor-suitability
-  conclusions.
+  conclusions (generic mode), or the five-dimension evidence profile per PI
+  (medical mode) without any total score.
 - An application-ready workbook for application mode, or an evidence-profile
   exploration workbook for medical discovery, without fabricated total scores.
-- The field/direction-named HTML research report from shared records, with
-  concise comparisons, evidence links, limitations and next verification steps.
+- The field/direction-named HTML research report from shared records. Medical
+  reports open with the compact overview table (advisor | core question |
+  five-year mainline | core collaboration ecology | latest signals | fit and
+  boundary), then modules A–E per PI including the inline SVG depth-1 ego
+  network, then "方向契合与主要边界" and "来源及检索覆盖说明".
 - Source, freshness, missing-field, and risk checks.
 
 ## Post-evaluation application materials
@@ -352,8 +441,9 @@ regenerate the workbook from structured state.
 ## Safety
 
 - Do not send email, submit applications, commit, push, or publish.
-- Keep CVs, project state, downloaded community snapshots, and generated outputs
-  local and Git-ignored.
+- Keep CVs, project state, downloaded community snapshots, credential files and
+  generated outputs local and Git-ignored.
+- Never print, log or store API key values; report credential status words only.
 - Do not treat public accessibility as redistribution permission.
 - Do not bundle or commit third-party community snapshot contents.
 - Stop and state the missing input instead of inventing application facts.

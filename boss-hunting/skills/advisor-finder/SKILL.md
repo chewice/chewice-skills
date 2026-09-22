@@ -5,8 +5,10 @@ description: >
   scope for PhD, MPhil, MS, Postdoc, or RA applications. Score research fit,
   map shortlisted advisors to programs, verify objective application facts,
   and produce source-backed candidate records and a workbook. Medical discovery
-  accepts interests without a CV; medical application screening also accepts
-  sufficient attributed background and compares evidence without total scores.
+  starts from a scientific question without a CV and runs Seeds → PI validation
+  → back-search → collaboration network → saturation → shortlist; medical
+  application screening also accepts sufficient attributed background and
+  compares evidence profiles without total scores.
 ---
 
 # Advisor Finder
@@ -18,13 +20,17 @@ field-level source record already supports the needed fact.
 ## Inputs
 
 Read `project.json` mode first. For `domainProfile: medical`, read
-`../advisor-pipeline/references/medical-profile.md` and follow its four-step
-intake. `discovery` needs the confirmed medical scope and regions, not a CV,
-degree or intake; `application` needs relevant real CV or attributed
-`applicantBackground`. Load the single `medical-sources.md` directory by region
-and route, and `browser-research-policy.md` before web research. Reuse existing
-answers, separate `currentSkills` from `desiredTraining`, and do not default to
-a disease or technique. The requirements below apply to generic mode.
+`../advisor-pipeline/references/medical-profile.md` and follow its three-step
+intake (field → disease / mechanism / question → regions; paradigm, objects,
+scales and method preferences optional). `discovery` needs the confirmed medical
+scope and regions, not a CV, grades, degree, intake, skills or desired training;
+`application` needs relevant real CV or attributed `applicantBackground`. Load
+the `medical-sources.md` Source Capability Registry (Global Core plus the
+selected regions) and `browser-research-policy.md` before web research; run
+`../advisor-pipeline/scripts/credentials.mjs --json` and
+`provider-capabilities.mjs` first and use only credential status words. Reuse
+existing answers and do not default to a disease or technique. The requirements
+below apply to generic mode.
 
 Require to start generic Phase 1:
 
@@ -79,7 +85,7 @@ Structured JSON is the source of truth.
 
 ### 1. Intake and normalize
 
-In medical mode use the four-step intake above instead of steps 1–5 below.
+In medical mode use the three-step intake above instead of steps 1–5 below.
 Preserve explicit undecided/unrestricted answers separately from unasked ones.
 Medical application missing a fact pauses only that qualification judgment;
 medical discovery does not produce applicant competitiveness or passed eligibility.
@@ -107,10 +113,34 @@ Size the roster to the user's actual scope:
 - For broad multi-school or regional searches, aim for roughly
   `shortlistTarget * 3`, capped at 60.
 
-Medical discovery uses three routes together: recent original papers, official
-institution/program rosters, and grants/research projects/doctoral vacancies.
-Verify current identity and distinguish same-name authors. Use the selected
-source-directory entries; do not enumerate every database.
+Medical discovery replaces the roster logic above with the seed-driven flow in
+medical-profile.md, executed by the Main Agent with subagents that write only
+`runs/<run-id>/subagents/*.json`:
+
+1. **Seeds** per sub-direction in parallel: Map Seeds (reviews / guidelines, for
+   the concept map only, never a PI source) and Research Seeds (five-year
+   original studies).
+2. **PI extraction and validation**: candidates come from corresponding-author
+   roles, contribution statements, official PI pages and funder PI records.
+   There is no "last author = PI" rule; a last author without contribution
+   evidence is at most `probable` (Level B). Resolve identity through
+   OpenAlex / ORCID / the current official page and record `pi_evidence_level`
+   A–D, `discovered_via` and `network_round`.
+3. **Back-search**: a five-year author back-search per PI decides
+   `researchRouteContinuity`; one matching paper never proves a sustained
+   mainline.
+4. **Network expansion** (max two rounds) through `collaboration-network.mjs`:
+   collaboration edges (co-authorship, shared project / grant / trial) and
+   research-neighbor edges (citation, co-citation, similarity) stay separate;
+   consortium papers do not create collaborators; new leads return to step 2.
+5. **Saturation**: stop when a round adds no validated PIs, or adds <10%
+   (configurable) with no new sub-direction, or the round cap is reached.
+6. Merge with `../advisor-pipeline/scripts/merge_subagent_findings.mjs`
+   (`--dry-run` first). Emerging PIs (new group, no graduated doctoral
+   students, low citations) are never excluded for seniority metrics.
+
+Use the registry entries for the selected regions; do not enumerate every
+database, and never rank PIs by citations, h-index or network centrality.
 
 Use official faculty pages,
 targeted search, Scholar, dblp, OpenReview, or field directories. Record only:
@@ -126,11 +156,16 @@ ecology research, or broad social investigation at this stage.
 
 ### 3. Research profile and fit
 
-In medical `evidence_profile`, replace the numeric instructions below with
-`evidenceProfile.scientificFit` and `trainingFit`, reasons and source IDs. Follow
-medical-profile for original work, contribution statements, preprint/version
-deduplication, resources and training evidence. Do not score absent preprints,
-prestige, web coverage or future training wishes as applicant ability.
+In medical `evidence_profile`, replace the numeric instructions below with the
+five-dimension profile: `researchQuestionFit`, `researchRouteContinuity`,
+`piRoleConfidence` (with Level A–D), `evidenceSufficiency`, `currentActivity`,
+each with reasons and source IDs, plus the module blocks `identity`,
+`researchMainline`, `collaborationNetwork`, `latestSignals`,
+`doctoralTrajectory`, `formalRecords`, `fitBoundary`, `keyUnknowns`,
+`nextVerification`. Follow medical-profile for original work, contribution
+statements and preprint/version deduplication. Do not produce training fit,
+resource, personal-funding, training-environment or mentoring judgements, and
+do not score absent preprints, prestige or web coverage.
 
 Prioritize up to `MAX_ADVISORS` for profiling.
 
@@ -156,9 +191,9 @@ Never infer low or high admission probability from prestige alone.
 ### 4. Shortlist
 
 In medical mode apply only evidenced applicable hard failures, retain unknown
-conditions, and compare question/training evidence. Do not use reach/match/safer
-quotas or the 0.6/0.4 formula. Strong relevance with sparse evidence remains
-visible for verification. Unmapped discovery advisors stay in advisor records
+conditions, and order by research-question fit → route continuity → stable
+name (display order only). Do not use reach/match/safer quotas or the 0.6/0.4
+formula. Strong relevance with sparse evidence remains visible for verification. Unmapped discovery advisors stay in advisor records
 and the derived exploration view. Program-level records follow the real-ID
 rules below, with `competitiveness: unknown` and numeric scores null.
 
@@ -273,9 +308,10 @@ fields plainly. Regeneration reads shared records and does not rerun research.
 ## Quality rules
 
 - Cite every material claim.
-- Use `verified`, `not_found`, `not_checked`, `inaccessible`, `conflict`, `stale`,
-  and `not_applicable`
-  consistently.
+- Use `verified`, `partial`, `not_found`, `not_checked`, `inaccessible`,
+  `conflict`, `stale`, and `not_applicable` consistently.
+- Never write API key values into records, prompts or logs; a public-database
+  `not_found` never becomes "the PI has no funding".
 - Never turn access failure, skipped research, or failed PDF extraction into
   “no requirement” or “no record”.
 - Verify recruiting for the target degree.

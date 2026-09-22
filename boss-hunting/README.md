@@ -9,23 +9,44 @@
 Evaluator；`advisor-pipeline` 保留兼容。安装时复制完整 `skills/`，包含 Boss Hunting
 入口及各模块，不另建事实源。
 
-医学配置采用四步交互：**医学领域 → 疾病/机制、研究方式与训练目标 → 地区及
-申请入口 → 发现、浅筛、确认深查和比较**。已提供的信息不重复询问，泛癌、机制
-优先、跨领域与明确未定均可接受；已有能力和希望学习的方法分开记录。
+医学配置只需三项最低输入：**医学领域 → 疾病/机制/科学问题 → 目标地区**；研究对象、
+尺度、范式与方法偏好为可选，不阻塞。已提供的信息不重复询问，泛癌、机制优先、跨领域
+与明确未定均可接受。探索不读取 CV、成绩、论文或申请者能力，也不再询问"已有能力 /
+希望获得的训练"。
+
+医学 `discovery` 按 **科学问题 → Seeds（综述作概念版图、近五年原创研究产生 PI 候选）→
+PI 身份验证（Level A–D，禁止"末位作者 = PI"）→ 每位 PI 近五年回查 → 合作网络扩展
+（≤2 轮，合作边与研究邻居边分开，consortium 论文过滤）→ 饱和停止 → Shortlist →
+五模块深查** 进行。五模块为：A 导师身份与当前科研定位、B 近五年科研主线与研究路线、
+C 科研合作网络、D 最新公开研究动向与项目支撑、E 博士培养轨迹。
 
 | 医学模式 | 输入与输出 |
 | --- | --- |
-| `discovery` 方向探索 | 无需 CV/学位/批次；形成真实导师及方向、训练匹配证据。未核实项目时输出导师探索表，不编造项目/资格 |
+| `discovery` 方向探索 | 无需 CV/学位/批次；产出每位 PI 的五维证据画像与五模块调研。未核实项目时输出导师探索表，不编造项目/资格 |
 | `application` 申请筛选 | 补学位、批次、硬约束及相关真实背景；CV 或标注来源的结构化背景均可，缺失条件保持待确认 |
 
-医学默认 `evidence_profile`，科学问题、训练支持、资格、机会、资源、研究经费、
-博士资助和公开培养样本分列；不使用综合分、reach/match/safer 配额或录取概率。
-通用非医学模式保留原数值匹配与组合策略。RP/套磁信仍需真实 CV、身份与确切目标确认。
+医学默认 `evidence_profile`：`researchQuestionFit`（方向契合）、`researchRouteContinuity`
+（主线连续性）、`piRoleConfidence`（PI 角色置信 + Level）、`evidenceSufficiency`、
+`currentActivity` 五维分列，每项附 item-level 来源；排序只是展示顺序，不是导师质量排名。
+**已删除**：训练匹配、实验室资源、博士生个人资助、培养环境/氛围、申请者能力、综合分、
+引用量排名；旧项目中的这些字段保留但不再检索、不进入报告。通用非医学模式保留原数值
+匹配与组合策略。RP/套磁信仍需真实 CV、身份与确切目标确认。
 
 执行细则：[医学画像](skills/advisor-pipeline/references/medical-profile.md)、
-[国内外来源目录](skills/advisor-pipeline/references/medical-sources.md)、
-[Browser Use 策略](skills/advisor-pipeline/references/browser-research-policy.md)。
-目录按地区/任务给出入口、查询、字段、边界和回退，并注明本次实测/未复测范围。
+[来源能力注册表](skills/advisor-pipeline/references/medical-sources.md)、
+[凭据与 Browser Use 策略](skills/advisor-pipeline/references/browser-research-policy.md)。
+注册表按 Global Core + 地区 Adapter 给出 capabilities、preferred/fallback 检索路线、
+authority 与对应 `credentials.env` 变量。
+
+API 凭据是可选加速器：复制 `config/credentials.example.env` 到
+`%APPDATA%\boss-hunting\credentials.env`（Windows）或
+`${XDG_CONFIG_HOME:-~/.config}/boss-hunting/credentials.env`（Linux/macOS），或用
+`BOSS_HUNTING_CREDENTIALS_FILE` 指定路径；支持 `OPENALEX_API_KEY`、`NCBI_API_KEY`、
+`ORCID_CLIENT_ID/SECRET`、`CINII_APP_ID`、`SEMANTIC_SCHOLAR_API_KEY`、`WOS_API_KEY`。
+`node skills/advisor-pipeline/scripts/credentials.mjs --check` 只打印
+`configured / unavailable / invalid / capability-limited` 状态；缺失 key 按
+认证 API → 匿名官方 API → Browser Use 官方页面 → 其他权威来源 降级，不阻塞运行，
+key 值不进入提示、Subagent 输出、evidence 或报告。不要把 key 贴进对话。
 默认先用宿主实际提供的联网工具：GPT/Codex 宿主的 `web.run`、`web_search` 等内置搜索与
 网页阅读，或 Wisp Science 的浏览器工具组（`web_open_tab`、`web_scan`、`web_execute_js`、
 `web_screenshot`、`web_save_assets`），按当前工具支持的动作查找并打开具体来源。内置
@@ -91,7 +112,7 @@ Linux 环境，其他平台须明确扩展 manifest 后另行验证。
 
 | 能力 | Advisor Atlas 会做什么 | 主要产物 |
 |---|---|---|
-| 导师发现 | 解析医学画像或真实 CV，在目标范围内发现导师并完成研究匹配 | 候选名单、研究匹配证据 |
+| 导师发现 | 解析医学画像（Seeds → PI 验证 → 合作网络）或真实 CV，在目标范围内发现导师并完成研究匹配 | 候选名单、研究匹配证据 |
 | 客观筛选 | 核对项目、学位、申请季、截止日期、材料与招生条件 | advisor—program 可行性记录 |
 | 导师背调 | 按用户选择的导师和维度调查论文主线、项目、招生与风险 | 背调证据与风险提示 |
 | 最终决策 | 医学采用分维度证据画像；通用模式保留数值匹配 | 按学科/方向命名的 HTML 主报告，Excel 补充与结构化比较 |
@@ -175,7 +196,7 @@ pixi run dev
 
 1. 点击“新建申请项目”，填写项目名称。
 2. 填写目标院校或地区范围。
-3. 选择领域配置和探索/申请模式；医学先完成四步画像，探索无需 CV，申请可填真实结构化背景。通用模式上传可读真实 CV。
+3. 选择领域配置和探索/申请模式；医学先完成三步最低输入（领域 → 疾病/机制/科学问题 → 地区），探索无需 CV，申请可填真实结构化背景。通用模式上传可读真实 CV。
 4. 填写申请者真实姓名，供后续 RP 与套磁信核验。
 5. 如有地区、排除国家、排名、费用或 funding 底线，填写“必须满足的硬条件”。
 6. 设置 Phase 1 希望保留的导师数量（默认 10）；通用模式另可选择均衡、稳妥或冲刺组合，医学不采用配额。
@@ -380,9 +401,9 @@ my-advisor-application/
 
 ```text
 使用 $boss-hunting 做医学方向探索。领域是肿瘤，机制优先并保留泛癌范围，
-希望做计算与数据研究，未来学习统计建模；已有能力暂未提供。
+科学问题是肿瘤微环境如何影响免疫治疗反应；研究范式偏向计算与数据（可选）。
 地区选中国香港和美国，暂未确定学位项目与入学批次，没有 CV。
-先做公开浅查和证据比较；深查仍等我选择确切候选和维度。
+先做 Seeds → PI 验证 → 合作网络 → 五模块调研；深查仍等我选择确切候选和维度。
 ```
 
 医学申请筛选示例（同样只是输入示例）：
@@ -391,7 +412,7 @@ my-advisor-application/
 使用 $boss-hunting 继续医学申请筛选，复用已有方向探索。
 目标为指定地区的研究型 PhD 和我提供的真实入学批次；背景以我提供的
 结构化学历、研究经历、资格为自述。只核对相关条件，缺失项待确认。
-研究经费与博士资助分开比较，暂不开始 RP 或套磁信。
+公开项目记录只记口径与单位，不转成博士个人资助；暂不开始 RP 或套磁信。
 ```
 
 通用模式输入示例：
@@ -521,11 +542,11 @@ Web 每轮只把当前阶段的 Skill 加入 Agent 上下文：Finder、Detectiv
 - 资源、funding、署名和职业支持
 - 学术诚信、公开争议、国际学生支持及合作网络
 
-不再使用 `shallow / medium / high`。通用默认前三项；医学默认另含研究轨迹、博士培养、资源及合作，菜单统一由共享目录生成。用户选什么就查什么，未选标“用户未选择复核”；已有事实复用。医学 `public_only` 不因资源维度自动触发社区资料授权。用户显式扩展社区调查并独立同意后，才按原机制下载/检索；匿名内容只作线索。
+不再使用 `shallow / medium / high`。通用默认前三项。医学项目使用独立的五模块目录（A 身份与科研定位、B 近五年主线、C 合作网络、D 最新动向与项目、E 博士培养轨迹），默认全选，菜单统一由共享目录生成；医学不含任何社区相关维度，不触发社区资料授权。用户选什么就查什么，未选标“用户未选择复核”；已有事实复用。通用项目显式扩展社区调查并独立同意后，才按原机制下载/检索；匿名内容只作线索。医学深查可由 Main Agent 分派 Subagent（Seed Scouts / Identity Resolver / Trajectory Mappers / Network Expander / Regional Project Investigator / Doctoral Trajectory Investigator / Evidence Auditor），Subagent 只写 `runs/<run-id>/subagents/*.json`，由 `merge_subagent_findings.mjs` 确定性合并进权威 JSON。
 
 ### 阶段 3：证据比较或通用排名
 
-`advisor-evaluator` 分开汇总研究与训练匹配、背景、硬条件、申请路径、机会、资格和所选背调维度。医学探索生成探索表，申请阶段生成申请比较表；通用流程保留申请就绪总表与数值排序。明确不适用的机会不会被综合分覆盖，未知也不当作不合格。
+`advisor-evaluator` 在医学模式下按五维证据画像分列展示（方向契合、主线连续性、PI 角色置信、证据充分度、当前活跃度）与五模块内容，不产生总分；通用模式分开汇总研究匹配、背景、硬条件、申请路径、机会、资格和所选背调维度。医学探索生成探索表，申请阶段生成申请比较表；通用流程保留申请就绪总表与数值排序。明确不适用的机会不会被综合分覆盖，未知也不当作不合格。
 
 评分用于辅助筛选，不替代申请者对导师风格、招生状态和合作方式的独立判断。
 

@@ -1,6 +1,6 @@
 # Advisor Atlas data-contract router
 
-Boss Hunting uses `project.json` schemaVersion 9; `status.json` and researched
+Boss Hunting uses `project.json` schemaVersion 10; `status.json` and researched
 output records remain version 2. Structured JSON is authoritative and Markdown
 state files are compact resumable summaries.
 
@@ -27,9 +27,19 @@ Cross-stage invariants:
 - A valid project CV is project-scoped and reused across phases. Do not ask for
   another upload unless it is missing, unreadable, a sample, belongs to another
   applicant, or the user asks to replace it.
-- Medical discovery uses the four-step research profile without a CV. Medical
-  application accepts relevant sourced structured background; RP/outreach retain
-  their original CV and exact-target gates. General projects keep their defaults.
-- Medical comparisons use evidence profiles, not weighted scores or reach quotas.
+- Medical discovery uses the three-step research profile (field → disease /
+  mechanism / question → regions) without a CV, grades, skills or desired
+  training. Medical application accepts relevant sourced structured background;
+  RP/outreach retain their original CV and exact-target gates. General projects
+  keep their defaults.
+- Medical comparisons use the five-dimension evidence profile (research-question
+  fit, route continuity, PI role confidence, evidence sufficiency, current
+  activity) with five public-evidence modules A–E, not weighted scores, reach
+  quotas, training fit, resources, doctoral funding or training environment.
   Unmapped advisors remain advisor-level discovery records, never fake programs.
+- Medical subagents write only `runs/<run-id>/subagents/*.json`; the Main Agent
+  merges them with `merge_subagent_findings.mjs`, the single writer of
+  `outputs/advisor_records.json` and `outputs/evidence.json` for that merge.
+  Credential values never enter any record; `runs/<run-id>/provider-capabilities.json`
+  stores status words and routes only.
 - Never insert demonstration records or infer unknown user inputs.

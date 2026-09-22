@@ -26,16 +26,18 @@ Read:
 If the full skill set is present, read
 `../advisor-pipeline/references/core-data-contract.md` before shared-record
 writes and `../advisor-pipeline/references/investigation-contract.md` for the
-confirmation/result contract. The menu script already owns the full 11-section
-catalog. During a confirmed run, look up only the selected section IDs in
+confirmation/result contract. The menu script already owns the mode-specific
+catalog: 11 generic sections, or the five medical modules A–E. During a
+confirmed run, look up only the selected section IDs in
 `references/investigation-sections.md`; do not load unselected section detail.
 In medical mode read `../advisor-pipeline/references/medical-profile.md`, the
-applicable region/route entries in `medical-sources.md`, and
-`browser-research-policy.md`. Public browser interaction does not authorize
-additional candidates or sections. Medical `sourcePolicy: public_only` never
-loads/downloads community sources merely because resource dimensions are selected.
-Read `references/community-sources.md` only when the source policy permits it
-and a reputation-related section is selected with independent consent.
+Global Core and selected-region entries in `medical-sources.md`, and
+`browser-research-policy.md` (credential status words and provider fallback).
+Public browser interaction does not authorize additional candidates or
+sections. Medical projects never load or download community sources: none of
+the five modules is community-relevant. Read `references/community-sources.md`
+only for generic projects whose source policy permits it and where a
+reputation-related section is selected with independent consent.
 
 Require exact `investigation.confirmed.selectedAdvisorProgramIds` and
 `investigation.confirmed.selectedSections` from `project.json`. The confirmed
@@ -59,8 +61,9 @@ internal IDs or section names.
    interactive selection gate defined in Advisor Pipeline. Render the menu with
    `node .agents/skills/advisor-pipeline/scripts/render_investigation_menu.mjs --root "$PWD"`
    and show its output verbatim — it already contains the numbered
-   advisor-program rows with stable IDs, all 11 ordered sections with their
-   mode-specific defaults, and the Web-equivalent cost level. Then ask separately for
+   advisor-program rows with stable IDs, the ordered section catalog for the
+   project's mode (11 generic sections or the five medical modules) with its
+   defaults, and the Web-equivalent cost level. Then ask separately for
    community-source consent only when the source policy permits it, show a final summary, and wait for
    explicit confirmation.
 
@@ -98,15 +101,22 @@ consent is false, continue other selected research without downloading them.
 
 ## Research workflow
 
-For medical mode follow the selected-ID mapping in
-`references/investigation-sections.md`: current entry → question and training
-fit → relevant resources/finance → verifiable doctoral outcomes → environment.
-Use 3–5 years of original research and 1–2 years of frontier evidence as
-adjustable windows. Read actual contribution statements before attributing
-leadership. Record resource access in four levels; separate research funding
-from doctoral support. Distinguish doctoral trainees from postdocs and do not
-derive success rates from selected alumni. Retain unknown interpersonal behavior;
-no personality score or inference from size/title/authorship.
+For medical mode follow the five-module menu in
+`references/investigation-sections.md`: A identity and research positioning →
+B five-year mainline → C collaboration network → D latest signals and projects
+→ E doctoral trajectory. Use a five-year original-research window and 1–2 years
+of frontier evidence as adjustable windows. Read actual contribution statements
+before attributing leadership; a last author without contribution evidence is
+at most `probable`. Collaborators are described at depth 1 only and are never
+recursively investigated; citation neighbours are not collaborators. Project
+records keep the published amount, unit and basis and are never converted into
+doctoral personal funding. Distinguish doctoral trainees from postdocs, count
+only people with supervision evidence, and never derive graduation, placement
+or success rates. Training fit, lab resources, doctoral funding, training
+environment, mentoring style and personality are out of scope; retain unknowns
+rather than inferring from group size, title or authorship. Work may be split
+across subagents that write `runs/<run-id>/subagents/*.json`; only the Main
+Agent merges them with `merge_subagent_findings.mjs`.
 
 For each selected advisor:
 
