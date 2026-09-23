@@ -316,7 +316,7 @@ test("T34 secrets never reach prompts, subagent output, evidence or reports", as
 
 test("T35 credential discovery honours OS defaults and the override variable", () => {
   assert.equal(resolveCredentialsPath({ platform: "darwin", env: { HOME: "/Users/fixture" } }).path, "/Users/fixture/.config/boss-hunting/credentials.env");
-  assert.equal(resolveCredentialsPath({ platform: "win32", env: { APPDATA: "/AppData/Roaming" } }).path.replace(/\\/g, "/"), "/AppData/Roaming/boss-hunting/credentials.env");
+  assert.equal(resolveCredentialsPath({ platform: "win32", env: { APPDATA: "C:\\AppData\\Roaming" } }).path, "C:\\AppData\\Roaming\\boss-hunting\\credentials.env");
   assert.equal(resolveCredentialsPath({ platform: "linux", env: { BOSS_HUNTING_CREDENTIALS_FILE: "/custom/creds.env" } }).source, "override");
 });
 

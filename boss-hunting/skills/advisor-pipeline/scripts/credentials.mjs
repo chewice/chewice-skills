@@ -9,7 +9,7 @@
 // run logs, HTML or Markdown.
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { resolve } from "node:path";
+import { posix, win32 } from "node:path";
 import { isExecutedDirectly } from "./direct-execution.mjs";
 
 export const CREDENTIAL_FILE_OVERRIDE = "BOSS_HUNTING_CREDENTIALS_FILE";
@@ -29,16 +29,16 @@ export const CREDENTIAL_STATUSES = ["configured", "unavailable", "invalid", "cap
 
 export function defaultCredentialsPath({ platform = process.platform, env = process.env } = {}) {
   if (platform === "win32") {
-    const appData = env.APPDATA || resolve(env.USERPROFILE || homedir(), "AppData", "Roaming");
-    return resolve(appData, "boss-hunting", "credentials.env");
+    const appData = env.APPDATA || win32.resolve(env.USERPROFILE || homedir(), "AppData", "Roaming");
+    return win32.resolve(appData, "boss-hunting", "credentials.env");
   }
-  const configHome = env.XDG_CONFIG_HOME || resolve(env.HOME || homedir(), ".config");
-  return resolve(configHome, "boss-hunting", "credentials.env");
+  const configHome = env.XDG_CONFIG_HOME || posix.resolve(env.HOME || homedir(), ".config");
+  return posix.resolve(configHome, "boss-hunting", "credentials.env");
 }
 
 export function resolveCredentialsPath({ platform = process.platform, env = process.env } = {}) {
   const override = String(env[CREDENTIAL_FILE_OVERRIDE] || "").trim();
-  if (override) return { path: resolve(override), source: "override" };
+  if (override) return { path: (platform === "win32" ? win32 : posix).resolve(override), source: "override" };
   return { path: defaultCredentialsPath({ platform, env }), source: "os_default" };
 }
 
