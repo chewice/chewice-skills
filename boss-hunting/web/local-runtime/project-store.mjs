@@ -577,6 +577,7 @@ export function createProjectStore(projectRoot) {
       force: true,
       filter: (source) =>
         basename(source) !== ".DS_Store" &&
+        basename(source) !== "credentials.env" &&
         !COMMUNITY_CACHE_FILES.has(basename(source)) &&
         !basename(source).endsWith(".tmp"),
     };

@@ -12,6 +12,24 @@ description: >
 
 # Boss Hunting
 
+On the first use of this installation, before starting research, run
+`node ../advisor-pipeline/scripts/first-use.mjs` from this Skill directory
+(or the equivalent full path in a copied Skill). Report its actual Pixi,
+locked-runtime and Skill checks to the user; a missing environment is a
+setup gap, not permission to install packages automatically. If Node itself is
+unavailable, check `pixi --version` and `node --version` with the host shell,
+explain the missing prerequisite and how to run the first-use check after setup.
+Next recommend the optional API keys with their purpose and official request
+links from the repository README. Ask the user to fill the one ignored
+`skills/boss-hunting/credentials.env` in the source repository manually; never
+request key values in chat. Run the credential status check again after they
+say it is filled. Once the environment check and API guidance are delivered,
+show a concrete first-use `$boss-hunting` prompt containing field, scientific
+question and target regions. Missing optional keys do not block public-only
+research. If the user already gave those inputs, reuse them rather than asking
+for the sample prompt to be sent back. Do this onboarding once per installation
+or when the user explicitly asks to check setup, not on every project change.
+
 This is the named entry to the existing workflow, not a separate system. Read
 [Advisor Pipeline](../advisor-pipeline/SKILL.md) and follow its mode-specific
 references. Use the same `project.json`, shared records, builders and confirmation

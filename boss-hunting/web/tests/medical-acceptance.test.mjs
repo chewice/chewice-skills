@@ -304,7 +304,7 @@ test("T33 subagents never write authoritative JSON; the merge layer is determini
 });
 
 test("T34 secrets never reach prompts, subagent output, evidence or reports", async () => {
-  const loaded = await loadCredentials({ platform: "linux", env: { HOME: "/h", OPENALEX_API_KEY: FAKE }, readFileImpl: async () => "" });
+  const loaded = await loadCredentials({ repositoryRoot: null, platform: "linux", env: { HOME: "/h", OPENALEX_API_KEY: FAKE }, readFileImpl: async () => "" });
   const prompt = buildRunPrompt({ project: { ...normalizeProjectMetadata(minimal, { now }), path: "/fictional" }, userPrompt: "go", runDirectory: "/run", provider: "codex", mode: "finder" });
   assert.doesNotMatch(prompt, new RegExp(FAKE));
   assert.match(prompt, /key 值不得进入提示、Subagent 输出、evidence、日志或报告/);

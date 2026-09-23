@@ -72,7 +72,7 @@ schema 调用，并映射到本策略已有的动作：
 
 ## 凭据与来源四级降级
 
-凭据是可选加速器，不是运行前提。[scripts/credentials.mjs](../scripts/credentials.mjs) 按固定顺序解析：进程环境 → `BOSS_HUNTING_CREDENTIALS_FILE` → OS 用户配置文件（Windows `%APPDATA%\boss-hunting\credentials.env`；Linux/macOS `${XDG_CONFIG_HOME:-~/.config}/boss-hunting/credentials.env`），支持 `OPENALEX_API_KEY`、`NCBI_API_KEY`、`ORCID_CLIENT_ID`/`ORCID_CLIENT_SECRET`、`CINII_APP_ID`、`SEMANTIC_SCHOLAR_API_KEY`、`WOS_API_KEY`。**不扫描磁盘找 `.env`**，不让用户把 key 贴进对话；模板见 `config/credentials.example.env`，真实文件已在 `.gitignore`。
+凭据是可选加速器，不是运行前提。[scripts/credentials.mjs](../scripts/credentials.mjs) 按固定顺序解析：进程环境 → `BOSS_HUNTING_CREDENTIALS_FILE` → 源仓库 `skills/boss-hunting/credentials.env` → 旧版 OS 用户配置文件。首次运行 [first-use.mjs](../scripts/first-use.mjs) 时在源仓库创建被 Git 忽略的空值模板，并在用户配置目录只登记源仓库路径；Web/手动复制 Skills 时必须排除真实凭据文件。支持 `OPENALEX_API_KEY`、`NCBI_API_KEY`、`ORCID_CLIENT_ID`/`ORCID_CLIENT_SECRET`、`CINII_APP_ID`、`SEMANTIC_SCHOLAR_API_KEY`、`WOS_API_KEY`。**不扫描项目目录找 `.env`**，不让用户把 key 贴进对话；模板见 `config/credentials.example.env`。
 
 对外只暴露状态词 `configured | unavailable | invalid | capability-limited`（`node scripts/credentials.mjs --check|--json`）。key 值不进 prompt、Subagent 输出、evidence、run 日志、HTML 或 Markdown；`merge_subagent_findings.mjs` 拒收含 secret 值的输出文件，`provider-capabilities.mjs` 拒写疑似含 secret 的 metadata。
 

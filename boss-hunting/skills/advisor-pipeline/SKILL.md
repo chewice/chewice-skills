@@ -235,13 +235,18 @@ Write rules:
 
 Credentials and providers:
 
+- On first use run `node scripts/first-use.mjs` and show its ordered environment,
+  optional-key and prompt guidance. It creates the ignored source-Skill
+  credentials template once and never installs dependencies; only the source
+  repository holds key values, not copied project Skills.
 - Run `node scripts/credentials.mjs --json` and
   `node scripts/provider-capabilities.mjs --project-root "$PWD" --run-id <run-id>`
   at start. Credentials are optional accelerators resolved from the process
-  environment, `BOSS_HUNTING_CREDENTIALS_FILE`, or the OS user config file
-  (`%APPDATA%\boss-hunting\credentials.env`,
-  `${XDG_CONFIG_HOME:-~/.config}/boss-hunting/credentials.env`). Never scan the
-  disk for `.env` files and never ask the user to paste keys into chat.
+  environment, `BOSS_HUNTING_CREDENTIALS_FILE`, the source repository's
+  `skills/boss-hunting/credentials.env`, then the legacy OS user config file.
+  The source repository is located from the Skill path or a one-time user
+  configuration pointer. Never scan project directories for `.env` files or
+  ask the user to paste keys into chat.
 - Only the status words `configured | unavailable | invalid | capability-limited`
   may appear in prompts, subagent outputs, evidence, logs, HTML or Markdown.
   Secret values never leave the loader.

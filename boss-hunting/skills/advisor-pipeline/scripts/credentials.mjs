@@ -2,17 +2,21 @@
 // Optional API credential loader for Boss Hunting.
 //
 // Credentials are accelerators, not prerequisites. The loader resolves them in
-// a fixed order (process environment -> BOSS_HUNTING_CREDENTIALS_FILE -> the
-// OS user config file) and never scans the disk for .env files. Callers only
+// a fixed order (process environment -> explicit override -> shared Skill file
+// -> legacy OS user config). A fixed repository pointer lets copied Skills use
+// the same source file; no project directory is scanned for .env files. Callers only
 // receive capability status words; secret values stay inside this module's
 // return object and must not be copied into prompts, subagent output, evidence,
 // run logs, HTML or Markdown.
+import { existsSync, realpathSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { posix, win32 } from "node:path";
+import { dirname, posix, resolve, win32 } from "node:path";
+import { fileURLToPath } from "node:url";
 import { isExecutedDirectly } from "./direct-execution.mjs";
 
 export const CREDENTIAL_FILE_OVERRIDE = "BOSS_HUNTING_CREDENTIALS_FILE";
+export const SKILL_CREDENTIALS_RELATIVE_PATH = "skills/boss-hunting/credentials.env";
 
 export const CREDENTIAL_PROVIDERS = [
   { id: "openalex", label: "OpenAlex", variables: ["OPENALEX_API_KEY"] },
@@ -36,9 +40,34 @@ export function defaultCredentialsPath({ platform = process.platform, env = proc
   return posix.resolve(configHome, "boss-hunting", "credentials.env");
 }
 
-export function resolveCredentialsPath({ platform = process.platform, env = process.env } = {}) {
+export function repositoryPointerPath({ platform = process.platform, env = process.env } = {}) {
+  const base = defaultCredentialsPath({ platform, env });
+  return (platform === "win32" ? win32 : posix).resolve(base, "..", "repository.path");
+}
+
+export function findRepositoryRoot(start = fileURLToPath(import.meta.url)) {
+  let directory;
+  try { directory = dirname(realpathSync(start)); } catch { directory = dirname(start); }
+  for (;;) {
+    if (existsSync(resolve(directory, "pixi.toml")) && existsSync(resolve(directory, "config", "credentials.example.env")) && existsSync(resolve(directory, "skills", "boss-hunting", "SKILL.md"))) return directory;
+    const parent = dirname(directory);
+    if (parent === directory) return null;
+    directory = parent;
+  }
+}
+
+export async function registeredRepositoryRoot({ platform = process.platform, env = process.env, readFileImpl = readFile } = {}) {
+  try {
+    const pointer = (await readFileImpl(repositoryPointerPath({ platform, env }), "utf8")).trim();
+    if (pointer && existsSync(resolve(pointer, "pixi.toml")) && existsSync(resolve(pointer, "config", "credentials.example.env")) && existsSync(resolve(pointer, "skills", "boss-hunting", "SKILL.md"))) return pointer;
+  } catch { /* no registered source repository */ }
+  return null;
+}
+
+export function resolveCredentialsPath({ platform = process.platform, env = process.env, repositoryRoot = null } = {}) {
   const override = String(env[CREDENTIAL_FILE_OVERRIDE] || "").trim();
   if (override) return { path: (platform === "win32" ? win32 : posix).resolve(override), source: "override" };
+  if (repositoryRoot) return { path: resolve(repositoryRoot, SKILL_CREDENTIALS_RELATIVE_PATH), source: "skill_directory" };
   return { path: defaultCredentialsPath({ platform, env }), source: "os_default" };
 }
 
@@ -71,8 +100,12 @@ function providerStatus(provider, values) {
   return "configured";
 }
 
-export async function loadCredentials({ env = process.env, platform = process.platform, readFileImpl = readFile } = {}) {
-  const location = resolveCredentialsPath({ platform, env });
+export async function loadCredentials({ env = process.env, platform = process.platform, readFileImpl = readFile, repositoryRoot } = {}) {
+  let sourceRoot = repositoryRoot === undefined ? findRepositoryRoot() : repositoryRoot;
+  if (sourceRoot === null && repositoryRoot === undefined) {
+    sourceRoot = await registeredRepositoryRoot({ platform, env, readFileImpl });
+  }
+  const location = resolveCredentialsPath({ platform, env, repositoryRoot: sourceRoot });
   const fromEnvironment = {};
   for (const name of CREDENTIAL_VARIABLES) {
     if (env[name] !== undefined && String(env[name]).trim() !== "") fromEnvironment[name] = String(env[name]);
@@ -85,13 +118,20 @@ export async function loadCredentials({ env = process.env, platform = process.pl
   } catch (error) {
     fileStatus = error?.code === "ENOENT" ? "missing" : "unreadable";
   }
+  let legacyFile = {};
+  if (location.source === "skill_directory") {
+    try { legacyFile = parseDotenv(await readFileImpl(defaultCredentialsPath({ platform, env }), "utf8")); } catch { /* legacy file is optional */ }
+  }
   const values = {};
   const origins = {};
   for (const name of CREDENTIAL_VARIABLES) {
     if (fromEnvironment[name] !== undefined) { values[name] = fromEnvironment[name]; origins[name] = "process_env"; }
     else if (fromFile[name] !== undefined && String(fromFile[name]).trim() !== "") {
       values[name] = String(fromFile[name]);
-      origins[name] = location.source === "override" ? "override_file" : "os_default_file";
+      origins[name] = location.source === "override" ? "override_file" : location.source === "skill_directory" ? "skill_file" : "os_default_file";
+    } else if (legacyFile[name] !== undefined && String(legacyFile[name]).trim() !== "") {
+      values[name] = String(legacyFile[name]);
+      origins[name] = "legacy_user_file";
     }
   }
   const providers = Object.fromEntries(CREDENTIAL_PROVIDERS.map((provider) => [provider.id, {

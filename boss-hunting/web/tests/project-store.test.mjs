@@ -27,9 +27,14 @@ test("project store persists exact investigation configuration", async () => {
       "must-not-copy",
     );
     await writeFile(resolve(skillReferences, "community-sources.md"), "copy");
+    const sourceCredentials = resolve(root, "skills", "boss-hunting", "credentials.env");
+    await mkdir(resolve(root, "skills", "boss-hunting"), { recursive: true });
+    await writeFile(sourceCredentials, "OPENALEX_API_KEY=fixture-private-value\n");
 
     const store = createProjectStore(root);
     const project = await store.createProject({ name: "Test", slug: "test-project" });
+    await assert.rejects(readFile(resolve(project.path, ".agents", "skills", "boss-hunting", "credentials.env")), { code: "ENOENT" });
+    await assert.rejects(readFile(resolve(project.path, ".claude", "skills", "boss-hunting", "credentials.env")), { code: "ENOENT" });
     assert.deepEqual(
       project.investigation.draft.selectedSections,
       DEFAULT_DETECTIVE_SECTIONS,

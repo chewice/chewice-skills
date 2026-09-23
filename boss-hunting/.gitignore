@@ -8,7 +8,9 @@ __pycache__/
 # Local agent/editor configuration; never distribute machine-specific launch
 # settings or credentials with the project.
 .claude/
-# Real API credentials live in the user config directory, never in the repo.
+# Shared local credential values are created on first use and never tracked.
+skills/boss-hunting/credentials.env
+# Legacy user config and accidental local credential files remain ignored.
 config/credentials.env
 *.credentials.env
 
