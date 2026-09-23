@@ -51,8 +51,18 @@ Default to the actual host's web tools, following their current schema: a GPT
 host's built-in web/search tools (`web.run`, `web_search`, or an exposed
 equivalent), or under Wisp Science its browser tools (`browser_setup`,
 `web_open_tab`, `web_scan`, `web_execute_js`, `web_screenshot`,
-`web_save_assets`). Use official static pages/APIs as fallback and an already
-available interactive browser only when dynamic JS/forms require it. Follow the
+`web_save_assets`). When a portal returns an empty shell or requires dynamic forms, immediately
+switch to actual interaction; do not finish that source after static attempts alone.
+On GPT use an exposed native interactive browser/computer tool first (inspect its
+schema; web.run is search/read, not form input). On Wisp use Browser Use:
+browser_setup → web_open_tab → web_scan → web_execute_js to fill name variants,
+institution and dates, submit, wait, inspect results, paginate and open details.
+Discover deferred tools if needed; an already available equivalent browser may be
+used with its real provider recorded. Never install a backend automatically.
+If no interactive tool exists, report missing host capability distinctly from a
+website access failure. Follow [the mandatory interaction procedure](../advisor-pipeline/references/browser-research-policy.md#动态基金库查询必须执行).
+Two static failures do not consume the two distinct interactive attempts allowed.
+Stop for CAPTCHA/login requiring human intervention; never bypass them. Follow the
 pipeline capability detection and evidence rules; built-in web retrieval is
 `static_web`, and Wisp Science browser retrieval is `browser` with
 `retrieval_provider: wisp_science_browser` — neither proves that Browser Use is
@@ -77,3 +87,15 @@ Missing or unknown sources remain pending verification, and external links use
 safe HTTP(S) URLs. Display order is never a PI quality ranking, and no total
 score, training-fit, resource, personal-funding or training-environment
 judgement is produced.
+
+## Minimal medical report and grant-search evidence
+
+Per-advisor official grant-database searching and its recorded process are mandatory baseline work for every medical report, even when the user never mentions grants. Do not require an extra prompt, a selected Detective section, or a deep-investigation request to include this baseline. Silence is not an exclusion; only an explicit user restriction can narrow it, and each excluded, blocked or unfinished search must still appear with its reason in a partial report.
+
+For a medical report, follow [the shared report contract](../advisor-pipeline/references/medical-profile.md#证据与续跑). Each advisor needs regional official grant-database searches using name variants and institution, covering active and past-five-year projects. Store the actual query, dates, scope, status, limitations and sources in `latestSignals.projectSearches[]`; store found grants in `projects[]`. Supplementary institutional/search-engine pages do not complete a database search. Respect user-selected investigation scope; report missing or blocked searches as partial, never infer “no grants” from empty data. Use descriptive `citation_label` links and separate appointment verification, page access and page update dates. Generate the shared minimalist HTML with five readable modules; do not replace it with custom decorated HTML.
+
+For collaborator selection and concise profiles, follow the medical contract: one documented, direction-relevant collaboration may suffice; report only who the scholar is, current appointment, research direction, and concrete joint projects and outputs with links.
+
+Medical minimum reports also include the [doctoral first-author and lab-website checks](../advisor-pipeline/references/medical-profile.md#博士指导第一作者画像与实验室网站默认最低内容), without an extra user request. Verify the advisor's corresponding/co-corresponding role and first/co-first authors on papers from the past five years; summarize only those joint papers. Seek an attributable lab website and check members/alumni/publications. First authors are not automatically doctoral students; preserve independent identity evidence, dates, sources and search gaps in `doctoralTrajectory`.
+
+报告导航与分区：沿用共享 HTML 生成器的五类浅色标题带及 01–05 编号；桌面右侧固定目录可跳到导师和模块，窄屏使用顶部折叠目录。保持离线单文件、系统字体与白底正文；只允许内置导航脚本的 CSP 哈希，不加载外部框架。基金过程仍默认展开，打印隐藏目录。

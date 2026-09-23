@@ -39,7 +39,13 @@ Under Wisp Science, its host browser tools (`browser_setup`, `web_open_tab`,
 `web_scan`, `web_execute_js`, `web_screenshot`, `web_save_assets`) are the
 interactive-browser route; connect with `browser_setup` first and stop for human
 verification when the host asks for it. Official static pages/APIs are fallback
-routes, and existing interactive browsers are for dynamic JS/forms that need them.
+routes. An empty shell or dynamic query form MUST trigger actual interactive
+tool discovery and execution (GPT native interactive tools when exposed; Wisp
+Browser Use). Static retries never substitute for filling name/institution/date,
+submitting, waiting, verifying filters and paginating. Record requiresInteraction,
+interactionAttempts and the shared query receipt fields. If no complete tool
+route exists, report missing host capability, not site failure; see the mandatory
+procedure in browser-research-policy.md.
 Record built-in retrieval as `static_web` and Wisp Science browser retrieval as
 `browser` with `retrieval_provider: wisp_science_browser`; this does not claim
 Browser Use is installed.
@@ -374,10 +380,12 @@ Completion requires:
 - An application-ready workbook for application mode, or an evidence-profile
   exploration workbook for medical discovery, without fabricated total scores.
 - The field/direction-named HTML research report from shared records. Medical
-  reports open with the compact overview table (advisor | core question |
-  five-year mainline | core collaboration ecology | latest signals | fit and
-  boundary), then modules A–E per PI including the inline SVG depth-1 ego
-  network, then "方向契合与主要边界" and "来源及检索覆盖说明".
+  reports start with the search requirements, then a compact comparison,
+  five readable modules per advisor, and “本次查了什么，还缺什么”.
+  Keep grant-search records expanded; put source and technical details in
+  native disclosure sections. Collaborator profiles contain only identity, current
+  appointment, research direction, joint projects and outputs; see the shared
+  medical contract for the relaxed single-documented-collaboration rule.
 - Source, freshness, missing-field, and risk checks.
 
 ## Post-evaluation application materials
@@ -452,3 +460,11 @@ regenerate the workbook from structured state.
 - Do not treat public accessibility as redistribution permission.
 - Do not bundle or commit third-party community snapshot contents.
 - Stop and state the missing input instead of inventing application facts.
+
+## Minimal medical report and grant-search evidence
+
+Per-advisor official grant-database searching and its recorded process are mandatory baseline work for every medical report, even when the user never mentions grants. Do not require an extra prompt, a selected Detective section, or a deep-investigation request to include this baseline. Silence is not an exclusion; only an explicit user restriction can narrow it, and each excluded, blocked or unfinished search must still appear with its reason in a partial report.
+
+For a medical report, follow [the shared report contract](../advisor-pipeline/references/medical-profile.md#证据与续跑). Each advisor needs regional official grant-database searches using name variants and institution, covering active and past-five-year projects. Store the actual query, dates, scope, status, limitations and sources in `latestSignals.projectSearches[]`; store found grants in `projects[]`. Supplementary institutional/search-engine pages do not complete a database search. Respect user-selected investigation scope; report missing or blocked searches as partial, never infer “no grants” from empty data. Use descriptive `citation_label` links and separate appointment verification, page access and page update dates. Generate the shared minimalist HTML with five readable modules; do not replace it with custom decorated HTML.
+
+Medical minimum reports also include the [doctoral first-author and lab-website checks](../advisor-pipeline/references/medical-profile.md#博士指导第一作者画像与实验室网站默认最低内容), without an extra user request. Verify the advisor's corresponding/co-corresponding role and first/co-first authors on papers from the past five years; summarize only those joint papers. Seek an attributable lab website and check members/alumni/publications. First authors are not automatically doctoral students; preserve independent identity evidence, dates, sources and search gaps in `doctoralTrajectory`.

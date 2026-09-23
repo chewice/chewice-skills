@@ -159,3 +159,17 @@ test("mode prompts remain compact while preserving the user request", () => {
     assert.ok(value.length < 4_000, `${mode} prompt grew to ${value.length} characters`);
   }
 });
+
+test("medical report baseline includes per-advisor grant search even without a grant request", () => {
+  for (const mode of ["finder", "ranking"]) {
+    const value = buildRunPrompt({
+      userPrompt: "寻找研究抑郁障碍机制的美国博士导师",
+      project: { ...project, domainProfile: "medical", searchMode: "discovery", medicalProfile: { fields: ["精神医学"], researchQuestions: ["抑郁障碍机制"] } },
+      runDirectory: "/tmp/advisor-project/runs/run-1", provider: "codex", mode,
+    });
+    assert.match(value, /无论用户 prompt 是否提及基金/);
+    assert.match(value, /latestSignals\.projectSearches/);
+    assert.match(value, /无需追加 prompt、另选深查维度或开启深查/);
+    assert.match(value, /仍逐位说明原因/);
+  }
+});

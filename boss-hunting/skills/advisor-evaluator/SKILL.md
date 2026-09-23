@@ -130,7 +130,7 @@ Medical tables follow `references/workbook-contract.md`: display order, real
 IDs, identity, discovery route, PI role confidence / Level, evidence
 sufficiency, current activity, research-question fit and route continuity with
 reasons, the module columns A–E (positioning and supervision link, long-term
-question and representative works with verified roles, core collaborators and
+question and representative works with verified roles, selected collaborators and
 research neighbours, latest papers and public project records, current and
 former doctoral students and graduate programme), formal records, fit boundary,
 unknowns, next verification, application route / eligibility / opportunity for
@@ -163,3 +163,11 @@ Use separate sheets for fit, evidence, sources/freshness, and configuration.
   links beside supported items; unsupported or unlinked items remain explicitly
   pending, without invented URLs or unrelated citations.
 - Stop rather than fabricate missing application facts.
+
+## Minimal medical report and grant-search evidence
+
+Per-advisor official grant-database searching and its recorded process are mandatory baseline work for every medical report, even when the user never mentions grants. Do not require an extra prompt, a selected Detective section, or a deep-investigation request to include this baseline. Silence is not an exclusion; only an explicit user restriction can narrow it, and each excluded, blocked or unfinished search must still appear with its reason in a partial report.
+
+Follow [the shared medical report contract](../advisor-pipeline/references/medical-profile.md#证据与续跑): record per-advisor official grant searches in `latestSignals.projectSearches`, separate supplementary sources, and mark missing/blocked searches as partial. Respect confirmed investigation scope. Use the shared minimalist HTML generator, descriptive citations and separate verification/access/update dates.
+
+Medical minimum reports also include the [doctoral first-author and lab-website checks](../advisor-pipeline/references/medical-profile.md#博士指导第一作者画像与实验室网站默认最低内容), without an extra user request. Verify the advisor's corresponding/co-corresponding role and first/co-first authors on papers from the past five years; summarize only those joint papers. Seek an attributable lab website and check members/alumni/publications. First authors are not automatically doctoral students; preserve independent identity evidence, dates, sources and search gaps in `doctoralTrajectory`.
