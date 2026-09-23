@@ -6,7 +6,7 @@
 
 ## 凭据与 Subagents
 
-API Key **全部可选**：`OPENALEX_API_KEY`（论文／作者／机构）、`NCBI_API_KEY`（PubMed）、`ORCID_CLIENT_ID`＋`ORCID_CLIENT_SECRET`（身份消歧）、`CINII_APP_ID`（日本 CiNii／KAKEN）、`SEMANTIC_SCHOLAR_API_KEY`（引文线索）、`WOS_API_KEY`（已有机构权限下的交叉核对）。申请入口和限制见[项目 README 凭据表](../../README.md#api-凭据)。Key 放在用户配置目录，参照[空值模板](../../config/credentials.example.env)，不要提交到 Git 或贴进聊天。缺失 Key 仍可用公开来源；当前代码做凭据状态与来源路线选择，检索由运行中的 Agent 使用可用工具执行。
+API Key **全部可选**：`OPENALEX_API_KEY`（论文／作者／机构）、`NCBI_API_KEY`（PubMed）、`ORCID_CLIENT_ID`＋`ORCID_CLIENT_SECRET`（身份消歧）、`CINII_APP_ID`（日本 CiNii／KAKEN）、`SEMANTIC_SCHOLAR_API_KEY`（引文线索）、`WOS_API_KEY`（已有机构权限下的交叉核对）。申请入口、`变量名=值` 的填写示例、配置路径与检查命令见[项目 README 的 API 凭据章节](../../README.md#api-凭据)；[空值模板](../../config/credentials.example.env)只供复制，不填真实值。Key 不要提交到 Git 或贴进聊天。缺失 Key 仍可用公开来源；当前代码做凭据状态与来源路线选择，检索由运行中的 Agent 使用可用工具执行。
 
 Codex／Claude Code 的主 Agent 负责调度、冲突裁决、合并和报告。Seed Scout 找种子研究；Identity Resolver 核验 PI；Trajectory Mapper 回查五年主线；Network Expander 梳理合作；Regional Project Investigator 核对地区项目；Doctoral Trajectory Investigator 核对博士指导关系；Evidence Auditor 最后审计来源。独立方向或 PI 可并行，同一 PI 先核验身份再回查。子代理只写 `runs/<run-id>/subagents/`，主 Agent 合并进 `outputs/`。[调度规则](../advisor-pipeline/SKILL.md#medical-discovery-orchestration)。
 

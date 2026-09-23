@@ -17,7 +17,27 @@ Boss Hunting 根据公开证据发现和比较博士导师。医学探索的最�
 | 按需 | `SEMANTIC_SCHOLAR_API_KEY` | 论文、引文及相关研究线索；引文关系不等于合作 | [Semantic Scholar 申请](https://www.semanticscholar.org/product/api#api-key-form) |
 | 有机构权限时按需 | `WOS_API_KEY` | Web of Science 文献与引文交叉核对；Key 不代表拥有 Expanded API 或特定订阅层级 | [Clarivate Developer Portal](https://developer.clarivate.com/) |
 
-复制[空值模板](config/credentials.example.env)，填入**用户配置目录**中的 `boss-hunting/credentials.env`：Linux／WSL 位于 `~/.config/`（若设置 `XDG_CONFIG_HOME`，则在其下），macOS 位于 `~/.config/`，Windows 位于 `%APPDATA%`；也可用 `BOSS_HUNTING_CREDENTIALS_FILE` 指定路径。进程环境变量优先于文件。检查状态（只显示状态词和文件路径）：
+**提供形式：**在用户自己的 `credentials.env` 中按 `变量名=申请到的值` 每行填写一项；这是纯文本 `.env` 文件，不是 JSON。只填写已经申请到的凭据，其他项留空或删除；ORCID 的 Client ID 和 Client Secret 要一起填写。例如（尖括号内容仅是占位符，不是真实 Key）：
+
+```dotenv
+OPENALEX_API_KEY=<你的 OpenAlex Key>
+NCBI_API_KEY=<你的 NCBI Key>
+ORCID_CLIENT_ID=<你的 ORCID Client ID>
+ORCID_CLIENT_SECRET=<你的 ORCID Client Secret>
+CINII_APP_ID=<你的 CiNii Application ID>
+SEMANTIC_SCHOLAR_API_KEY=<你的 Semantic Scholar Key>
+WOS_API_KEY=<你的 Web of Science Key>
+```
+
+将[空值模板](config/credentials.example.env)复制到**仓库外的用户配置目录**，再用文本编辑器填入真实值。默认路径：Linux／WSL 为 `~/.config/boss-hunting/credentials.env`（设置了 `XDG_CONFIG_HOME` 时位于该目录下），macOS 为 `~/.config/boss-hunting/credentials.env`，Windows 为 `%APPDATA%\boss-hunting\credentials.env`。也可设置 `BOSS_HUNTING_CREDENTIALS_FILE` 指向自选文件；进程环境变量中同名 Key 优先于文件中的值。以 Linux／WSL 为例：
+
+```bash
+mkdir -p "$HOME/.config/boss-hunting"
+cp -n /path/to/boss-hunting/config/credentials.example.env "$HOME/.config/boss-hunting/credentials.env"
+# 然后用文本编辑器填写已申请到的值；不要把真实值放进命令历史。
+```
+
+检查状态（只显示状态词和文件路径，不显示 Key）：
 
 ```bash
 pixi run --manifest-path /path/to/boss-hunting/pixi.toml node /path/to/boss-hunting/skills/advisor-pipeline/scripts/credentials.mjs --check
