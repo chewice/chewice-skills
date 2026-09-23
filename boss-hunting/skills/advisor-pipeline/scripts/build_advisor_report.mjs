@@ -153,7 +153,7 @@ function moduleHeading(index, key) {
   return `<div class="module module-${key}" id="advisor-${index + 1}-${key}"><h4><span class="module-number">${number}</span>${title}</h4>`;
 }
 function reportNavigation(advisors, medical) {
-  return `<nav class="report-toc" aria-label="报告目录"><details class="toc-shell" open><summary>报告目录</summary><div class="toc-content">
+  return `<nav class="report-toc" aria-label="报告目录"><p class="toc-brand"><span class="toc-mark" aria-hidden="true">A</span><span><strong>Advisor Atlas</strong><small>导师调研</small></span></p><details class="toc-shell" open><summary>报告目录</summary><div class="toc-content">
 <a href="#requirements">查找要求</a><a href="#overview">导师对照</a><a href="#advisors">导师详情</a>
 ${advisors.map((row, index) => {
     const id = `advisor-${index + 1}`;
@@ -458,21 +458,53 @@ function responsiveTables(report) {
 }
 
 const REPORT_STYLE = `
-*{box-sizing:border-box}html{scroll-padding-top:24px}body{max-width:1000px;margin:auto;padding:48px 28px;color:#202124;background:#fff;font:17px/1.7 system-ui,-apple-system,"Segoe UI",sans-serif;overflow-wrap:anywhere}
-h1{font-size:30px;line-height:1.35;margin:12px 0 20px}h2{font-size:24px;margin:48px 0 20px;border-bottom:1px solid #ddd;padding-bottom:10px}h3{font-size:22px;margin:32px 0 14px}h4{font-size:19px;margin:28px 0 14px}h5{font-size:17px;margin:24px 0 10px}h6{font-size:15px;margin:18px 0 8px}p{margin:10px 0}a{color:#185a8d;text-underline-offset:3px}a:focus-visible,summary:focus-visible{outline:2px solid #185a8d;outline-offset:4px}
-.muted,.sources,.status-line{color:#555;font-size:14px}.sources{display:inline-block;margin-top:4px}.module{margin:24px 0;padding-top:4px;border-top:1px solid #e5e5e5}article{padding:0 0 30px;margin:32px 0 0;border-bottom:1px solid #aaa}dl{margin:12px 0}dl>div{display:grid;grid-template-columns:190px minmax(0,1fr);gap:20px;margin:14px 0}dt{font-weight:600}dd{margin:0;min-width:0}table{border-collapse:collapse;width:100%;font-size:14px;table-layout:fixed}th,td{text-align:left;vertical-align:top;border-bottom:1px solid #ddd;padding:12px 10px}th{font-weight:600}th:first-child,td:first-child{padding-left:0}.table-wrap{max-width:100%}li{margin:12px 0}ul,ol{padding-left:24px}details{margin:14px 0}summary{cursor:pointer;font-weight:600}details>p,details>div{margin-left:16px}pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px}.source-detail{border-bottom:1px solid #e5e5e5;padding:10px 0}.source-claim{border-top:1px solid #eee;padding-top:8px}.search-record{margin:18px 0}.person-entry{margin:24px 0;padding:0 0 24px;border-bottom:1px solid #e5e5e5}.person-entry:last-child{border-bottom:0;padding-bottom:0}.person-heading{display:flex;align-items:baseline;gap:8px 16px;flex-wrap:wrap;margin:0 0 6px}.person-heading h5,.person-heading h6{font-size:18px;margin:0;font-weight:600}.person-meta,.person-role{font-size:14px;color:#555}.person-meta{margin:4px 0 12px}.field-label{display:block;font-size:14px;color:#555;margin-bottom:3px}.person-work h6{font-weight:500;color:#555}.works{padding-left:20px}.works li{margin:14px 0}.person-entry details{margin:12px 0}.sources{margin-left:4px}nav{display:flex;gap:20px;flex-wrap:wrap;font-size:14px;margin:24px 0}
-@media(max-width:700px){body{padding:24px 16px;font-size:16px}h1{font-size:25px}h2{font-size:21px}dl>div{grid-template-columns:1fr;gap:3px}table,tbody,tr,td{display:block;width:100%}thead{display:none}tr{border-bottom:1px solid #bbb;padding:12px 0}td{border:0;padding:6px 0}td:before{content:attr(data-label);display:block;font-weight:600;margin-bottom:2px}details>p,details>div{margin-left:0}}
-@media print{body{max-width:none;padding:0;font-size:11pt}nav,.technical{display:none}h2,h3,h4,h5,h6{break-after:avoid}tr,.source-claim{break-inside:avoid}a{color:#185a8d}details{display:block}details>*{display:block}details::details-content{content-visibility:visible;display:block}summary{list-style:none}.source-detail{break-inside:auto}table{font-size:10pt}}
-/* Module identity is consistent across advisors, with text and numbering as well as color. */
-.advisor>h3{font-size:28px;border-top:2px solid #354352;padding-top:22px;margin-top:52px}
-.module{margin:40px 0;border:0;padding:0}.module>h4{display:flex;gap:14px;align-items:baseline;background:var(--module-bg,#f1f3f5);border-left:3px solid var(--module-edge,#687785);padding:12px 16px;margin:0 0 22px;color:#202c38}
-.module-a{--module-bg:#edf3fa;--module-edge:#6685a8}.module-b{--module-bg:#edf6f3;--module-edge:#5f8b80}.module-c{--module-bg:#f3eff8;--module-edge:#89729d}.module-d{--module-bg:#fbf2e9;--module-edge:#ac8257}.module-e{--module-bg:#eff2f5;--module-edge:#758594}.module-number{font-size:14px;font-weight:600;font-variant-numeric:tabular-nums}
-.report-toc{display:block;position:sticky;top:0;z-index:5;background:#fff;border-bottom:1px solid #dce1e6;margin:0 0 24px;font-size:14px;line-height:1.5}
-.report-toc details{margin:0}.report-toc summary{padding:10px 8px}.report-toc a{display:block;padding:7px 10px;text-decoration:none;color:#414b56;border-left:2px solid transparent}.report-toc a:hover{background:#f3f5f7}.report-toc a[aria-current]{color:#185a8d;border-left-color:#185a8d;background:#edf3fa;font-weight:600}.report-toc .toc-content{margin:0;max-height:65vh;overflow-y:auto;overscroll-behavior:contain;padding:6px 0 12px}.report-toc .toc-advisor>div{margin:0 0 4px 12px}.report-toc .toc-advisor>summary{font-weight:600;overflow-wrap:anywhere}.report-toc .toc-advisor a{font-size:13px}.report-toc .toc-advisor>summary>a{display:inline;padding:2px 0;font-size:14px;border:0}.report-toc .toc-advisor>summary{padding-left:8px}
-html{scroll-padding-top:76px}[id]:focus{outline:none}[id]:focus-visible{outline:2px solid #185a8d;outline-offset:5px}
-@media(min-width:1200px){body{max-width:1340px;padding-right:300px}.report-toc{position:fixed;right:max(24px,calc((100vw - 1340px)/2 + 28px));top:50%;transform:translateY(-50%);width:240px;max-height:80vh;overflow-y:auto;border:0;border-left:1px solid #dce1e6;padding-left:12px;margin:0}.report-toc .toc-shell>summary{display:none}.report-toc .toc-content{max-height:none}html{scroll-padding-top:28px}}
-@media print{body{max-width:none;padding:0}.report-toc{display:none!important}.module>h4{border:1px solid #aaa;border-left:3px solid #555;background:#f4f4f4;print-color-adjust:exact}.advisor>h3{margin-top:26px}}
-
+:root{--ink:#1d2130;--muted:#767b8b;--line:#e7e7ec;--canvas:#f6f5f2;--card:#fff;--violet:#6557d9;--violet-dark:#4d42b9;--violet-soft:#eeecff;--green:#2f8b67;--green-soft:#e8f4ee;--amber:#b8782d;--amber-soft:#fff2df;--sidebar:#24222d;--shadow:0 14px 34px rgba(35,31,60,.055)}
+*{box-sizing:border-box}html{scroll-padding-top:24px;background:var(--canvas)}
+body{margin:0;padding:20px 18px 48px;color:var(--ink);background:var(--canvas);font:17px/1.7 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;-webkit-font-smoothing:antialiased;overflow-wrap:anywhere}
+main{max-width:1000px;margin:0 auto}
+.eyebrow{margin:0 0 8px;color:var(--violet);font-size:11px;font-weight:800;letter-spacing:.16em}
+header,main>section{padding:28px 32px;margin:0 0 14px;border:1px solid var(--line);border-radius:18px;background:var(--card);box-shadow:var(--shadow)}
+h1{margin:6px 0 14px;font:500 34px/1.25 Georgia,"Songti SC",serif;letter-spacing:-.02em}
+h2{margin:0 0 18px;padding:0;border:0;font:500 22px/1.3 Georgia,"Songti SC",serif}
+h3{margin:8px 0 12px;font:500 26px/1.3 Georgia,"Songti SC",serif}
+h4{margin:22px 0 12px;font:500 18px/1.35 Georgia,"Songti SC",serif}
+h5{margin:20px 0 8px;font-size:16px}h6{margin:16px 0 6px;font-size:15px}p{margin:10px 0}
+a{color:var(--violet);text-underline-offset:3px}a:hover{color:var(--violet-dark)}
+a:focus-visible,summary:focus-visible,[id]:focus-visible{outline:2px solid var(--violet);outline-offset:4px}
+.muted,.sources,.status-line,.person-meta,.person-role,.field-label{color:var(--muted);font-size:14px}
+.sources{display:inline-block;margin:4px 0 0 4px}.status-line{margin:0 0 8px}
+header>p:last-of-type,.status-line{padding:8px 12px;border-radius:10px;background:#f3f2f7}
+article{padding:8px 0 4px;margin:28px 0 0;border:0}
+.advisor>h3{margin:8px 0 10px;padding:0;border:0}
+.module{margin:18px 0;padding:20px 22px 18px;border:1px solid var(--line);border-radius:14px;background:var(--card);box-shadow:0 8px 20px rgba(35,31,60,.04)}
+.module>h4{display:flex;gap:12px;align-items:center;margin:0 0 16px;padding:0 0 14px;border-bottom:1px solid var(--line);background:none;color:var(--ink)}
+.module-number{display:inline-grid;place-items:center;min-width:32px;height:32px;border-radius:10px;background:var(--module-chip,var(--violet-soft));color:var(--module-ink,var(--violet-dark));font:700 12px/1 ui-sans-serif,system-ui,sans-serif;font-variant-numeric:tabular-nums}
+.module-a{--module-chip:var(--violet-soft);--module-ink:var(--violet-dark)}.module-b{--module-chip:var(--green-soft);--module-ink:var(--green)}.module-c{--module-chip:#ece8fb;--module-ink:#5b4db8}.module-d{--module-chip:var(--amber-soft);--module-ink:var(--amber)}.module-e{--module-chip:#eef1f6;--module-ink:#4a5563}
+dl{margin:12px 0}dl>div{display:grid;grid-template-columns:190px minmax(0,1fr);gap:20px;margin:14px 0}dt{font-weight:650}dd{margin:0;min-width:0}
+.table-wrap{max-width:100%;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fafaf8}
+table{border-collapse:collapse;width:100%;font-size:14px;table-layout:fixed}th,td{text-align:left;vertical-align:top;border-bottom:1px solid var(--line);padding:12px 14px}th{color:#5c5866;background:#f3f2f7;font-weight:650}tr:last-child td{border-bottom:0}
+li{margin:12px 0}ul,ol{padding-left:22px}details{margin:14px 0}summary{cursor:pointer;font-weight:650}details>p,details>div{margin-left:16px}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;padding:12px;border-radius:10px;background:#f3f2f7}
+.source-detail{border-bottom:1px solid var(--line);padding:10px 0}.source-claim{border-top:1px solid #eee;padding-top:8px}.search-record{margin:18px 0}
+.person-entry{margin:22px 0;padding:0 0 18px;border-bottom:1px solid var(--line)}.person-entry:last-child{border-bottom:0;padding-bottom:0}
+.person-heading{display:flex;align-items:baseline;gap:8px 16px;flex-wrap:wrap;margin:0 0 6px}
+.person-heading h5,.person-heading h6{margin:0;font:500 18px/1.35 Georgia,"Songti SC",serif}.person-meta{margin:4px 0 12px}.field-label{display:block;margin-bottom:3px}.person-work h6{font-weight:500}.works{padding-left:20px}.works li{margin:14px 0}.person-entry details{margin:12px 0}
+.toc-brand{display:flex;align-items:center;gap:11px;margin:0 4px 18px;color:#f5f4f8}
+.toc-mark{width:35px;height:35px;border-radius:11px;display:grid;place-items:center;background:linear-gradient(145deg,#7f71ef,#574ac2);color:#fff;font:italic 20px/1 Georgia,serif;box-shadow:0 8px 20px rgba(101,87,217,.3)}
+.toc-brand strong{display:block;font:16px/1.2 Georgia,"Songti SC",serif}.toc-brand small{display:block;margin-top:3px;color:#9e9ba8;font-size:10px;letter-spacing:.12em}
+.report-toc{display:block;position:sticky;top:0;z-index:5;margin:0 0 16px;padding:16px 16px 10px;border:1px solid #2d2a36;border-radius:0 0 16px 16px;background:var(--sidebar);color:#f5f4f8;font-size:14px;line-height:1.5;box-shadow:0 12px 28px rgba(12,10,17,.18)}
+.report-toc details{margin:0}.report-toc summary{padding:10px 8px;color:#d3d0db}
+.report-toc a{display:block;padding:8px 12px;border:0;border-radius:10px;color:#afabb8;text-decoration:none;transition:background .16s ease,color .16s ease}
+.report-toc a:hover{background:rgba(255,255,255,.055);color:#fff}
+.report-toc a[aria-current]{color:#fff;background:#37333f;box-shadow:inset 3px 0 0 #897df0;font-weight:600}
+.report-toc .toc-content{margin:0;max-height:65vh;overflow-y:auto;overscroll-behavior:contain;padding:4px 0 8px;scrollbar-width:thin;scrollbar-color:#514c5d transparent}
+.report-toc .toc-advisor>div{margin:0 0 4px 8px}.report-toc .toc-advisor>summary{font-weight:600;overflow-wrap:anywhere;padding-left:8px}
+.report-toc .toc-advisor a{font-size:13px}.report-toc .toc-advisor>summary>a{display:inline;padding:2px 0;font-size:14px;box-shadow:none}
+html{scroll-padding-top:76px}[id]:focus{outline:none}
+@media(max-width:700px){body{padding:12px 12px 36px;font-size:16px}h1{font-size:26px}h2{font-size:20px}header,main>section{padding:20px 16px}dl>div{grid-template-columns:1fr;gap:3px}table,tbody,tr,td{display:block;width:100%}thead{display:none}tr{border-bottom:1px solid var(--line);padding:12px 0}td{border:0;padding:6px 14px}td:before{content:attr(data-label);display:block;color:#5c5866;font-weight:650;margin-bottom:2px}details>p,details>div{margin-left:0}.table-wrap{border:0;background:transparent}}
+@media(min-width:1200px){body{padding:34px 36px 54px 280px}main{margin:0}.report-toc{position:fixed;left:0;top:0;bottom:0;width:244px;height:100vh;max-height:none;overflow:auto;padding:28px 16px 20px;border:0;border-radius:0;margin:0;box-shadow:none}.report-toc .toc-shell>summary{display:none}.report-toc .toc-content{max-height:none}html{scroll-padding-top:28px}}
+@media print{html,body{background:#fff;color:#1d2130}body{max-width:none;padding:0;font-size:11pt}nav,.technical,.report-toc{display:none!important}header,main>section,.module,.table-wrap{box-shadow:none;border-color:#ccc}h2,h3,h4,h5,h6{break-after:avoid}tr,.source-claim,.person-entry{break-inside:avoid}a{color:var(--violet-dark)}details{display:block}details>*{display:block}details::details-content{content-visibility:visible;display:block}summary{list-style:none}.source-detail{break-inside:auto}table{font-size:10pt}.advisor>h3{margin-top:20px}}
+@media(prefers-reduced-motion:reduce){.report-toc a{transition:none}}
 `;
 
 // ---------------------------------------------------------------------------
@@ -624,7 +656,7 @@ ${historicalRanking ? `<details class="technical"><summary>历史比较记录（
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'sha256-${REPORT_NAV_HASH}'; base-uri 'none'; form-action 'none'">
 <title>${html(subject(project))} — 导师调研</title>
 <style>${REPORT_STYLE}</style></head>
-<body>${reportNavigation(advisorRows.map(row => ({...row, ...(advisorFacts.get(row.advisor_id || row.advisorId) || {})})), medical)}<main><header><p class="muted">Boss Hunting · 导师调研</p><h1>${html(subject(project))}</h1>
+<body>${reportNavigation(advisorRows.map(row => ({...row, ...(advisorFacts.get(row.advisor_id || row.advisorId) || {})})), medical)}<main><header><p class="eyebrow">Boss Hunting · 导师调研</p><h1>${html(subject(project))}</h1>
 ${fixtureNotice ? `<p><strong>虚构示例 / FICTIONAL FIXTURE：</strong>${html(fixtureNotice)}</p>` : ""}
 <p>${discovery ? "生物医学导师方向探索" : medical ? "生物医学导师申请筛选" : "导师与申请项目调研"} · ${html(project.target || "地区尚未确认")} · ${advisorRows.length} 位导师记录${medical && discovery ? "" : ` / ${programRows.length} 个真实项目机会`}</p>
 ${historicalRanking ? `<p><strong>历史比较待复核：</strong>已有 ${rankings.length} 条比较记录的调查确认已失效或不适用于当前范围。保留研究和来源痕迹；当前按稳定名称展示，申请资格待重新核对。</p>` : ""}
