@@ -41,7 +41,7 @@ WOS_API_KEY=<你的 Web of Science Key>
 
 首次检查后，请**手动编辑源仓库**的 `skills/boss-hunting/credentials.env`，按上表填写已申请到的值；空值模板来自 [config/credentials.example.env](config/credentials.example.env)。进程环境变量或 `BOSS_HUNTING_CREDENTIALS_FILE` 可显式覆盖；旧版 OS 用户配置文件仍作为兼容回退。不要在申请项目里复制或新建 Key 文件。克隆仓库本身无法生成被 Git 忽略的文件，所以创建动作发生在首次检查时。
 
-如果首次检查提示凭据文件权限过宽，填写真实 Key 前请核对宿主系统的文件访问权限；某些 WSL Windows 盘挂载不会按 Linux 的 `chmod` 显示权限。
+如果首次检查提示凭据文件权限过宽，填写真实 Key 前请核对宿主系统的文件访问权限；某些 WSL Windows 盘挂载不会按 Linux 的 `chmod` 显示权限。原生 Windows 上 Node.js 报告的 `mode` 不能证明文件仅本人可读，请在文件属性中核对访问权限。
 
 检查状态（只显示状态词和文件路径，不显示 Key）：
 

@@ -113,7 +113,9 @@ export function renderFirstUse(result) {
     "有机构权限时按需 WoS（WOS_API_KEY）：注册门户和应用，订阅获准的 API 计划：https://developer.clarivate.com/",
     "每行填写 VARIABLE=实际值；不要把 Key 发到聊天。Key 缺失不阻止公开检索。",
   );
-  if (credentials.sharedFileMode !== null && credentials.sharedFileMode !== undefined && (credentials.sharedFileMode & 0o077)) {
+  if (environment.platform.startsWith("win32") && credentials.sharedFileMode !== null && credentials.sharedFileMode !== undefined) {
+    lines.push("Windows 文件权限需在文件属性中核对；Node.js 的 mode 数值不能证明凭据文件仅本人可读。填写真实 Key 前请核对访问权限。");
+  } else if (credentials.sharedFileMode !== null && credentials.sharedFileMode !== undefined && (credentials.sharedFileMode & 0o077)) {
     lines.push("文件系统报告凭据文件权限为 0" + credentials.sharedFileMode.toString(8) + "；填写真实 Key 前请核对宿主系统的文件访问权限。");
   }
   if (credentials.file.source === "override") lines.push("当前设置了 BOSS_HUNTING_CREDENTIALS_FILE，状态检测优先读取该覆盖文件。");

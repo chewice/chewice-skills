@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { mkdtemp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
+import { platform } from "node:process";
 import { resolve } from "node:path";
 import test from "node:test";
 import { createTemplate, renderFirstUse } from "../../skills/advisor-pipeline/scripts/first-use.mjs";
@@ -19,7 +20,8 @@ test("first-use creates one ignored-source credential template and never overwri
     assert.equal(created.created, true);
     assert.equal(created.path, resolve(root, "skills/boss-hunting/credentials.env"));
     assert.equal(await readFile(created.path, "utf8"), "OPENALEX_API_KEY=\n");
-    assert.equal((await stat(created.path)).mode & 0o777, 0o600);
+    // Windows reports synthetic POSIX mode bits; its ACL cannot be asserted here.
+    if (platform !== "win32") assert.equal((await stat(created.path)).mode & 0o777, 0o600);
     assert.equal(await readFile(pointer, "utf8"), root + "\n");
 
     await writeFile(created.path, "OPENALEX_API_KEY=fixture-private-value\n");
@@ -43,14 +45,20 @@ test("first-use feedback orders environment, optional keys and prompt without ex
     },
     credentials: { file: { path: "/fixture/boss-hunting/skills/boss-hunting/credentials.env", status: "loaded" }, sharedFileMode: 0o777, created: true, providers: statuses },
   };
+  report.credentials.sharedPath = resolve(report.repositoryRoot, "skills/boss-hunting/credentials.env");
   const text = renderFirstUse(report);
   assert.ok(text.indexOf("1. 依赖环境") < text.indexOf("2. 可选 API 凭据"));
   assert.ok(text.indexOf("2. 可选 API 凭据") < text.indexOf("3. 首次使用 prompt 示例"));
   assert.match(text, /https:\/\/openalex\.org\/settings\/api/);
-  assert.match(text, /skills\/boss-hunting\/credentials\.env/);
+  assert.ok(text.includes(report.credentials.sharedPath));
   assert.match(text, /文件系统报告凭据文件权限为 0777/);
   assert.match(text, /\$boss-hunting 探索/);
   assert.doesNotMatch(text, /fixture-private-value/);
+  report.environment.platform = "win32-64";
+  const windowsText = renderFirstUse(report);
+  assert.match(windowsText, /Windows 文件权限需在文件属性中核对/);
+  assert.doesNotMatch(windowsText, /文件系统报告凭据文件权限为 0777/);
+  report.environment.platform = "linux-64";
   report.environment.runtime.ready = false;
   assert.doesNotMatch(renderFirstUse(report), /\$boss-hunting 探索/);
 });
