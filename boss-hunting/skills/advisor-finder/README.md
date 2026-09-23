@@ -29,6 +29,6 @@ $advisor-finder 先探索英国的神经免疫方向导师。我希望学习单�
 目前只比较研究问题和训练支持，暂不判断申请资格。
 ```
 
-首次项目建议通过 [Boss Hunting](../boss-hunting/README.md) 初始化。已有 CV 和当前有效来源会被复用；未核实的资格或项目保持待确认，不作为通过条件。
+首次项目建议通过 [Boss Hunting](../../README.md) 初始化。已有 CV 和当前有效来源会被复用；未核实的资格或项目保持待确认，不作为通过条件。
 
 产物包括 `outputs/advisor_records.json`、`program_records.json`、`evidence.json`、`candidates.json`，以及按研究方向命名的 HTML 和补充 Excel。详细流程见 [SKILL.md](SKILL.md)，匹配规则见 [matching-strategy.md](references/matching-strategy.md)。

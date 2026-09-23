@@ -1,5 +1,7 @@
 # Boss Hunting
 
+本目录是 Boss Hunting 项目仓库，包含 Pixi 环境、Web 控制台和 Skills；真正被 Codex／Claude Code 识别的主 Skill 入口是 [skills/boss-hunting/SKILL.md](skills/boss-hunting/SKILL.md)。`skills/` 下的 Finder、Detective、Evaluator 等目录是协作模块，不是另一套同名系统。
+
 Boss Hunting 根据公开证据发现和比较博士导师。医学探索的最低输入只有**医学领域、疾病／机制／科学问题、目标地区**，无需 CV。流程从种子研究发现 PI、核验身份、回查近五年研究、扩展合作网络，再调查五个模块：身份与科研定位、近五年主线、合作网络、最新研究与项目、博士培养轨迹。五维证据画像分别呈现方向契合、主线连续性、PI 角色置信度、证据充分性和当前活跃度；未知事项会标明，不生成导师质量总分。申请筛选需要相关真实背景；RP 和套磁信另需真实 CV、确切导师—项目目标与用户确认。
 
 设计参考 Ben A. Barres 的 NeuroView [*How to pick a graduate advisor*](https://doi.org/10.1016/j.neuron.2013.10.005)（[PubMed](https://pubmed.ncbi.nlm.nih.gov/24139033/)）。文章讨论导师选择与指导质量，**并非对 Boss Hunting 的验证或认可**。本 Skill 只比较可公开核验的研究、项目及指导关系等事实，不推断导师人格或组内氛围。
