@@ -1,34 +1,22 @@
-# Boss Hunting
+# Boss Hunting Skill
 
-## 用途
+医学探索从**医学领域 → 疾病／机制／科学问题 → 目标地区**开始，无需 CV。Skill 发现并核验 PI，调查身份与定位、近五年主线、合作网络、最新研究／项目、博士培养轨迹，再用五维证据画像比较。申请筛选需要真实相关背景；RP／套磁信另需真实 CV、确切目标和确认。
 
-导师发现与比较的主入口。根据医学研究兴趣或真实 CV，调用 Finder、Detective、Evaluator，逐步形成有来源的候选名单、背景调查和比较报告，也支持继续已有项目。医学探索可不提供 CV；申请筛选与申请材料各有对应输入要求。
+设计参考 Ben A. Barres 的 [*How to pick a graduate advisor*](https://doi.org/10.1016/j.neuron.2013.10.005)（[PubMed](https://pubmed.ncbi.nlm.nih.gov/24139033/)）。文章讨论导师选择与指导质量，并未验证或认可本 Skill；调查只记录可公开核验的事实。
 
-本技能复用 [advisor-pipeline](../advisor-pipeline/README.md) 的状态和脚本，不维护第二套流程。主产物为申请项目 `outputs/` 下按学科或研究方向命名的 HTML，Excel 为补充导出。
+## 凭据与 Subagents
 
-## 运行必需依赖
+API Key **全部可选**：`OPENALEX_API_KEY`（论文／作者／机构）、`NCBI_API_KEY`（PubMed）、`ORCID_CLIENT_ID`＋`ORCID_CLIENT_SECRET`（身份消歧）、`CINII_APP_ID`（日本 CiNii／KAKEN）、`SEMANTIC_SCHOLAR_API_KEY`（引文线索）、`WOS_API_KEY`（已有机构权限下的交叉核对）。申请入口和限制见[项目 README 凭据表](../../README.md#api-凭据)。Key 放在用户配置目录，参照[空值模板](../../config/credentials.example.env)，不要提交到 Git 或贴进聊天。缺失 Key 仍可用公开来源；当前代码做凭据状态与来源路线选择，检索由运行中的 Agent 使用可用工具执行。
 
-- 可加载本地 Skills、读写项目文件并检索公开网页的 Agent，例如 Codex 或 Claude Code。
-- 完整的同级技能集合，尤其是 `advisor-pipeline` 及 Finder、Detective、Evaluator；安装时复制整个 `skills/`。
-- [项目 Pixi 环境](../../pixi.toml)：默认平台为 `linux-64`，Windows 使用 WSL；Node.js `>=22.13,<23` 用于初始化和导出。该环境同时声明 Python `>=3.11,<3.13`，用于按需社区同步。
-- 事实核验默认先用宿主实际暴露的联网工具，按真实 schema 执行：GPT/Codex 宿主的内置搜索与网页阅读（`web.run`、`web_search`），或 Wisp Science 的浏览器工具组（`browser_setup`、`web_open_tab`、`web_scan`、`web_execute_js`、`web_screenshot`、`web_save_assets`）。官方静态页/API 作为回退，动态 JS 表单才使用已有交互浏览器。Wisp Science 浏览器复用真实 Chrome 会话，证据记 `retrieval_method: browser` 与 `retrieval_provider: wisp_science_browser`；没有固定必装的 Browser Use 服务。
+Codex／Claude Code 的主 Agent 负责调度、冲突裁决、合并和报告。Seed Scout 找种子研究；Identity Resolver 核验 PI；Trajectory Mapper 回查五年主线；Network Expander 梳理合作；Regional Project Investigator 核对地区项目；Doctoral Trajectory Investigator 核对博士指导关系；Evidence Auditor 最后审计来源。独立方向或 PI 可并行，同一 PI 先核验身份再回查。子代理只写 `runs/<run-id>/subagents/`，主 Agent 合并进 `outputs/`。[调度规则](../advisor-pipeline/SKILL.md#medical-discovery-orchestration)。
 
-直接使用 Skills 不要求安装 Web 的 npm 包、R 或 Excel 库。社区 PDF 检索、RP 编译等依赖仅在进入相应阶段时需要，见 [完整依赖与安装说明](../../README.md#按使用方式准备依赖)。
+## 使用与结果
 
-## 如何使用
+在仓库运行 `pixi install`（默认 `linux-64`；Windows 使用 WSL），将完整 `skills/` 复制到申请项目的 `.agents/skills/`（Codex）或 `.claude/skills/`（Claude Code）。在项目文件夹调用：
 
-1. 按 [项目安装说明](../../README.md#方式二在自己的项目文件夹中直接使用-skills)，将完整 `skills/` 放到申请项目的 `.agents/skills/`（Codex）或 `.claude/skills/`（Claude Code），保留仓库作为共享 Pixi 依赖环境。
-2. 在该申请项目中调用技能，提供已有资料。例如：
+```text
+$boss-hunting 探索肿瘤免疫治疗反应的博士导师：领域是肿瘤学，
+问题是肿瘤微环境如何影响免疫治疗反应，地区为香港和美国；目前没有 CV。
+```
 
-   ```text
-   $boss-hunting 我想探索肿瘤免疫方向的博士导师，地区为英国和香港。
-   我希望学习单细胞分析，目前先做方向与训练匹配探索，没有 CV。
-   ```
-
-   ```text
-   $boss-hunting 继续当前申请项目，复用已保存的 CV 和候选记录。
-   ```
-
-3. Agent 只补问缺失输入，完成发现后由用户选择具体导师—项目与背调维度；申请材料另行确认目标与种类。
-
-流程细则见 [SKILL.md](SKILL.md)。技能生成研究资料与申请材料，不发送邮件或提交申请。
+主报告位于申请项目的 `outputs/<学科或方向>-导师调研.html`；导师与来源记录为 `outputs/advisor_records.json`、`outputs/evidence.json`，运行记录在 `runs/<run-id>/`。Excel 为补充；确认精确目标后，RP／套磁信在 `outputs/application-materials/<advisorProgramId>/`。安装命令、Key 申请网址及 Web 使用方法见[项目 README](../../README.md)，执行规则见[SKILL.md](SKILL.md)。
