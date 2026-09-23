@@ -1,3 +1,4 @@
+import { doctoralWorkbookSummary, overlayDoctoralProfile } from "./doctoral-evidence.mjs";
 import { dateCell, formulaCell } from "./workbook-runtime.mjs";
 import { buildMedicalDiscoveryView, evidenceProfile, medicalProject, normalizeMedicalCandidate } from "./medical-evidence.mjs";
 
@@ -48,10 +49,14 @@ function profileTable(name, candidates, project, advisorOnly = false) {
   const data = candidates.map((original, index) => {
     const row = normalizeMedicalCandidate(original, project, index);
     const profile = evidenceProfile(row);
+    const stored = project.advisorRecords?.find((advisor) => (advisor.advisor_id || advisor.advisorId) === (row.advisor_id || row.advisorId));
+    const base = evidenceProfile(stored || {});
+    const doctoral = base.doctoralTrajectory || base.doctoral_trajectory;
+    if (doctoral) profile.doctoralTrajectory = overlayDoctoralProfile(doctoral, profile.doctoralTrajectory);
     const mainline = profile.researchMainline;
     const network = profile.collaborationNetwork;
     const signals = profile.latestSignals;
-    const doctoral = profile.doctoralTrajectory;
+    const doctoralView = normalizeMedicalCandidate({ ...row, evidenceProfile: profile }, project, index).evidenceProfile.doctoralTrajectory;
     return [
       index + 1, row.advisor_id || row.advisorId || "", advisorOnly ? "" : row.advisorProgramId || "",
       row.name || row.advisorName || "",
@@ -71,9 +76,9 @@ function profileTable(name, candidates, project, advisorOnly = false) {
       text(network.researchNeighbors.map((neighbor) => [neighbor.name, neighbor.type].filter(Boolean).join(" | "))),
       works([...signals.latestPapers, ...signals.preprints]),
       text(signals.projects.map((item) => [item.title, item.projectId, item.fundingBody, item.piRole, item.period, item.status, item.amount !== null && item.amount !== undefined ? `${item.amount} ${item.amountUnit || ""}` : "金额未公开"].filter(Boolean).join(" | "))),
-      people(doctoral.currentDoctoral), people(doctoral.formerDoctoral),
-      text([doctoral.graduateProgram.graduateSchool, doctoral.graduateProgram.doctoralProgram, doctoral.graduateProgram.supervisorListing,
-        doctoral.emergingPiNote ? `新兴 PI：${doctoral.emergingPiNote}` : null].filter(Boolean)),
+      people(doctoralView.currentDoctoral), people(doctoralView.formerDoctoral),
+      text([doctoralView.graduateProgram.graduateSchool, doctoralView.graduateProgram.doctoralProgram, doctoralView.graduateProgram.supervisorListing,
+        doctoralView.emergingPiNote ? `新兴 PI：${doctoralView.emergingPiNote}` : null, doctoralWorkbookSummary(doctoralView, project.evidenceRecords)].filter(Boolean)),
       text(profile.formalRecords), text(profile.fitBoundary), text(profile.keyUnknowns), text(profile.nextVerification),
       discovery && row.applicationPathway === "unknown" ? "本次未核验" : row.applicationPathway,
       discovery ? "本次未核验" : row.feasibility,
@@ -92,6 +97,7 @@ export function buildMedicalWorkbookSheets(input, overrides = {}) {
     cvValid: input.cvValid === true,
     evidenceRecords: rows(input.evidenceRows || input.evidence || input.sources || input.sourceRows) };
   const advisors = rows(input.advisorRecords || input.advisor_records);
+  project.advisorRecords = advisors;
   const candidates = rows(overrides.candidates || input.applicationRows || input.candidates || input.advisors);
   const sheets = [];
   if (project.searchMode === "discovery") {
