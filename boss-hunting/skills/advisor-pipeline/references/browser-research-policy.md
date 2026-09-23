@@ -5,11 +5,11 @@
 ## 每次运行的能力发现
 
 1. 检查宿主实际工具列表及可搜索工具，分别确认内置网页能力和交互式浏览器能力。用真实名称与 schema 调用；没有能力记录 `unavailable`，可调用但未试过记录 `available_not_tested`，成功操作才记录该次 `tested`。不要由 enabled、backend 或文档声明推断工具可用。
-2. 默认后端 `builtin_web`；旧 `auto` 同样解释为内置网页工具优先。用户显式选择的其他 backend 原样保留，先检查其可用性，不静默改写。内置工具不可用或无法提供所需内容时，使用官方静态页面/只读 API 或其他官方来源；只有 JS 渲染、动态表单、交互式筛选/分页无法由这些路径完成时才使用已有交互浏览器。HTTP POST 可以是只读检索，按是否产生外部业务变更判断。
+2. 默认后端 `builtin_web`；旧 `auto` 同样解释为内置网页工具优先。用户显式选择的其他 backend 原样保留，先检查其可用性，不静默改写。内置工具不可用或无法提供所需内容时，使用官方静态页面/只读 API 或其他官方来源；一旦出现 JS 空框架或动态表单，立即按下文执行已有交互浏览器，不重复静态读取来替代交互。HTTP POST 可以是只读检索，按是否产生外部业务变更判断。
 3. 按当前工具 schema 选择真实支持的操作。部分宿主支持搜索、打开页面、页内查找或点击链接；PDF截图也以实际 schema 为准，不能假设每个宿主都有这些能力。每步观察最终 URL、标题和页面状态，筛选/重定向/分页后确认生效。普通网页用返回文本定位；交互浏览器优先 DOM/可访问性树，必要时截图。PDF先读解析文字，扫描件/图表再看实际可用页面图像，OCR仅为后备。
 4. 从结果进入具体记录/导师/公告详情，不能用搜索摘要代替关键事实。记录数据所属时点，访问时间不能替代源更新时间。
 5. 交互浏览器缺失不影响已经可用的内置网页搜索/读取。各路线均受阻时依次找其他官方公开来源和有限交叉证据；只暂停受阻来源，探索仍可继续。403、验证码、登录、付费墙、空框架分别记受阻/失败/部分读取，不能写查无。
-6. 每条难访问路线最多两次有区别的合法尝试，再换源或留下缺口。无需为了完整目录遍历所有站点。
+6. 每条难访问路线最多两次有区别的合法尝试；动态查询必须另行执行最多两次真实交互尝试，静态失败不消耗交互次数，再换源或留下缺口。无需为了完整目录遍历所有站点。
 
 页内/PDF `find` 返回无匹配，只表示该工具此次未定位到关键词，不等于已经完整
 搜索或 `not_found`。尤其PDF提取可能与定位索引不同：用 `open` 的页面/文本窗口
@@ -182,3 +182,17 @@ Last update: September 1, 2026）。这只证明该宿主的打开与文本读�
 的动态 JS 表单、筛选和分页仍未验证。没有安装 Browser Use 或浏览器二进制、配置
 个人会话、调用云端付费服务。本地 fixture、内置网页读取和真实交互浏览器测试
 分别记录，不能互相替代。
+
+## 动态基金库查询必须执行
+
+NSFC 等门户返回空框架、加载页或动态检索表单时，立即切换交互路线，不以再次静态读取代替交互。逐位填入姓名变体、机构消歧及实际五年范围，提交查询，等待结果加载，检查筛选条件、结果数量及分页，打开项目详情。无机构筛选字段时用结果中的机构逐项消歧并记录限制。只有完整查询返回零条才可写“本次条件下未找到记录”。官方公告补查仍属 supplementary。
+
+GPT 宿主优先用实际暴露的内置交互浏览器或 computer 工具；`web.run` 的搜索、打开、点击链接和 PDF 截图不等于填写表单。Wisp Science 使用已连接的 Browser Use 工具组：`browser_setup` → `web_open_tab` → `web_scan` → `web_execute_js`（按当前 DOM 填写、触发输入事件、提交）→ 等待并再次 `web_scan` → 翻页/详情核验。不能假定 selector 或工具参数；先读真实 schema 与页面。
+
+先检查当前工具及可发现的延迟加载工具。有完整交互能力就必须实际调用，不得仅建议用户下次使用；GPT 原生交互不可用时可用现有 MCP/Playwright 等价能力，记录实际 provider。若均不可用，明确列出“宿主未提供表单交互工具”，不能声称站点访问受阻。公开只读填写、提交、筛选、翻页已在调查范围内，无需逐次确认。不得自动安装、付费或绕过验证码；需要人工验证时暂停该来源并说明。
+
+每条路线最多两次有区别的实际交互尝试；静态读取不计入。记录 `latestSignals.projectSearches[].requiresInteraction=true`，以及 `interactionAttempts[]` 中真实执行的 `provider/tool/checkedAt/url/outcome/reason/sourceIds`。未调用时 outcome 写 unavailable，不能伪造已执行。最终结果 sourceIds 关联结果证据，失败尝试的来源放各自 attempt.sourceIds。
+
+动态查询的结果证据增加 `interaction_required: true`、`query_submitted`、`filters_confirmed`、`results_loaded`、`pagination_complete`（布尔）、`result_count`（非负整数）；只有亲眼观察或工具返回确认后填写。保留实际查询条件、URL、时间及检索范围；`not_found` 还需 `complete_results: true` 和 `searched_sources`。缺失任一完成条件就保留 partial/not_checked；得到部分项目可以保存，但不声称完整检索。
+
+运行辅助函数 `discoverResearchCapabilities` 另返回 `formInteraction` 和 `formRoutes`。只有同一会话工具组能导航、读取、输入、激活才具备表单能力。复合 computer 工具可按已检查的真实 schema 传 `toolCapabilities[工具名]={sessionGroup,provider,operations:["navigate","read","input","activate"]}`；不得凭名称猜能力。`requiresInteraction:true` 时不降级成静态“可完成”。`nextResearchAction` 指示继续交互、发现工具或留下缺口；`executePublicResearchStep` 经权限检查调用传入的真实工具。它们不是自动安装的浏览器客户端，运行 Agent 必须执行动作并记录结果。

@@ -137,3 +137,5 @@ AND ("{start_YYYY/MM/DD}"[dp] : "{end_YYYY/MM/DD}"[dp])
 `[fau]` 是 full author，`[1au]` 第一作者，`[lastau]` 末位个人作者；`[ad]` 不证明机构与目标作者一一对应；不存在 `[corresponding author]` 字段。
 
 每轮在 `runs/<run-id>/` 中记录范围、真实查询/筛选、访问来源/时间、事实及缺口。项目记录只查一次，PI 科研记录在多个项目间复用。优先补会改变判断的身份、主线与项目未知项；饱和规则见 medical-profile.md。来源受限按浏览器策略有限重试/降级，不把预算未查完写成没有候选。
+
+NSFC 动态检索：门户框架不代表完成姓名检索。按 [动态基金库查询必须执行](browser-research-policy.md#动态基金库查询必须执行) 填写姓名变体、机构和日期并核验结果、分页；记录 requiresInteraction 与实际交互尝试。仅静态读取不可写查无项目。

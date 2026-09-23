@@ -82,7 +82,7 @@ test("Wisp Science host browser tools are an interactive browser, never built-in
 });
 
 test("auto prefers built-in web while requested backends and interaction needs use available tools", () => {
-  const hostTools = { web__run() {}, http_fetch() {}, browser_click() {} };
+  const hostTools = { web__run() {}, http_fetch() {}, browser_navigate() {}, browser_snapshot() {}, browser_fill() {}, browser_click() {} };
   assert.equal(discoverResearchCapabilities(hostTools, { backend: "auto" }).preferredBackend, "builtin_web");
   const chosen = discoverResearchCapabilities(hostTools, { backend: "host-browser" });
   assert.equal(chosen.requestedBackend, "host-browser");
@@ -92,7 +92,7 @@ test("auto prefers built-in web while requested backends and interaction needs u
   assert.equal(discoverResearchCapabilities({ http_fetch() {}, browser_click() {} }).preferredBackend, "static_web");
   assert.equal(discoverResearchCapabilities({ browser_click() {} }).preferredBackend, "browser");
   const fallback = discoverResearchCapabilities({ web__run() {} }, { requiresInteraction: true });
-  assert.equal(fallback.preferredBackend, "builtin_web");
+  assert.equal(fallback.preferredBackend, "unavailable");
   assert.equal(fallback.interactiveBrowser, "unavailable");
   assert.ok(fallback.limitations.length);
 });

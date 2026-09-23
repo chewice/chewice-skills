@@ -58,13 +58,15 @@ function wosTier(probe) {
 // Decide the route for one provider from static facts, credential status, host
 // capability discovery and optional runtime probe results. `probes` records real
 // observations only (e.g. { authenticatedApi: false } after a 401/403).
+function available(value) { return value === true || value === "available"; }
+
 export function selectRoute(providerId, { credentialStatus = "unavailable", hostTools = {}, probe = null, authorizedBrowser = false } = {}) {
   const provider = PROVIDER_REGISTRY[providerId];
   if (!provider) throw new Error(`未知 provider: ${providerId}`);
   const configured = credentialStatus === "configured" || credentialStatus === "capability-limited";
   const authenticatedApi = configured && probe?.authenticatedApi !== false;
   const anonymousApi = provider.anonymousApi && probe?.anonymousApi !== false;
-  const browserAvailable = Boolean(hostTools.interactiveBrowser || hostTools.builtinWeb);
+  const browserAvailable = (probe?.requiresInteraction ? available(hostTools.formInteraction) : available(hostTools.interactiveBrowser) || available(hostTools.builtinWeb));
   const browser = providerId === "wos"
     ? Boolean(authorizedBrowser && browserAvailable)
     : provider.browser && browserAvailable && probe?.browser !== false;
@@ -121,7 +123,7 @@ export function buildProviderCapabilities({ credentials, hostTools = {}, probes 
     generatedAt: now,
     mode: runMode(providers),
     credentialsFile: { path: credentials?.file?.path || null, status: credentials?.file?.status || "missing", source: credentials?.file?.source || "os_default" },
-    hostTools: { builtinWeb: Boolean(hostTools.builtinWeb), interactiveBrowser: Boolean(hostTools.interactiveBrowser) },
+    hostTools: { builtinWeb: available(hostTools.builtinWeb), interactiveBrowser: available(hostTools.interactiveBrowser), formInteraction: available(hostTools.formInteraction) },
     providers,
     principles: [
       "credentials are optional accelerators, not prerequisites",
