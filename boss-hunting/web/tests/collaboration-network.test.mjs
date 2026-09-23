@@ -70,3 +70,18 @@ test("T26 saturation stops on zero new validated PIs, low growth without new str
   assert.equal(saturationReached({ existingValidated: 20, newValidated: 8, round: 2 }).reason, "max_rounds");
   assert.equal(saturationReached({ existingValidated: 20, newValidated: 8, round: 1, ratio: 0.5 }).stop, true, "ratio is configurable");
 });
+
+test("a single relevant documented paper or project can qualify without repeated collaboration", () => {
+  const network = buildEgoNetwork("pi", [
+    record({id:"single",type:"coauthorship",year:2025,title:"Joint study",url:"https://example.org/study",participants:["pi","once"],directionRelevant:true}),
+    record({id:"project",type:"shared_project",year:2026,title:"Joint project",participants:["pi","grant"],directionRelevant:true}),
+    record({id:"unrelated",type:"coauthorship",year:2025,participants:["pi","unrelated"],directionRelevant:false}),
+    record({id:"unsourced",type:"coauthorship",year:2025,participants:["pi","unsourced"],directionRelevant:true,sourceIds:[]}),
+  ], {referenceYear:2026});
+  assert.deepEqual(new Set(network.coreCollaborators.map(row=>row.collaboratorId)),new Set(["once","grant"]));
+  const paper=network.coreCollaborators.find(row=>row.collaboratorId==="once").collaborationEvidence[0];
+  assert.equal(paper.title,"Joint study");
+  assert.equal(paper.url,"https://example.org/study");
+  assert.deepEqual(paper.sourceIds,["src"]);
+  assert.deepEqual(new Set(network.leads.map(row=>row.collaboratorId)),new Set(["unrelated","unsourced"]));
+});

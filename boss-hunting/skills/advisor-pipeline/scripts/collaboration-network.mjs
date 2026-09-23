@@ -9,6 +9,7 @@ import { COLLABORATION_EDGE_TYPES, RESEARCH_NEIGHBOR_EDGE_TYPES } from "./medica
 export const DEFAULT_NETWORK_THRESHOLDS = Object.freeze({
   // Configurable engineering defaults, not scientific standards.
   windowYears: 5,
+  allowSingleDocumentedCollaboration: true,
   minDirectionRelatedJointStudies: 2,      // heuristic A
   minJointStudiesWithSharedProject: 1,     // heuristic B
   minDistinctYearsForContinuity: 2,        // heuristic C
@@ -107,6 +108,10 @@ export function buildEgoNetwork(targetId, records, options = {}) {
     const heuristics = {
       A_repeated_direction_related_studies: directionStudies >= thresholds.minDirectionRelatedJointStudies,
       B_joint_study_plus_shared_project: directionStudies >= thresholds.minJointStudiesWithSharedProject && sharedProject,
+      D_single_documented_collaboration: thresholds.allowSingleDocumentedCollaboration && directionRelated.some((record) =>
+        (record.directionRelevant === true || record.direction_relevant === true)
+        && list(record.sourceIds ?? record.source_ids).length > 0
+        && !["not_checked", "inaccessible", "conflict", "not_found"].includes(record.status)),
       C_multi_year_topic_continuity: entry.years.size >= thresholds.minDistinctYearsForContinuity && topicConsistent && directionRelated.length > 0,
     };
     const years = [...entry.years].sort((left, right) => left - right);
@@ -117,12 +122,12 @@ export function buildEgoNetwork(targetId, records, options = {}) {
       firstYear: years[0] ?? null,
       lastYear: years[years.length - 1] ?? null,
       sharedTopics: [...entry.topics],
-      collaborationEvidence: entry.records.map((record) => ({ type: record.type, id: record.id ?? null, year: recordYear(record), sourceIds: list(record.sourceIds ?? record.source_ids) })),
+      collaborationEvidence: entry.records.map((record) => ({ type: record.type, id: record.id ?? null, title: record.title ?? record.project_title ?? null, url: record.url ?? record.final_url ?? null, year: recordYear(record), sourceIds: list(record.sourceIds ?? record.source_ids) })),
       heuristics,
       sourceIds: [...entry.sourceIds],
     };
     if (Object.values(heuristics).some(Boolean)) coreCollaborators.push(summary);
-    else leads.push({ ...summary, reason: "insufficient_repeated_collaboration" });
+    else leads.push({ ...summary, reason: "insufficient_documented_collaboration" });
   }
 
   const edges = coreCollaborators.flatMap((collaborator) => {
