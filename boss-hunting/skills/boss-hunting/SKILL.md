@@ -98,4 +98,4 @@ For collaborator selection and concise profiles, follow the medical contract: on
 
 Medical minimum reports also include the [doctoral first-author and lab-website checks](../advisor-pipeline/references/medical-profile.md#博士指导第一作者画像与实验室网站默认最低内容), without an extra user request. Verify the advisor's corresponding/co-corresponding role and first/co-first authors on papers from the past five years; summarize only those joint papers. Seek an attributable lab website and check members/alumni/publications. First authors are not automatically doctoral students; preserve independent identity evidence, dates, sources and search gaps in `doctoralTrajectory`.
 
-报告导航与分区：沿用共享 HTML 生成器的五模块卡片及 01–05 编号，视觉对齐本地控制台（暖色画布、白色卡片、深色目录、紫色链接）。桌面左侧深色固定目录可跳到导师和模块，窄屏使用顶部折叠目录。保持离线单文件、系统字体；只允许内置导航脚本的 CSP 哈希，不加载外部框架。基金过程仍默认展开，打印隐藏目录。
+报告导航与分区：沿用共享 HTML 生成器的五模块卡片及 01–05 编号，使用米白画布、暖白卡片、浅卡其目录及深陶土色链接。桌面左侧垂直居中的紧凑悬浮目录（宽 216px、距左 16px、最大高度 70vh、内部滚动，正文留出空间）可跳到导师和模块，窄屏使用顶部折叠目录。保持离线单文件、系统字体；只允许内置导航脚本的 CSP 哈希，不加载外部框架。基金过程仍默认展开，打印隐藏目录。

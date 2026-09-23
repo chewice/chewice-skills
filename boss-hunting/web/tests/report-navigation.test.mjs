@@ -36,14 +36,14 @@ test('general advisor reports only link actual chapters and advisor entries', ()
  assert.doesNotMatch(nav,/href="#advisor-1-[a-e]"|toc-advisor/);
 });
 
-test('report chrome follows the local console tokens without external assets', () => {
+test('report chrome uses the warm archive palette without external assets', () => {
  const report=buildAdvisorReport({project:{domainProfile:'general',interests:[{name:'Ecology'}]},advisors:[{advisor_id:'general-pi',name:'General fixture'}],candidates:[],programs:[],evidence:[]});
  assert.match(report,/class="eyebrow"/);
  assert.match(report,/class="toc-brand"/);
- assert.match(report,/--canvas:#f6f5f2/);
- assert.match(report,/--violet:#6557d9/);
- assert.match(report,/--sidebar:#24222d/);
+ assert.match(report,/--canvas:#f5f0e8/);
+ assert.match(report,/--accent:#934b35/);
+ assert.match(report,/--sidebar:#efe8db/);
  assert.match(report,/Georgia,"Songti SC",serif/);
  assert.doesNotMatch(report,/fonts\.googleapis|cdn\.|@import|href="https:\/\/fonts/);
- assert.match(report,/min-width:1200px[\s\S]*left:0/);
+ assert.match(report,/min-width:1200px[\s\S]*left:16px/);
 });

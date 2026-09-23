@@ -8,7 +8,7 @@ import { isExecutedDirectly } from "./direct-execution.mjs";
 import { isMedicalRankingCurrent, normalizeProjectMetadata } from "./project-contract.mjs";
 import {
   buildMedicalDiscoveryView, compareMedicalCandidates, hasReadableProjectCv, isMedicalEvidenceProfile,
-  evidenceProfile, normalizeMedicalCandidate, validateMedicalCandidateMappings, projectSearchCoverage,
+  evidenceProfile, normalizeMedicalCandidate, validateMedicalCandidateMappings, projectSearchCoverage, identityCoverage,
 } from "./medical-evidence.mjs";
 
 function html(value) {
@@ -170,7 +170,8 @@ const REPORT_NAV_SCRIPT = `(() => {
   const links = [...nav.querySelectorAll('a[href^="#"]')];
   const targets = links.map(link => document.getElementById(link.hash.slice(1)));
   const groups = [...nav.querySelectorAll('.toc-advisor')];
-  const resize = () => { shell.open = desktop.matches; };
+  const scrollOffset = () => { document.documentElement.style.scrollPaddingTop = desktop.matches ? '28px' : (nav.getBoundingClientRect().height + 16) + 'px'; };
+  const resize = () => { shell.open = desktop.matches; scrollOffset(); };
   resize(); desktop.addEventListener('change', resize);
   let scheduled = false;
   const update = () => {
@@ -182,10 +183,11 @@ const REPORT_NAV_SCRIPT = `(() => {
       const active = targets[current]?.closest('article')?.id;
       groups.forEach(group => { group.open = group.dataset.advisor === active; });
       if (desktop.matches) {
-        const box = nav.getBoundingClientRect();
+        const scroller = nav.querySelector('.toc-content');
+        const box = scroller.getBoundingClientRect();
         const item = links[current].getBoundingClientRect();
-        if (item.top < box.top + 12) nav.scrollTop += item.top - box.top - 12;
-        else if (item.bottom > box.bottom - 12) nav.scrollTop += item.bottom - box.bottom + 12;
+        if (item.top < box.top + 12) scroller.scrollTop += item.top - box.top - 12;
+        else if (item.bottom > box.bottom - 12) scroller.scrollTop += item.bottom - box.bottom + 12;
       }
     }
   };
@@ -195,7 +197,7 @@ const REPORT_NAV_SCRIPT = `(() => {
   nav.addEventListener('click', event => {
     const link = event.target.closest('a');
     if (!link) return;
-    if (!desktop.matches) shell.open = false;
+    if (!desktop.matches) { shell.open = false; scrollOffset(); }
     const target = document.getElementById(link.hash.slice(1));
     if (target) { target.setAttribute('tabindex', '-1'); target.focus({preventScroll:true}); }
     schedule();
@@ -372,6 +374,7 @@ function medicalAdvisorSection(advisor, index, project, opportunities, evidence)
   const signals = profile.latestSignals;
   const doctoral = profile.doctoralTrajectory;
   const discovery = project.searchMode === "discovery";
+  const identityCheck = identityCoverage(row, evidence);
   const officialUrl = identity.officialProfileUrl || row.homepage || row.advisorHomepage;
   const applicationEntry = !discovery && opportunities.length ? `<div class="module"><h4>真实申请入口（申请筛选模式）</h4>${facts([["项目 / 学位 / 批次 / 路径", opportunities.map((candidate) => ({
     program: candidate.program || candidate.programNameEn || candidate.programNameZh, degree: candidate.degree, intake: candidate.intake,
@@ -382,11 +385,10 @@ function medicalAdvisorSection(advisor, index, project, opportunities, evidence)
 ${evidenceStatusRow(profile)}
 <p>与您的研究需求：${html(label("fit", profile.researchQuestionFit.status))}。${html(profile.researchQuestionFit.reasons.join("；"))} ${sources(profile.researchQuestionFit.sourceIds, evidence)}</p>
 <p><strong>目前能确认和不能确认的事项：</strong>${html(text(profile.fitBoundary))}</p>
-${moduleHeading(index, "a")}${facts([
-  ["当前机构 / 院系 / 职位", [identity.currentInstitution || row.current_institution || row.school || row.schoolName, identity.department, identity.currentPosition], identity.sourceIds],
-  ["主要研究方向", identity.researchPositioning, identity.sourceIds],
-  ["博士指导资格与所属项目", [identity.doctoralSupervisionLink, doctoral.graduateProgram.graduateSchool, doctoral.graduateProgram.doctoralProgram, doctoral.graduateProgram.supervisorListing, doctoral.graduateProgram.institutionalRelationship].filter(Boolean), [...(identity.sourceIds || []), ...(doctoral.graduateProgram.sourceIds || [])]],
-], evidence)}<p>${link(officialUrl, "机构导师介绍")} · 任职信息核对日期：${html(identity.affiliationAsOf || "未记录")}</p></div>
+${moduleHeading(index, "a")}${facts(identityCheck.fields.map((field) => [
+  field.label, field.complete ? field.value : [field.value, field.reason].filter(Boolean).join("；"), field.sourceIds,
+]), evidence)}<p>${link(officialUrl, "机构导师介绍")}</p>
+${facts([["所属博士项目", [doctoral.graduateProgram.graduateSchool, doctoral.graduateProgram.doctoralProgram, doctoral.graduateProgram.supervisorListing, doctoral.graduateProgram.institutionalRelationship].filter(Boolean), doctoral.graduateProgram.sourceIds]], evidence)}</div>
 ${moduleHeading(index, "b")}${facts([
   ["长期科学问题", mainline.longTermQuestion, mainline.sourceIds],
   ["持续主题 / 新方向 / 近期转向", [mainline.continuingThemes.length ? `持续：${mainline.continuingThemes.join("；")}` : null, mainline.newDirections.length ? `新方向：${mainline.newDirections.join("；")}` : null, mainline.recentShift ? `近期转向：${mainline.recentShift}` : null].filter(Boolean), mainline.sourceIds],
@@ -458,52 +460,52 @@ function responsiveTables(report) {
 }
 
 const REPORT_STYLE = `
-:root{--ink:#1d2130;--muted:#767b8b;--line:#e7e7ec;--canvas:#f6f5f2;--card:#fff;--violet:#6557d9;--violet-dark:#4d42b9;--violet-soft:#eeecff;--green:#2f8b67;--green-soft:#e8f4ee;--amber:#b8782d;--amber-soft:#fff2df;--sidebar:#24222d;--shadow:0 14px 34px rgba(35,31,60,.055)}
+:root{--ink:#191919;--muted:#655c50;--line:#e2d9c8;--canvas:#f5f0e8;--card:#fbf8f2;--accent:#934b35;--accent-dark:#793c2b;--accent-soft:#f1dfd3;--green:#52633d;--green-soft:#e9eddf;--amber:#80571e;--amber-soft:#f1e6d1;--sidebar:#efe8db;--shadow:0 14px 34px rgba(70,55,35,.09)}
 *{box-sizing:border-box}html{scroll-padding-top:24px;background:var(--canvas)}
 body{margin:0;padding:20px 18px 48px;color:var(--ink);background:var(--canvas);font:17px/1.7 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;-webkit-font-smoothing:antialiased;overflow-wrap:anywhere}
 main{max-width:1000px;margin:0 auto}
-.eyebrow{margin:0 0 8px;color:var(--violet);font-size:11px;font-weight:800;letter-spacing:.16em}
+.eyebrow{margin:0 0 8px;color:var(--accent);font-size:11px;font-weight:800;letter-spacing:.16em}
 header,main>section{padding:28px 32px;margin:0 0 14px;border:1px solid var(--line);border-radius:18px;background:var(--card);box-shadow:var(--shadow)}
 h1{margin:6px 0 14px;font:500 34px/1.25 Georgia,"Songti SC",serif;letter-spacing:-.02em}
 h2{margin:0 0 18px;padding:0;border:0;font:500 22px/1.3 Georgia,"Songti SC",serif}
 h3{margin:8px 0 12px;font:500 26px/1.3 Georgia,"Songti SC",serif}
 h4{margin:22px 0 12px;font:500 18px/1.35 Georgia,"Songti SC",serif}
 h5{margin:20px 0 8px;font-size:16px}h6{margin:16px 0 6px;font-size:15px}p{margin:10px 0}
-a{color:var(--violet);text-underline-offset:3px}a:hover{color:var(--violet-dark)}
-a:focus-visible,summary:focus-visible,[id]:focus-visible{outline:2px solid var(--violet);outline-offset:4px}
+a{color:var(--accent);text-underline-offset:3px}a:hover{color:var(--accent-dark)}
+a:focus-visible,summary:focus-visible,[id]:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
 .muted,.sources,.status-line,.person-meta,.person-role,.field-label{color:var(--muted);font-size:14px}
 .sources{display:inline-block;margin:4px 0 0 4px}.status-line{margin:0 0 8px}
-header>p:last-of-type,.status-line{padding:8px 12px;border-radius:10px;background:#f3f2f7}
+header>p:last-of-type,.status-line{padding:8px 12px;border-radius:10px;background:#efe8db}
 article{padding:8px 0 4px;margin:28px 0 0;border:0}
 .advisor>h3{margin:8px 0 10px;padding:0;border:0}
 .module{margin:18px 0;padding:20px 22px 18px;border:1px solid var(--line);border-radius:14px;background:var(--card);box-shadow:0 8px 20px rgba(35,31,60,.04)}
 .module>h4{display:flex;gap:12px;align-items:center;margin:0 0 16px;padding:0 0 14px;border-bottom:1px solid var(--line);background:none;color:var(--ink)}
-.module-number{display:inline-grid;place-items:center;min-width:32px;height:32px;border-radius:10px;background:var(--module-chip,var(--violet-soft));color:var(--module-ink,var(--violet-dark));font:700 12px/1 ui-sans-serif,system-ui,sans-serif;font-variant-numeric:tabular-nums}
-.module-a{--module-chip:var(--violet-soft);--module-ink:var(--violet-dark)}.module-b{--module-chip:var(--green-soft);--module-ink:var(--green)}.module-c{--module-chip:#ece8fb;--module-ink:#5b4db8}.module-d{--module-chip:var(--amber-soft);--module-ink:var(--amber)}.module-e{--module-chip:#eef1f6;--module-ink:#4a5563}
+.module-number{display:inline-grid;place-items:center;min-width:32px;height:32px;border-radius:10px;background:var(--module-chip,var(--accent-soft));color:var(--module-ink,var(--accent-dark));font:700 12px/1 ui-sans-serif,system-ui,sans-serif;font-variant-numeric:tabular-nums}
+.module-a{--module-chip:var(--accent-soft);--module-ink:var(--accent-dark)}.module-b{--module-chip:var(--green-soft);--module-ink:var(--green)}.module-c{--module-chip:#ede4d5;--module-ink:#6a5136}.module-d{--module-chip:var(--amber-soft);--module-ink:var(--amber)}.module-e{--module-chip:#ece9df;--module-ink:#5c564c}
 dl{margin:12px 0}dl>div{display:grid;grid-template-columns:190px minmax(0,1fr);gap:20px;margin:14px 0}dt{font-weight:650}dd{margin:0;min-width:0}
-.table-wrap{max-width:100%;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fafaf8}
-table{border-collapse:collapse;width:100%;font-size:14px;table-layout:fixed}th,td{text-align:left;vertical-align:top;border-bottom:1px solid var(--line);padding:12px 14px}th{color:#5c5866;background:#f3f2f7;font-weight:650}tr:last-child td{border-bottom:0}
+.table-wrap{max-width:100%;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#faf6ef}
+table{border-collapse:collapse;width:100%;font-size:14px;table-layout:fixed}th,td{text-align:left;vertical-align:top;border-bottom:1px solid var(--line);padding:12px 14px}th{color:#5c564c;background:#efe8db;font-weight:650}tr:last-child td{border-bottom:0}
 li{margin:12px 0}ul,ol{padding-left:22px}details{margin:14px 0}summary{cursor:pointer;font-weight:650}details>p,details>div{margin-left:16px}
-pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;padding:12px;border-radius:10px;background:#f3f2f7}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;padding:12px;border-radius:10px;background:#efe8db}
 .source-detail{border-bottom:1px solid var(--line);padding:10px 0}.source-claim{border-top:1px solid #eee;padding-top:8px}.search-record{margin:18px 0}
 .person-entry{margin:22px 0;padding:0 0 18px;border-bottom:1px solid var(--line)}.person-entry:last-child{border-bottom:0;padding-bottom:0}
 .person-heading{display:flex;align-items:baseline;gap:8px 16px;flex-wrap:wrap;margin:0 0 6px}
 .person-heading h5,.person-heading h6{margin:0;font:500 18px/1.35 Georgia,"Songti SC",serif}.person-meta{margin:4px 0 12px}.field-label{display:block;margin-bottom:3px}.person-work h6{font-weight:500}.works{padding-left:20px}.works li{margin:14px 0}.person-entry details{margin:12px 0}
-.toc-brand{display:flex;align-items:center;gap:11px;margin:0 4px 18px;color:#f5f4f8}
-.toc-mark{width:35px;height:35px;border-radius:11px;display:grid;place-items:center;background:linear-gradient(145deg,#7f71ef,#574ac2);color:#fff;font:italic 20px/1 Georgia,serif;box-shadow:0 8px 20px rgba(101,87,217,.3)}
-.toc-brand strong{display:block;font:16px/1.2 Georgia,"Songti SC",serif}.toc-brand small{display:block;margin-top:3px;color:#9e9ba8;font-size:10px;letter-spacing:.12em}
-.report-toc{display:block;position:sticky;top:0;z-index:5;margin:0 0 16px;padding:16px 16px 10px;border:1px solid #2d2a36;border-radius:0 0 16px 16px;background:var(--sidebar);color:#f5f4f8;font-size:14px;line-height:1.5;box-shadow:0 12px 28px rgba(12,10,17,.18)}
-.report-toc details{margin:0}.report-toc summary{padding:10px 8px;color:#d3d0db}
-.report-toc a{display:block;padding:8px 12px;border:0;border-radius:10px;color:#afabb8;text-decoration:none;transition:background .16s ease,color .16s ease}
-.report-toc a:hover{background:rgba(255,255,255,.055);color:#fff}
-.report-toc a[aria-current]{color:#fff;background:#37333f;box-shadow:inset 3px 0 0 #897df0;font-weight:600}
-.report-toc .toc-content{margin:0;max-height:65vh;overflow-y:auto;overscroll-behavior:contain;padding:4px 0 8px;scrollbar-width:thin;scrollbar-color:#514c5d transparent}
+.toc-brand{display:flex;align-items:center;gap:11px;margin:0 4px 18px;color:#191919}
+.toc-mark{width:35px;height:35px;border-radius:11px;display:grid;place-items:center;background:linear-gradient(145deg,#cc785c,#a85a40);color:#fff;font:italic 20px/1 Georgia,serif;box-shadow:0 8px 20px rgba(168,90,64,.22)}
+.toc-brand strong{display:block;font:16px/1.2 Georgia,"Songti SC",serif}.toc-brand small{display:block;margin-top:3px;color:#655c50;font-size:10px;letter-spacing:.12em}
+.report-toc{display:block;position:sticky;top:0;z-index:5;margin:0 0 16px;padding:16px 16px 10px;border:1px solid #d8cdb8;border-radius:0 0 16px 16px;background:var(--sidebar);color:#191919;font-size:14px;line-height:1.5;box-shadow:0 12px 28px rgba(12,10,17,.18)}
+.report-toc details{margin:0}.report-toc summary{padding:10px 8px;color:#5c564c}
+.report-toc a{display:block;padding:8px 12px;border:0;border-radius:10px;color:#5c564c;text-decoration:none;transition:background .16s ease,color .16s ease}
+.report-toc a:hover{background:#e5d5c2;color:#191919}
+.report-toc a[aria-current]{color:#793c2b;background:#e5d5c2;box-shadow:inset 3px 0 0 #a85a40;font-weight:600}
+.report-toc .toc-content{margin:0;max-height:65vh;overflow-y:auto;overscroll-behavior:contain;padding:4px 0 8px;scrollbar-width:thin;scrollbar-color:#b5a68e transparent}
 .report-toc .toc-advisor>div{margin:0 0 4px 8px}.report-toc .toc-advisor>summary{font-weight:600;overflow-wrap:anywhere;padding-left:8px}
 .report-toc .toc-advisor a{font-size:13px}.report-toc .toc-advisor>summary>a{display:inline;padding:2px 0;font-size:14px;box-shadow:none}
-html{scroll-padding-top:76px}[id]:focus{outline:none}
-@media(max-width:700px){body{padding:12px 12px 36px;font-size:16px}h1{font-size:26px}h2{font-size:20px}header,main>section{padding:20px 16px}dl>div{grid-template-columns:1fr;gap:3px}table,tbody,tr,td{display:block;width:100%}thead{display:none}tr{border-bottom:1px solid var(--line);padding:12px 0}td{border:0;padding:6px 14px}td:before{content:attr(data-label);display:block;color:#5c5866;font-weight:650;margin-bottom:2px}details>p,details>div{margin-left:0}.table-wrap{border:0;background:transparent}}
-@media(min-width:1200px){body{padding:34px 36px 54px 280px}main{margin:0}.report-toc{position:fixed;left:0;top:0;bottom:0;width:244px;height:100vh;max-height:none;overflow:auto;padding:28px 16px 20px;border:0;border-radius:0;margin:0;box-shadow:none}.report-toc .toc-shell>summary{display:none}.report-toc .toc-content{max-height:none}html{scroll-padding-top:28px}}
-@media print{html,body{background:#fff;color:#1d2130}body{max-width:none;padding:0;font-size:11pt}nav,.technical,.report-toc{display:none!important}header,main>section,.module,.table-wrap{box-shadow:none;border-color:#ccc}h2,h3,h4,h5,h6{break-after:avoid}tr,.source-claim,.person-entry{break-inside:avoid}a{color:var(--violet-dark)}details{display:block}details>*{display:block}details::details-content{content-visibility:visible;display:block}summary{list-style:none}.source-detail{break-inside:auto}table{font-size:10pt}.advisor>h3{margin-top:20px}}
+html{scroll-padding-top:76px}
+@media(max-width:700px){body{padding:12px 12px 36px;font-size:16px}h1{font-size:26px}h2{font-size:20px}header,main>section{padding:20px 16px}dl>div{grid-template-columns:1fr;gap:3px}table,tbody,tr,td{display:block;width:100%}thead{display:none}tr{border-bottom:1px solid var(--line);padding:12px 0}td{border:0;padding:6px 14px}td:before{content:attr(data-label);display:block;color:#5c564c;font-weight:650;margin-bottom:2px}details>p,details>div{margin-left:0}.table-wrap{border:0;background:transparent}}
+@media(min-width:1200px){body{padding:34px 36px 54px 280px}main{margin:0}.report-toc{position:fixed;left:16px;top:50%;transform:translateY(-50%);width:216px;max-height:70vh;overflow:hidden;padding:16px 12px;border:1px solid var(--line);border-radius:14px;margin:0;box-shadow:0 12px 28px rgba(70,55,35,.13)}.report-toc .toc-shell>summary{display:none}.report-toc .toc-content{max-height:calc(70vh - 100px)}html{scroll-padding-top:28px}}
+@media print{html,body{background:#fff;color:#191919}body{max-width:none;padding:0;font-size:11pt}nav,.technical,.report-toc{display:none!important}header,main>section,.module,.table-wrap{box-shadow:none;border-color:#ccc}h2,h3,h4,h5,h6{break-after:avoid}tr,.source-claim,.person-entry{break-inside:avoid}a{color:var(--accent-dark)}details{display:block}details>*{display:block}details::details-content{content-visibility:visible;display:block}summary{list-style:none}.source-detail{break-inside:auto}table{font-size:10pt}.advisor>h3{margin-top:20px}}
 @media(prefers-reduced-motion:reduce){.report-toc a{transition:none}}
 `;
 
@@ -636,7 +638,9 @@ export function buildAdvisorReport({ project = {}, advisors = [], programs = [],
   const overviewRows = discovery ? advisorRows : programRows;
   const missingGrantChecks = medical ? advisorRows.filter((row) => !projectSearchCoverage(row.evidenceProfile.latestSignals.projectSearches, evidence, row.advisor_id || row.advisorId).complete) : [];
   const missingDoctoralChecks = medical ? advisorRows.filter((row) => !doctoralCoverage(row.evidenceProfile.doctoralTrajectory, evidence)) : [];
-  const completion = medical && missingGrantChecks.length ? "部分完成：基金检索尚有缺口" : medical && missingDoctoralChecks.length ? "部分完成：第一作者或实验室补查尚有缺口" : audit.completionTier === "complete" ? "已完成本轮设定范围的检索" : audit.completionTier === "blocked" ? "检索受阻" : "部分完成或完成情况未记录";
+  const identityChecks = medical ? advisorRows.map((row) => ({ row, ...identityCoverage(row, evidence) })) : [];
+  const missingIdentityChecks = identityChecks.filter((check) => !check.complete);
+  const completion = medical && missingGrantChecks.length ? "部分完成：基金检索尚有缺口" : medical && missingDoctoralChecks.length ? "部分完成：第一作者或实验室补查尚有缺口" : missingIdentityChecks.length ? "部分完成：身份信息尚有缺口" : audit.completionTier === "complete" ? "已完成本轮设定范围的检索" : audit.completionTier === "blocked" ? "检索受阻" : "部分完成或完成情况未记录";
   const prose = (value, fallback) => typeof value === "string" && !/^[a-z0-9_]+$/i.test(value) ? value : fallback;
   const pageCount = new Set(evidence.map((row) => urlKey(sourceUrl(row))).filter(Boolean)).size;
   const pendingCount = evidence.filter((row) => ["partial", "inaccessible", "not_checked", "conflict", "stale"].includes(row.status)).length;
@@ -648,6 +652,7 @@ ${facts([["实际检索范围", prose(audit.searchCoverage || audit.coverage, `�
 ["仍需补查", audit.limitations?.length ? audit.limitations : "请结合各导师的待核实事项阅读"]])}
 ${medical ? `<p>基金检索尚未完成或受限：${missingGrantChecks.length ? html(missingGrantChecks.map((row) => row.name || row.advisorName).join("、")) : "无；仅指已记录的数据库和查询范围"}。</p>` : ""}
 ${medical && missingDoctoralChecks.length ? `<p>第一作者或实验室补查尚未完成：${html(missingDoctoralChecks.map((row) => row.name || row.advisorName).join("、"))}。详见逐位博士指导情况。</p>` : ""}
+${missingIdentityChecks.length ? `<h3>身份信息待补查</h3><ul>${missingIdentityChecks.map(({row, gaps}) => `<li><strong>${html(row.name || row.advisorName)}</strong><ul>${gaps.map((gap) => `<li>${html(gap.label)}：${html(gap.reason)}</li>`).join("")}</ul></li>`).join("")}</ul>` : ""}
 <details class="technical"><summary>查询与工具记录（复核用）</summary>${coverage}</details>
 ${sourceAppendix(evidence, advisorRows)}
 ${historicalRanking ? `<details class="technical"><summary>历史比较记录（不用于当前顺序或申请判断）</summary><pre>${html(JSON.stringify(ranking, null, 2))}</pre></details>` : ""}</section>`;
@@ -701,13 +706,15 @@ async function latestProviderCapabilities(root) {
   return null;
 }
 
-export async function exportAdvisorReport(projectRoot) {
+export async function exportAdvisorReport(projectRoot, { checkIdentity = false } = {}) {
   const root = resolve(projectRoot);
   const project = await readJson(resolve(root, "project.json"));
   const keys = ["advisor_records", "program_records", "evidence", "candidates"];
   const arrays = await Promise.all(keys.map((key) => readJson(resolve(root, "outputs", `${key}.json`), [])));
   arrays.forEach((value, index) => { if (!Array.isArray(value)) throw new Error(`${keys[index]}.json 顶层必须是数组`); });
   const [advisors, programs, evidence, candidates] = arrays;
+  const identityChecks = isMedicalEvidenceProfile(project) ? advisors.map((row) => ({ advisorId: row.advisor_id || row.advisorId, name: row.name, ...identityCoverage(row, evidence) })) : [];
+  if (checkIdentity) return { complete: identityChecks.every((check) => check.complete), identityChecks };
   const ranking = await readJson(resolve(root, "outputs", "ranking.json"), []);
   const audit = await readJson(resolve(root, "outputs", "matching-audit.json"), {});
   const report = buildAdvisorReport({ project, advisors, programs, evidence, candidates, ranking, audit,
@@ -715,12 +722,12 @@ export async function exportAdvisorReport(projectRoot) {
   await mkdir(resolve(root, "outputs"), { recursive: true });
   const output = resolve(root, "outputs", reportFilename(project));
   await writeFile(output, report, "utf8");
-  return { output, advisorCount: advisors.length, candidateCount: candidates.length };
+  return { output, advisorCount: advisors.length, candidateCount: candidates.length, identityGaps: identityChecks.filter((check) => !check.complete).map(({advisorId, name, gaps}) => ({advisorId, name, gaps})) };
 }
 
 if (isExecutedDirectly(import.meta.url)) {
   const index = process.argv.indexOf("--project-root");
   const root = index < 0 ? "" : process.argv[index + 1];
   if (!root) throw new Error("Usage: build_advisor_report.mjs --project-root <project-directory>");
-  console.log(JSON.stringify(await exportAdvisorReport(root)));
+  console.log(JSON.stringify(await exportAdvisorReport(root, { checkIdentity: process.argv.includes("--check-identity") })));
 }

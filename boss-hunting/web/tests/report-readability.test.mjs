@@ -55,7 +55,7 @@ test("semantic citations deduplicate each block and source pages without losing 
   assert.match(appendix, /页面更新时间[\s\S]*2026-09-21/);
   delete advisor.evidence_profile.identity.affiliationAsOf;
   const missing = buildAdvisorReport(input).split('id="advisor-1-a"')[1].split('id="advisor-1-b"')[0];
-  assert.match(missing, /任职信息核对日期：未记录/);
+  assert.match(missing, /任职信息核对日期[\s\S]*未核验：字段尚未记录/);
 });
 
 test("grant process and citation labels cannot inject HTML or unsafe links", async () => {

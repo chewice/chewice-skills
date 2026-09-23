@@ -310,6 +310,48 @@ function identity(profile, candidate) {
   };
 }
 
+export const IDENTITY_FIELDS = [
+  ["currentInstitution", "当前机构"], ["department", "院系"], ["currentPosition", "职位"],
+  ["researchPositioning", "主要研究方向"], ["doctoralSupervisionLink", "博士指导关联"],
+  ["affiliationAsOf", "任职信息核对日期"],
+];
+
+// Audit explicit field evidence; never extract facts from citation labels or URLs.
+export function identityCoverage(candidate = {}, evidence = []) {
+  const profile = normalizeMedicalEvidenceProfile(candidate);
+  const advisorId = candidate.advisor_id || candidate.advisorId;
+  const canonical = (value) => String(value).split('.').at(-1).replaceAll('_', '').toLowerCase();
+  const states = { not_checked: "未核验", not_found: "所查来源未提供", inaccessible: "访问受阻", conflict: "来源存在冲突", partial: "部分核验", stale: "信息可能过期", not_applicable: "不适用" };
+  const fields = IDENTITY_FIELDS.map(([field, label]) => {
+    const value = profile.identity[field];
+    const present = typeof value === "string" && Boolean(value.trim());
+    const rows = evidence.filter((row) => advisorId && (row.entity_id || row.entity) === advisorId
+      && list(row.fields_supported || row.fieldsSupported).some((key) => canonical(key) === canonical(field)));
+    const usable = (row) => {
+      try {
+        const url = new URL(row.final_url || row.source_url || row.url || "");
+        return ["http:", "https:"].includes(url.protocol)
+          && Boolean((row.evidence_id || row.evidenceId) && typeof row.claim === "string" && row.claim.trim())
+          && !["empty_shell", "dynamic_form", "loading"].includes(row.page_state);
+      } catch { return false; }
+    };
+    const limitation = rows.find((row) => row.status === "conflict")
+      || rows.find((row) => Object.hasOwn(states, row.status));
+    const verified = rows.some((row) => row.status === "verified" && usable(row));
+    const dateValid = field !== "affiliationAsOf" || (/^\d{4}-\d{2}-\d{2}$/.test(value || "")
+      && Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value);
+    const complete = present && dateValid && verified && !limitation;
+    const reason = complete ? "" : limitation
+      ? `${states[limitation.status]}：${limitation.limitations || limitation.reason || limitation.claim || "缺少具体说明"}`
+      : !present ? verified ? "已有字段证据，尚未写入记录；需核对正文并补填" : "未核验：字段尚未记录"
+      : !dateValid ? "核对日期格式无效，需记录实际核验日期" : "字段已记录，对应字段来源待核验";
+    return { field, label, value, complete, reason,
+      sourceIds: rows.map((row) => row.evidence_id || row.evidenceId).filter(Boolean) };
+  });
+  return { complete: fields.every((field) => field.complete), fields,
+    gaps: fields.filter((field) => !field.complete).map(({ field, label, reason }) => ({ field, label, reason })) };
+}
+
 export function normalizeMedicalEvidenceProfile(candidate = {}) {
   const profile = evidenceProfile(candidate);
   const role = pick(profile, "piRoleConfidence", "pi_role_confidence") || {};
