@@ -6,6 +6,7 @@
 // looks like a secret, deduplicates advisors and evidence, records conflicts as
 // `conflict` evidence, and is the single writer of outputs/advisor_records.json
 // and outputs/evidence.json for that merge.
+import { mergeDoctoralAdditions } from "./doctoral-evidence.mjs";
 import { createHash } from "node:crypto";
 import { mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -94,11 +95,15 @@ function findingToEvidence(finding, output, sourcesById, index) {
     url: primary?.url || primary?.final_url || null,
     final_url: primary?.final_url || primary?.url || null,
     page_title: primary?.page_title || primary?.title || null,
+    citation_label: finding.citation_label || primary?.citation_label || null,
     accessed_at: primary?.accessed_at || null,
     source_updated_at: primary?.source_updated_at || null,
     retrieval_method: primary?.retrieval_method || null,
     retrieval_provider: primary?.retrieval_provider || null,
     retrieval_tool: primary?.retrieval_tool || null,
+    ...Object.fromEntries(["interaction_required", "query_submitted", "filters_confirmed", "results_loaded",
+      "pagination_complete", "result_count", "page_state", "complete_results", "searched_sources"]
+      .filter(key => primary?.[key] !== undefined).map(key => [key, primary[key]])),
     extraction_status: primary?.extraction_status || null,
     reading_depth: finding.reading_depth || primary?.reading_depth || null,
     page_locator: finding.page_locator || primary?.page_locator || null,
@@ -128,9 +133,57 @@ function conflictToEvidence(conflict, output, index) {
   };
 }
 
+// Only grant additions are merged here; other profile interpretation remains
+// Main Agent-owned. Never replace a whole existing evidence profile.
+function mergeProjectFindings(existing, record, output, report, evidence) {
+  const current = existing.evidenceProfile || existing.evidence_profile;
+  const incoming = record.evidenceProfile || record.evidence_profile;
+  if (!current || !incoming) return;
+  const addition = incoming.latestSignals || incoming.latest_signals;
+  if (!addition) return;
+  const key = current.latestSignals ? "latestSignals" : current.latest_signals ? "latest_signals" : "latestSignals";
+  const target = current[key] ||= {};
+  for (const aliases of [["projects", "grants"], ["projectSearches", "project_searches"]]) {
+    const updates = addition[aliases[0]] || addition[aliases[1]];
+    if (!Array.isArray(updates)) continue;
+    const storageKey = target[aliases[0]] ? aliases[0] : target[aliases[1]] ? aliases[1] : aliases[0];
+    const rows = target[storageKey] ||= [];
+    const identity = (item) => aliases[0] === "projects"
+      ? JSON.stringify([item.source || item.sourceName || item.fundingBody || item.funding_body, item.projectId || item.project_id || item.grant_id || item.title || item.project_title])
+      : JSON.stringify([item.database || item.sourceName, item.query || item.query_or_filter_summary, item.scope, item.checkedAt || item.checked_at]);
+    for (const update of updates) {
+      if (!update || typeof update !== "object") continue;
+      const found = rows.find((row) => identity(row) === identity(update));
+      if (!found) { rows.push(structuredClone(update)); continue; }
+      for (const [inputField, value] of Object.entries(update)) {
+        const groups = [["projectId", "project_id", "grant_id"], ["title", "project_title"],
+          ["fundingBody", "funding_body"], ["piRole", "pi_role", "role"], ["period", "project_period"],
+          ["amount", "published_amount"], ["amountUnit", "amount_unit", "currency"], ["amountBasis", "amount_basis"],
+          ["requiresInteraction", "requires_interaction"], ["interactionAttempts", "interaction_attempts"],
+          ["source", "sourceName"], ["checkedAt", "checked_at"], ["sourceKind", "source_kind"], ["query", "query_or_filter_summary"]];
+        const aliasesForField = groups.find((names) => names.includes(inputField)) || [inputField];
+        const field = aliasesForField.find((name) => Object.hasOwn(found, name)) || inputField;
+        if (value === null || value === undefined || value === "") continue;
+        if (["interactionAttempts", "interaction_attempts"].includes(field)) {
+          found[field] = [...new Map([...list(found[field]), ...list(value)].map(row => [JSON.stringify(row), row])).values()];
+        } else if (field === "sourceIds" || field === "source_ids") {
+          const refKey = found.sourceIds ? "sourceIds" : found.source_ids ? "source_ids" : field;
+          found[refKey] = [...new Set([...list(found[refKey]), ...list(value)])];
+        } else if (found[field] === undefined || found[field] === null || found[field] === "") found[field] = structuredClone(value);
+        else if (JSON.stringify(found[field]) !== JSON.stringify(value)) {
+          const conflict = { entity_id: existing.advisor_id || existing.advisorId,
+            field: `latestSignals.${aliases[0]}.${field}`, claims: [String(found[field]), String(value)] };
+          report.conflicts.push({ task_id: output.task_id, ...conflict });
+          evidence.push(conflictToEvidence(conflict, output, evidence.length));
+        }
+      }
+    }
+  }
+}
+
 export function mergeSubagentOutputs(outputs, { advisorRecords = [], evidenceRecords = [], credentials = null } = {}) {
   const report = { files: [], errors: [], droppedRemovedFields: [], duplicateAdvisors: [], duplicateEvidence: [], conflicts: [], gaps: [], queries: [], secretsBlocked: [] };
-  const advisors = list(advisorRecords).map((row) => ({ ...row }));
+  const advisors = structuredClone(list(advisorRecords));
   const evidence = list(evidenceRecords).map((row) => ({ ...row }));
   const advisorIndex = new Map();
   for (const advisor of advisors) for (const key of advisorKey(advisor)) advisorIndex.set(key, advisor);
@@ -161,8 +214,22 @@ export function mergeSubagentOutputs(outputs, { advisorRecords = [], evidenceRec
         if (!keys.length) { report.errors.push(`${fileName}: 新导师实体缺少 advisor_id / ORCID / OpenAlex 标识`); continue; }
         const existing = keys.map((key) => advisorIndex.get(key)).find(Boolean);
         if (existing) {
+          mergeProjectFindings(existing, record, output, report, evidence);
+          const currentProfile = existing.evidenceProfile || existing.evidence_profile;
+          const incomingProfile = record.evidenceProfile || record.evidence_profile;
+          const addition = incomingProfile?.doctoralTrajectory || incomingProfile?.doctoral_trajectory;
+          if (currentProfile && addition) {
+            const key = currentProfile.doctoralTrajectory ? "doctoralTrajectory" : currentProfile.doctoral_trajectory ? "doctoral_trajectory" : "doctoralTrajectory";
+            const previous = currentProfile[key] || {};
+            currentProfile[key] = { ...previous, ...mergeDoctoralAdditions(previous, addition, (field, before, after) => {
+              const conflict = {entity_id: existing.advisor_id || existing.advisorId, field, claims: [before, after]};
+              report.conflicts.push({task_id: output.task_id, ...conflict});
+              evidence.push(conflictToEvidence(conflict, output, evidence.length));
+            }) };
+          }
           report.duplicateAdvisors.push({ task_id: output.task_id, advisor_id: existing.advisor_id, merged_from: record.advisor_id || keys[0] });
           for (const [key, value] of Object.entries(record)) {
+            if (["evidenceProfile", "evidence_profile"].includes(key) && (existing.evidenceProfile || existing.evidence_profile)) continue;
             if (value === null || value === undefined || value === "") continue;
             if (existing[key] === undefined || existing[key] === null || existing[key] === "" || (Array.isArray(existing[key]) && !existing[key].length)) {
               existing[key] = value;

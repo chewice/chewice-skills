@@ -189,7 +189,7 @@ test("CV-only medical application survives selection, export, confirmation and r
   const worksheet = (await readStoredZipEntries(workbookPath)).get("xl/worksheets/sheet1.xml").toString();
   assert.match(worksheet, /<t xml:space="preserve">eligible<\/t>/);
   let report = await exportAdvisorReport(project.path);
-  assert.match(await readFile(report.output, "utf8"), /<div class="fact-item">eligible<\/div>/);
+  assert.match(await readFile(report.output, "utf8"), /<div class="fact-item">符合已核实条件<\/div>/);
   const complete = await verifyRunArtifacts({ projectPath: project.path, mode: "finder" });
   assert.equal(complete.complete, true, complete.missing.join("; "));
   project = await store.updateProject(project.id, { investigation: {
@@ -211,7 +211,7 @@ test("CV-only medical application survives selection, export, confirmation and r
     assert.equal(restored.readiness.modes.finder.ready, false, state);
     assert.equal(restored.candidates[0].feasibility, "needs_confirmation", state);
     report = await exportAdvisorReport(project.path);
-    assert.doesNotMatch(await readFile(report.output, "utf8"), /<div class="fact-item">eligible<\/div>/, state);
+    assert.doesNotMatch(await readFile(report.output, "utf8"), /<div class="fact-item">符合已核实条件<\/div>/, state);
     const obsolete = await verifyRunArtifacts({ projectPath: project.path, mode: "finder" });
     assert.equal(obsolete.complete, false, state);
     assert.match(obsolete.missing.join("; "), /资格|已核实证据/, state);

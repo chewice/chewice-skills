@@ -56,7 +56,7 @@ test("T03 advisor id only: advisor-level report without invented programme or in
   const rows = buildMedicalDiscoveryView(bundle.advisors, bundle.project);
   assert.ok(rows.every((row) => !("advisorProgramId" in row) && !("intake" in row) && !("program" in row)));
   const report = buildAdvisorReport(bundle);
-  assert.match(report, /B\. 近五年科研主线与研究路线/);
+  assert.match(report, /研究方向与近年论文/);
   assert.doesNotMatch(report, /advisorProgramId/);
 });
 
@@ -189,7 +189,9 @@ test("T18 unchecked, not-found and blocked evidence remain distinguishable", asy
   assert.match(report, /inaccessible/);
   assert.match(report, /not_found/);
   assert.match(report, /not_checked/);
-  assert.match(report, /未检索、未找到、受阻、部分、冲突和过期分别保留/);
+  assert.match(report, /访问受阻/);
+  assert.match(report, /在所查范围内未找到/);
+  assert.match(report, /未检索或未核验/);
 });
 
 test("T19 review inflation: a single review cannot make a core collaborator", () => {
@@ -240,7 +242,7 @@ test("T25 network recursion: ego network is depth 1 and the report does not expa
   const network = normalizeMedicalEvidenceProfile(bundle.advisors[0]).collaborationNetwork;
   assert.equal(network.depth, 1);
   const report = buildAdvisorReport(bundle);
-  assert.equal((report.match(/<svg viewBox/g) || []).length, 1, "one ego network per advisor, none for collaborators");
+  assert.equal((report.match(/<svg viewBox/g) || []).length, 0, "concise collaborator profiles without recursive diagrams");
 });
 
 test("T26 saturation stops when a round adds only duplicates", () => {

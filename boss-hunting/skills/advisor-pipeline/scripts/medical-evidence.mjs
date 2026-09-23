@@ -5,6 +5,8 @@
 // collaboration network, latest signals/projects, doctoral trajectory).
 // Training fit, lab resources, doctoral personal funding, training environment,
 // applicant ability and overall quality scores are intentionally absent.
+import { interactiveQueryComplete } from "./browser-research.mjs";
+import { doctoralAdditions } from "./doctoral-evidence.mjs";
 import { hasStructuredApplicantBackground } from "./project-contract.mjs";
 import { open, realpath } from "node:fs/promises";
 import { isAbsolute, relative, resolve } from "node:path";
@@ -145,7 +147,7 @@ function collaborator(item) {
     firstYear: pick(source, "firstYear", "first_year") ?? null,
     lastYear: pick(source, "lastYear", "last_year") ?? null,
     sharedTopics: list(pick(source, "sharedTopics", "shared_topics")),
-    ownCoreDirection: pick(source, "ownCoreDirection", "own_core_direction") ?? null,
+    ownCoreDirection: pick(source, "researchDirection", "research_direction", "ownCoreDirection", "own_core_direction") ?? null,
     recentRoute: pick(source, "recentRoute", "recent_route") ?? null,
     relationToMainline: pick(source, "relationToMainline", "relation_to_mainline") ?? null,
     jointRecordCount: Math.max(0, Number(pick(source, "jointRecordCount", "joint_record_count")) || 0),
@@ -205,12 +207,48 @@ function project(item) {
   };
 }
 
+export const PROJECT_SEARCH_STATUSES = ["found", "not_found", "inaccessible", "partial", "not_checked"];
+
+function projectSearch(item) {
+  const source = item && typeof item === "object" ? item : {};
+  return {
+    database: pick(source, "database", "sourceName") ?? null,
+    query: pick(source, "query", "query_or_filter_summary") ?? null,
+    checkedAt: pick(source, "checkedAt", "checked_at") ?? null,
+    scope: source.scope ?? null,
+    status: PROJECT_SEARCH_STATUSES.includes(source.status) ? source.status : "not_checked",
+    sourceKind: pick(source, "sourceKind", "source_kind") ?? "unknown",
+    limitations: source.limitations ?? null,
+    requiresInteraction: pick(source, "requiresInteraction", "requires_interaction") === true,
+    interactionAttempts: list(pick(source, "interactionAttempts", "interaction_attempts")),
+    sourceIds: sourceIds(source),
+  };
+}
+
+// A configured provider or an empty projects list is not evidence of a search.
+export function projectSearchCoverage(searches = [], evidence = [], advisorId) {
+  if (!searches.length) return { complete: false, summary: "未记录检索过程" };
+  const complete = searches.every((search) => search.sourceKind === "supplementary" || (
+    search.sourceKind === "official_database" && ["found", "not_found"].includes(search.status)
+    && search.database && search.query && search.scope && /^\d{4}-\d{2}-\d{2}$/.test(search.checkedAt || "") && Number.isFinite(Date.parse(search.checkedAt))
+    && search.sourceIds.length && search.sourceIds.every((id) => evidence.some((row) =>
+      (row.evidence_id || row.evidenceId) === id && (row.entity_id || row.entity) === advisorId
+      && (search.status === "found" ? row.status === "verified" : row.status === "not_found")
+      && (!["empty_shell", "dynamic_form", "loading"].includes(row.page_state))
+      && (!(search.requiresInteraction || row.interaction_required) || (interactiveQueryComplete(row)
+        && (search.status !== "found" || row.result_count > 0)))
+      && /^https?:\/\//i.test(row.final_url || row.source_url || row.url || "")))))
+    && searches.some((search) => search.sourceKind === "official_database");
+  return { complete: Boolean(complete), summary: complete ? "已完成所列基金库检索" : "基金检索尚未完成或受限" };
+}
+
 function latestSignals(profile) {
   const source = pick(profile, "latestSignals", "latest_signals") || {};
   return {
     latestPapers: list(pick(source, "latestPapers", "latest_papers")).map(representativeWork),
     preprints: list(pick(source, "preprints")).map(representativeWork),
     projects: list(pick(source, "projects", "grants")).map(project),
+    projectSearches: list(pick(source, "projectSearches", "project_searches")).map(projectSearch),
     registries: list(pick(source, "registries")),
     trials: list(pick(source, "trials", "clinical_trials")),
     sourceIds: sourceIds(source),
@@ -237,6 +275,7 @@ function doctoralTrajectory(profile) {
   const source = pick(profile, "doctoralTrajectory", "doctoral_trajectory") || {};
   const graduate = pick(source, "graduateProgram", "graduate_program") || {};
   return {
+    ...doctoralAdditions(source),
     currentDoctoral: list(pick(source, "currentDoctoral", "current_doctoral")).map(doctoralPerson),
     formerDoctoral: list(pick(source, "formerDoctoral", "former_doctoral")).map(doctoralPerson),
     graduateProgram: {
@@ -249,7 +288,7 @@ function doctoralTrajectory(profile) {
     },
     emergingPiNote: pick(source, "emergingPiNote", "emerging_pi_note") ?? null,
     sampleLimitation: pick(source, "sampleLimitation", "sample_limitation")
-      ?? "已核实的公开案例，不代表完整 cohort；不计算毕业率、去向率或培养成功率",
+      ?? "已核实的公开案例，不代表完整博士生群体；不计算毕业率、去向率或培养成功率",
     sourceIds: sourceIds(source),
   };
 }

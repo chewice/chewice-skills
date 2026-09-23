@@ -233,14 +233,14 @@ The projection contains:
   `researchObjects`, `methods`, `recentShift`, `participationOnlyWorks`,
   `representativeWorks[{title, year, venue, doi, url, verifiedRole, relationToMainline, isPreprint, sourceIds}]`,
   `backSearchWindow`).
-- `collaborationNetwork` (`depth: 1`, `coreCollaborators[]`,
+- `collaborationNetwork` (`depth: 1`, `coreCollaborators[{name, currentInstitution, currentPosition, ownCoreDirection, collaborationEvidence: [{type, title, year, url, sourceIds}], sourceIds}]`,
   `edges[{type: coauthorship|shared_project|shared_grant|shared_trial, target, count, years, sourceIds}]`,
   `researchNeighbors[{type: citation|co_citation|bibliographic_coupling|semantic_similarity|related_papers}]`,
   `heuristics`).
 - `latestSignals` (`latestPapers`, `preprints`,
   `projects[{title, projectId, fundingBody, piRole, period, status, amount, amountUnit, amountBasis, source, sourceIds}]`,
   `registries`, `trials`).
-- `doctoralTrajectory` (`currentDoctoral[]`, `formerDoctoral[]` with
+- `doctoralTrajectory` (`firstAuthorProfiles[]`, `labWebsites[]`, `searches[]` as defined in investigation-contract.md, `currentDoctoral[]`, `formerDoctoral[]` with
   supervision evidence / degree or year / topic / outputs / first destination /
   latest public role / information date, `graduateProgram`, `emergingPiNote`,
   `sampleLimitation`).
@@ -367,3 +367,7 @@ Evidence statuses are `verified`, `partial`, `not_found`, `not_checked`,
 - Recheck deadline, tuition, scholarship, and materials for the named intake.
 - Refresh QS only when the requested edition changes.
 - Never repeat program-level browsing for advisors in the same program.
+
+### 动态查询完成记录（兼容增补）
+
+基金 `projectSearches[]` 可增 `requiresInteraction` 与 `interactionAttempts[]`（provider/tool/checkedAt/url/outcome/reason/sourceIds）。NSFC 动态查询必须填写。对应 evidence 增 `interaction_required`、`query_submitted`、`filters_confirmed`、`results_loaded`、`pagination_complete`、`result_count`；布尔字段按实际观察填写，result_count 是完整结果数。保留 page_state、complete_results、searched_sources。静态空框架不能证明查无。详见 [交互执行规则](browser-research-policy.md#动态基金库查询必须执行)。旧记录兼容，不推断完成交互；合并保留尝试与结果证据。

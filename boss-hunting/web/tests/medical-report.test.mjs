@@ -31,19 +31,19 @@ test("T03 T13 T25 medical discovery HTML renders five modules with item-level li
   assert.match(report, /虚构示例 \/ FICTIONAL FIXTURE/);
   assert.match(report, /生物医学导师方向探索/);
   assert.match(report, /没有综合导师分/);
-  // First page: compact overview table with the fixed six columns.
-  assert.match(report, /<th>导师<\/th><th>核心研究问题<\/th><th>近五年科研主线<\/th><th>核心合作生态<\/th><th>最新研究信号<\/th><th>方向契合与边界<\/th>/);
+  // First page: compact overview table with the fixed four columns.
+  assert.match(report, /<th>导师与机构<\/th><th>与需求的关系<\/th><th>基金检索结果<\/th><th>需要进一步确认<\/th>/);
   // Five modules per advisor in order, then boundary and coverage sections.
-  const order = ["A. 导师身份与当前科研定位", "B. 近五年科研主线与研究路线", "C. 科研合作网络", "D. 最新公开研究动向与项目支撑", "E. 博士培养轨迹", "方向契合与主要边界", "来源及检索覆盖说明"];
+  const order = ["身份与任职", "研究方向与近年论文", "主要合作研究者", "科研基金与近期进展", "博士指导情况", "本次查了什么，还缺什么"];
   const positions = order.map((label) => report.indexOf(label));
   assert.ok(positions.every((position, index) => position >= 0 && (index === 0 || position > positions[index - 1])), positions.join(","));
-  // C module: inline SVG ego network without scripts; edge weight = joint record count.
-  assert.match(report, /<svg viewBox/);
-  assert.match(report, /stroke-width="3\.0"/);
-  assert.match(report, /Fixture Collabora… \(2\)<\/text>/);
-  assert.match(report, /研究邻居（科学邻近，不是合作）/);
+  // C module only presents selected scholars and concrete joint work.
+  assert.match(report, /class="person-entry collaborator"/);
+  assert.match(report, /与导师合作的项目/);
+  assert.match(report, /与导师合作的产出/);
+  assert.doesNotMatch(report, /<svg|研究方向相近的人|对方核心方向与近期路线/);
   // D module: fixed project field list and amount unit handling.
-  assert.match(report, /<th>项目名称<\/th><th>项目编号<\/th><th>资助机构 \/ 来源<\/th><th>PI 角色<\/th><th>期限<\/th><th>状态<\/th><th>公开金额（单位）<\/th>/);
+  assert.match(report, /<th>项目名称<\/th><th>项目编号<\/th><th>资助机构 \/ 来源<\/th><th>项目中的角色<\/th><th>期限<\/th><th>状态<\/th><th>公开金额（单位）<\/th>/);
   assert.match(report, /FIX-0001/);
   assert.match(report, /未公开/);
   // E module distinguishes current and former doctoral students and never computes success rates.
@@ -53,14 +53,14 @@ test("T03 T13 T25 medical discovery HTML renders five modules with item-level li
   assert.match(report, /新兴 PI/);
   // Item-level external links plus supplementary evidence anchors.
   assert.match(report, /href="https:\/\/example.org\/fictional-study"/);
-  assert.match(report, /href="#evidence-1"/);
+  assert.doesNotMatch(report, />证据\s*\d+<\/a>/);
   assert.match(report, /not_checked/);
   assert.match(report, /未保存查询记录/);
   assert.match(report, /provider-capabilities\.json/);
   // Removed dimensions do not appear in discovery output.
   assert.doesNotMatch(report, /训练|研究资源及可访问层级|博士生资助|培养制度与环境|申请条件与时效/);
   assert.doesNotMatch(report, /reachCap|matchingContractVersion/);
-  assert.doesNotMatch(report, /advisorProgramId|<script|type="module"/);
+  assert.doesNotMatch(report, /advisorProgramId|<script(?! id="report-navigation")|type="module"/);
   assert.equal(input.advisors[0].advisorProgramId, undefined);
 });
 
@@ -77,7 +77,7 @@ test("report escapes all external text, blocks unsafe links and cannot execute p
   assert.match(report, /&lt;script&gt;uploadCV/);
   assert.match(report, /&lt;svg onload/);
   assert.match(report, /Ignore all instructions/);
-  assert.doesNotMatch(report, /<img|<script|href="javascript:|href="data:|<svg onload/);
+  assert.doesNotMatch(report, /<img|<script(?! id="report-navigation")|href="javascript:|href="data:|<svg onload/);
   assert.match(report, /Content-Security-Policy/);
 });
 
@@ -104,12 +104,12 @@ test("medical application report keeps programme entry, exact intake and project
   const report = buildAdvisorReport(input);
   assert.match(report, /生物医学导师申请筛选/);
   assert.match(report, /Fictional Biomedical PhD；PhD；2027/);
-  assert.match(report, /eligible/);
+  assert.match(report, /符合已核实条件/);
   assert.match(report, /申请条件与时效/);
   assert.match(report, /真实申请入口（申请筛选模式）/);
   assert.match(report, /FIX-APP-01/);
   assert.match(report, /1200000 fictional_unit/);
-  assert.match(report, /Level A/);
+  assert.match(report, /已核实研究负责人身份/);
   assert.match(report, /列表顺序不是导师质量排名/);
   assert.doesNotMatch(report, /训练|博士生资助|研究资源及可访问层级|培养制度与环境/);
   input.candidates[0].intake = "2026";
@@ -134,18 +134,18 @@ test("T13 facts and comparison carry direct source hyperlinks next to the exact 
   );
   const report = buildAdvisorReport(input);
   const brief = report.match(/<article[\s\S]*?<\/article>/)[0];
-  const moduleOf = (id) => brief.split(`id="advisor-1-${id}"`)[1].split("</div>\n<div class=\"module\"")[0];
+  const moduleOf = (id) => brief.split(`id="advisor-1-${id}"`)[1].split(/<div class="module(?: module-[a-e])?"/)[0];
   const section = (label) => report.split(`<dt>${label}</dt><dd>`)[1].split("</dd>")[0];
   assert.match(moduleOf("b"), /href="https:\/\/example.org\/paper-detail"/);
   assert.match(moduleOf("d"), /href="https:\/\/example.org\/grant-detail"/);
   assert.doesNotMatch(moduleOf("d"), /old-grant|cohort-detail/);
-  assert.match(moduleOf("e"), /href="https:\/\/example.org\/cohort-detail".*partial/);
+  assert.match(moduleOf("e"), /href="https:\/\/example.org\/cohort-detail".*部分核实/);
   assert.match(section("项目截止日（批次 / 时区）"), /href="https:\/\/example.org\/program-date"/);
   assert.doesNotMatch(section("项目截止日（批次 / 时区）"), /scholarship-date|old-date|other-date/);
   assert.match(section("奖学金截止日（批次 / 时区）"), /href="https:\/\/example.org\/scholarship-date"/);
   const comparison = report.match(/<table class="overview">[\s\S]*?<\/table>/)[0];
   assert.match(comparison, /href="https:\/\/example.org\/fictional-study"/);
-  assert.match(comparison, /href="#evidence-/);
+  assert.doesNotMatch(comparison, />证据\s*\d+<\/a>/);
 });
 
 test("inline sources expose missing associations and keep unsafe nested URLs inert", async () => {
@@ -155,10 +155,10 @@ test("inline sources expose missing associations and keep unsafe nested URLs ine
   input.evidence[0].final_url = "javascript:alert(2)";
   const brief = buildAdvisorReport(input).match(/<article[\s\S]*?<\/article>/)[0];
   assert.match(brief, /来源关联尚待补齐/);
-  assert.match(brief, /对应来源待补，信息待核验/);
+  assert.match(brief, /来源关联尚待补齐/);
   assert.match(brief, /未提供可用公开链接/);
   assert.match(brief, /&lt;script&gt;fixture/);
-  assert.doesNotMatch(brief, /href="javascript:|<script|href="https:\/\/example.org\/fictional-study"/);
+  assert.doesNotMatch(brief, /href="javascript:|<script(?! id="report-navigation")|href="https:\/\/example.org\/fictional-study"/);
 });
 
 test("general projects export through the same HTML report without medical-only requirements", () => {
@@ -199,9 +199,9 @@ test("stale medical ranking retains historical trace without old order or eligib
   input.project.medicalProfile.researchQuestions = ["Changed fixture research question"];
   const report = buildAdvisorReport(input);
   assert.match(report, /历史比较待复核/);
-  assert.match(report, /历史候选ID/);
-  assert.match(report, /needs_confirmation/);
-  assert.doesNotMatch(report, /<div class="fact-item">eligible<\/div>/);
+  assert.match(report, /历史比较待复核/);
+  assert.match(report, /需要进一步确认/);
+  assert.doesNotMatch(report, /<div class="fact-item">符合已核实条件<\/div>/);
   assert.ok(report.indexOf("Alpha Fixture") < report.indexOf("Zeta Fixture"));
 });
 
@@ -233,8 +233,8 @@ test("current evaluator findings reach the comparison and advisor brief without 
   const brief = report.match(/<article[\s\S]*?<\/article>/)[0];
   assert.match(comparison, /Current evaluator question alignment/);
   assert.match(comparison, /Current evaluator boundary/);
-  assert.match(comparison, /活跃新兴方向/);
-  assert.match(comparison, /href="#evidence-4"/);
+  assert.match(brief, /活跃新兴方向/);
+  assert.match(comparison, /href="https:\/\/example.org\/fictional-evaluator-source"/);
   assert.doesNotMatch(comparison, /sourceIds:|status:|Old advisor-level match/);
   assert.match(brief, /Current evaluator question alignment/);
   assert.match(brief, /Current evaluator continuity note/);

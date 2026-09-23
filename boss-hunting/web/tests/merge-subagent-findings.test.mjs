@@ -99,3 +99,44 @@ test("T33 run merge is the single writer of outputs and produces merge-report.js
     assert.equal(saved.runId, "run-1");
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+test("nested grant additions preserve prior research, conflicts and inputs across profile naming conventions", () => {
+  for (const profileKey of ["evidence_profile", "evidenceProfile"]) {
+    const existing = [{advisor_id:"fixture-pi", name:"Fixture PI", [profileKey]: {
+      researchMainline:{longTermQuestion:"Preserve this research fact"},
+      latestSignals:{projects:[{projectId:"G1", source:"NIH", amount:10, sourceIds:["old"]}]},
+    }}];
+    const before = structuredClone(existing);
+    const update = output({new_entities:[{entity_type:"advisor",advisor_id:"fixture-pi",evidence_profile:{
+      researchMainline:{longTermQuestion:"Do not replace"}, latest_signals:{
+        projects:[{projectId:"G1",source:"NIH",amount:20,sourceIds:["new"]},{projectId:"G2",source:"NIH",title:"New grant"}],
+        project_searches:[{database:"NIH",query:"Fixture PI",checked_at:"2026-09-23",scope:"active",status:"found",source_ids:["new"]}],
+      },
+    }}], findings:[{entity:"fixture-pi", claim:"Grant query result", status:"verified", source_ids:["s1"], citation_label:"NIH 项目查询"}]});
+    const result = mergeSubagentOutputs([{fileName:"grants.json",output:update}],{advisorRecords:existing});
+    assert.deepEqual(existing,before);
+    const profile = result.advisors[0][profileKey];
+    assert.equal(profile.researchMainline.longTermQuestion,"Preserve this research fact");
+    assert.equal(profile.latestSignals.projects.length,2);
+    assert.equal(profile.latestSignals.projects[0].amount,10);
+    assert.deepEqual(profile.latestSignals.projects[0].sourceIds,["old","new"]);
+    assert.equal(profile.latestSignals.projectSearches.length,1);
+    assert.ok(result.evidence.some(row=>row.status==="conflict" && row.fields_supported.includes("latestSignals.projects.amount")));
+    assert.ok(result.evidence.some(row=>row.citation_label==="NIH 项目查询"));
+    const again=mergeSubagentOutputs([{fileName:"grants.json",output:update}],{advisorRecords:result.advisors,evidenceRecords:result.evidence});
+    assert.equal(again.advisors[0][profileKey].latestSignals.projects.length,2);
+    assert.equal(again.advisors[0][profileKey].latestSignals.projectSearches.length,1);
+  }
+});
+
+test("interactive query receipts survive merge and repeated attempts deduplicate", () => {
+  const attempt={provider:"wisp_science_browser",tool:"web_execute_js",checkedAt:"2026-09-23",outcome:"submitted"};
+  const search={database:"NSFC",query:"Fixture PI",scope:"five years",checkedAt:"2026-09-23",requiresInteraction:true,interactionAttempts:[attempt]};
+  const existing=[{advisor_id:"fixture-pi",evidenceProfile:{latestSignals:{projectSearches:[search]}}}];
+  const update=output({new_entities:[{entity_type:"advisor",advisor_id:"fixture-pi",evidenceProfile:{latestSignals:{projectSearches:[{...search,interactionAttempts:[attempt,{...attempt,outcome:"loaded"}]}]}}}],sources_checked:[{source_id:"s1",url:"https://example.org/results",retrieval_method:"browser",retrieval_provider:"wisp_science_browser",retrieval_tool:"web_scan",extraction_status:"success",interaction_required:true,query_submitted:true,filters_confirmed:true,results_loaded:true,pagination_complete:true,result_count:2}]});
+  const merged=mergeSubagentOutputs([{fileName:"interactive.json",output:update}],{advisorRecords:existing});
+  assert.deepEqual(merged.report.errors,[]);
+  assert.equal(merged.advisors[0].evidenceProfile.latestSignals.projectSearches[0].interactionAttempts.length,2);
+  assert.equal(merged.evidence[0].query_submitted,true);
+  assert.equal(merged.evidence[0].result_count,2);
+});
