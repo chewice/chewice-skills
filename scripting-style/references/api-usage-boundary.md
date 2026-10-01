@@ -1,18 +1,18 @@
-# API 使用边界
+# API usage boundaries
 
-只有用户或当前项目提供 API 契约时，才读取本参考。
+Read only when the user or current project supplies an API contract.
 
-把 API 当作不透明的既有能力。分析文件负责调用周围可见的科学准备与判断，不负责 API 内部算法。
+Treat the API as an existing opaque capability. The analysis owns visible scientific input preparation and decisions, not the API's hidden algorithms.
 
-## 保持可见的内容
+## Keep the call understandable
 
-1. 确认已有文档中的 import、`source()` 或 command、必需输入、有分析含义的参数和返回形态。
-2. 把 filtering、grouping、feature choice、sample selection 和其他科学输入准备留在主分析中。
-3. 按项目已有约定，在首次使用附近加载 API。
-4. 只调用已知参数。项目 API 可以合理读取其正上方建立的技术常量；不要错误宣称每个范例都把所有值作为参数传入。
-5. 用目标文件类型的正常检查方式观察返回对象。
-6. 只保存下一科学步骤需要的 API 结果或衍生证据。
+1. Identify the documented import, `source()`, or command; required inputs; scientifically meaningful parameters; and return structure.
+2. Keep filtering, grouping, feature choice, sample selection, and other scientific preparation in the main analysis.
+3. Load the API near first use using the current project convention.
+4. Pass only known arguments. A project API may legitimately read technical constants defined immediately above it; do not claim every example passes all values explicitly.
+5. Inspect the returned object using ordinary operations for the target file type.
+6. Save only results or derived evidence needed by the next scientific step.
 
-不得打开用户已排除的实现、根据函数名猜测隐藏行为、把源代码复制进分析、构造跨项目 adapter 或重新实现 API。若缺失契约会改变科学含义，提出最小必要问题。
+Do not inspect excluded implementations, infer hidden behavior from a function name, copy source into the analysis, build cross-project adapters, or reimplement the API without authorization. Ask the smallest necessary question if a missing contract changes scientific meaning.
 
-只有重复调用已经形成稳定技术形态时，才允许窄 wrapper。cutoff、group、target、lineage、database choice 和其他科学决定继续留在 wrapper 外部。
+A narrow wrapper is justified only by a stable technical repetition needed now, never to support an obsolete signature or hide a defective implementation. Keep cutoffs, groups, targets, lineages, database choices, and other scientific decisions outside it. Fix owned implementation defects and affected known callers within scope. If the cause belongs to an opaque or out-of-scope API, report the mismatch rather than inventing fallback behavior. Explicit conversion to a documented current input format is permitted; make assumptions and information loss visible.

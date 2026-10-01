@@ -1,36 +1,39 @@
-# 公开科研代码中的分段分析（补充来源）
+# Supplemental public analysis examples
 
-当前主要写作来源是 [GZDlab 本地范例索引](../examples/example-index.yaml)，本页仅在需要公开源码佐证或 Notebook 补充时读取。检查日期：2026-09-18。以下三个项目与 Nature、Science、Cell 正刊论文的对应关系已核对；只读检查选定版本的 source cells，没有执行论文分析，也不使用 stored outputs 证明结论。
+The primary writing sources are the [local GZDlab examples](../examples/example-index.yaml). Read this reference only for supplemental public-source evidence or notebook examples. Historical inspection date: **2026-09-18**. That review checked the relationship between the following code and Nature, Science, and Cell papers and inspected selected source cells at fixed revisions. It did not execute the papers' analyses or use stored outputs as evidence of conclusions.
 
-已发表代码通常是整理后的分析记录。可观察其对象变换、展示位置和选择说明，但不能据此还原作者当时的探索顺序，或把整仓库视为最佳写法。下面的 cell 编号从 **1** 开始，包含 Markdown cells。
+Published code is often an edited analysis record. It can illustrate object transformations, display placement, and selection rationale, but does not reveal the authors' original exploration order or make an entire repository exemplary. Cell numbers below are **one-based**, including Markdown cells.
 
-## Nature：Tabula Muris Senis
+## Nature: Tabula Muris Senis
 
-- 论文：[A single-cell transcriptomic atlas characterizes ageing tissues in the mouse](https://doi.org/10.1038/s41586-020-2496-1)，Nature，2020。
-- 固定 commit：`5ee7b62ec7208c240634946180a8a105a7356816`。
-- [droplet-processing Notebook](https://github.com/czbiohub-sf/tabula-muris-senis/blob/5ee7b62ec7208c240634946180a8a105a7356816/1_tabula_muris_senis/11_figure_1/tabula-muris-senis-droplet-processing.ipynb)，Python；检查 cells 1–24。
-- **借鉴：** cells 3–6 在读入表和科学对象后展示记录或对象；cells 9–12 展示 metadata、执行变换、再查看类别；后续以明确段落处理另一组输入。对象和差异沿主线可见，展示是分析过程的一部分。
-- **排除：** 机器路径、旧 Scanpy API、字段映射、历史筛选和类别处理不能成为默认值。较长循环只能证明这种组织形式存在，不能证明新数据适合立即套用同一循环。
+- Paper: [A single-cell transcriptomic atlas characterizes ageing tissues in the mouse](https://doi.org/10.1038/s41586-020-2496-1), Nature, 2020.
+- Fixed commit: `5ee7b62ec7208c240634946180a8a105a7356816`.
+- [Droplet-processing notebook](https://github.com/czbiohub-sf/tabula-muris-senis/blob/5ee7b62ec7208c240634946180a8a105a7356816/1_tabula_muris_senis/11_figure_1/tabula-muris-senis-droplet-processing.ipynb), Python; inspected cells 1–24.
+- **Useful structure:** cells 3–6 display records/objects after loading; cells 9–12 display metadata, transform it, and inspect categories. Later sections process another input group. Objects and differences stay visible, with inspection part of the analysis.
+- **Exclude:** machine paths, old Scanpy APIs, field mappings, historical filters, and category choices. A long loop demonstrates a possible structure, not that new data should immediately use it.
 
-## Science：Tabula Sapiens
+## Science: Tabula Sapiens
 
-- 论文：[The Tabula Sapiens: A multiple-organ, single-cell transcriptomic atlas of humans](https://doi.org/10.1126/science.abl4896)，Science，2022。
-- 固定 commit：`14de8b082a25dba79e12c39626843543ab92e5b5`；这里只使用 `paper1`，不混入后续论文的代码。
-- [Fig2_cell_fractions Notebook](https://github.com/czbiohub-sf/tabula-sapiens/blob/14de8b082a25dba79e12c39626843543ab92e5b5/paper1/Fig2/Fig2_cell_fractions.ipynb)，Python；检查 cells 1–24。
-- **借鉴：** cells 12–18 用标题区分读入、分析和变换，显示输入表、局部记录与汇总表；cell 20 接续绘图；cells 22–24 另起一段读入另一类表并展示。计算、观察与图形用途能够顺着代码追踪。
-- **排除：** 开头的大型绘图 helper、通配 import、个人路径、历史参数和大量遗留注释不是探索模板。展示整张表在这个来源中存在，但新任务仍按对象大小选择局部内容。
+- Paper: [The Tabula Sapiens: A multiple-organ, single-cell transcriptomic atlas of humans](https://doi.org/10.1126/science.abl4896), Science, 2022.
+- Fixed commit: `14de8b082a25dba79e12c39626843543ab92e5b5`; use only `paper1`, not later papers' code.
+- [Fig2_cell_fractions notebook](https://github.com/czbiohub-sf/tabula-sapiens/blob/14de8b082a25dba79e12c39626843543ab92e5b5/paper1/Fig2/Fig2_cell_fractions.ipynb), Python; inspected cells 1–24.
+- **Useful structure:** cells 12–18 distinguish reading, analysis, and transformation with headings, displaying input tables, local records, and summaries. Cell 20 plots; cells 22–24 read/display another table type. Computation, inspection, and plotting purpose are traceable.
+- **Exclude:** large opening plot helpers, wildcard imports, personal paths, historical parameters, and extensive obsolete comments. Full-table display in a source does not justify displaying a large object in a new task.
 
-## Cell：KPTracer
+## Cell: KPTracer
 
-- 论文：[Lineage tracing reveals the phylodynamics, plasticity, and paths of tumor evolution](https://doi.org/10.1016/j.cell.2022.04.015)，Cell，2022。
-- 固定 commit：`76a022bc6ab0bd3238127843a15acb00087d97ce`。
-- [Figure3_S3_diffexp Notebook](https://github.com/mattjones315/KPTracer-release/blob/76a022bc6ab0bd3238127843a15acb00087d97ce/reproducibility/Figure3_S3/Figure3_S3_diffexp.ipynb)，**R 代码**；检查全部 21 个 cells。
-- **借鉴：** cells 7–9 将计算、结果查看和后续处理分开；cells 11–17 用说明区分分析目的、计算、人工挑选及结果展示，选择留在主线并明确其人工性质。Notebook 的实际语言必须核对，不能默认 Python。
-- **排除：** 人工挑选的具体内容、统计阈值、包版本和隐藏上游依赖不迁移；部分选择与图形是发表后的固定方案，不能假定适用于新任务。批处理脚本和算法库不作为默认交互分析架构。
+- Paper: [Lineage tracing reveals the phylodynamics, plasticity, and paths of tumor evolution](https://doi.org/10.1016/j.cell.2022.04.015), Cell, 2022.
+- Fixed commit: `76a022bc6ab0bd3238127843a15acb00087d97ce`.
+- [Figure3_S3_diffexp notebook](https://github.com/mattjones315/KPTracer-release/blob/76a022bc6ab0bd3238127843a15acb00087d97ce/reproducibility/Figure3_S3/Figure3_S3_diffexp.ipynb), **R source**; inspected all 21 cells.
+- **Useful structure:** cells 7–9 separate computation, inspection, and later processing; cells 11–17 explain analysis purposes, computation, manual selection, and display. Choices remain visible and explicitly manual. Inspect the actual notebook language rather than assuming Python.
+- **Exclude:** particular manual selections, thresholds, versions, and hidden upstream dependencies. Some choices and figures are fixed publication results, not defaults for new tasks. Batch scripts and algorithm libraries are not the default interactive analysis architecture.
 
-## 如何用于本 Skill
+## Applying this evidence
 
-- 这三份证据都是 `.ipynb`。它们支持 Notebook 的分段展示与选择可见性；不据此推导 `.R`、`.py` 或 `.sh` 的具体语法。R 分段、Python `# %%` 和按结果推进的执行约束来自本次用户明确要求，并由本地类型指南与验证支持。
-- 仅借鉴当前分析真正需要的结构，不抄写历史参数、标识、数据内容或科学结论。公开仓库有 helper 和 pipeline，并不使它们成为本 Skill 的默认产物；稳定的窄函数和机械重复仍有合理位置。
-- [本地范例索引](../examples/example-index.yaml) 的 `<SOURCE_ROOT>` 现在明确指 GZDlab 根目录，旧 sc06 来源相对路径均带 `sc06/` 前缀。保持同类型按需读取；本页不覆盖用户指定的本地写作偏好，来源缺失时也不搜索用户机器或强制下载。
-- 后续验证见 [分段分析验证](../validation/interactive-analysis-validation.md)。源码形式、片段执行测试和真实科学分析的正确性分别报告。
+All three examples are `.ipynb`. They support notebook sectioning, inspection, and visible choices, not the concrete syntax of `.R`, `.py`, or `.sh`. R section conventions, Python `# %%`, and execution guided by output come from explicit user requirements and local type-specific guidance/validation.
+
+Borrow only useful current structure, never historical parameters, identifiers, data, or conclusions. Public helpers/pipelines do not make those structures defaults. Narrow stable functions and confirmed mechanical repetition still have legitimate roles.
+
+In the [local index](../examples/example-index.yaml), `<SOURCE_ROOT>` denotes the GZDlab root; older sc06 paths carry the `sc06/` prefix. Read same-type sources on demand. Do not override local preferences, search the user's machine, or force downloads when sources are absent.
+
+See [validation records](../validation/interactive-analysis-validation.md) for the distinctions between source inspection, fragment execution, and scientific correctness. These notes preserve historical evidence; translation is not a new source verification.

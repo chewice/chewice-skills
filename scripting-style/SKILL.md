@@ -1,112 +1,120 @@
 ---
 name: scripting-style
-description: 编写、续写、重构或审查项目内部探索性科研分析代码（.R、.py、.sh、.ipynb）。以脚本目录为工作目录使用相对路径，自然分段留白，适时展示数据内容与类型，逐段运行后决定下一步。用户强调 GZDlab 式写作、人类可读、线性探索、少封装或减少 Bash/Rscript 批跑时使用。不用于环境设计、公共函数库、R package、通用 CLI 或统一 pipeline。
+description: Write, extend, refactor, or review project-local exploratory scientific analysis in R, Python, Bash, or notebooks (.R, .py, .sh, .ipynb). Use for readable linear analysis, GZDlab-style scripts, analysis-step headings, relative paths, visible data previews, and execution guided by observed results. Excludes environment setup, public libraries, R packages, general CLIs, and workflow platforms.
 ---
 
 # Scripting Style
 
 > **Write the analysis, not an application around the analysis.**
 
-默认产物是项目内部可逐段运行的科研分析记录。以 GZDlab 代表脚本的写作习惯为主要参考：路径和对象在附近可见，分段、留白和短说明帮助读者检查并继续分析。只学习代码表达与组织，不继承来源的分析方法、参数或科学结论。
+Produce a project-local analysis record that a researcher can run and inspect in pieces. GZDlab examples inform expression and organization only, never scientific methods, parameters, or conclusions.
 
-**编写当前片段 → 运行单行、多行或一个 cell → 展示并检查真实结果 → 决定并续写下一步。**
+**Write the current fragment → execute a line, selection, or cell → inspect real output → decide and write the next step.**
 
-## 日常入口
+These instructions use English. Generated headings, comments, and explanations follow the user's language and project conventions; English skill instructions do not require English analysis comments.
 
-1. 确认目标文件类型，只完整读取对应的一份指南：
-   - `.R`：[R analysis](references/r-analysis.md)
-   - `.py`：[Python analysis](references/python-analysis.md)
-   - `.sh`：[Bash analysis](references/bash-analysis.md)
-   - `.ipynb`：[Notebook analysis](references/notebook-analysis.md)，先识别实际 kernel 与代码语言
-2. 修改既有代码时，先读目标文件及其邻近的**同类型**脚本。保持当前 section、对象命名和分析顺序，默认做 minimal diff。落实下述脚本目录约定时只调整受影响的路径，不重排项目目录；用户明确指定的其他运行契约优先。
-3. 新建代码时，若用户提供了 source root，或索引中的相对路径可从当前工作区明确解析，可从 [type-first example index](examples/example-index.yaml) 选择最多一个同类型 primary，必要时再选一个同类型 complement。只学习结构；不得复制来源中的路径、参数、环境痕迹或科学结论。不要猜测 `<SOURCE_ROOT>` 或搜索用户机器来定位范例；来源不可用时直接依照类型指南，且不声称已读取范例。
-4. 任务调用用户或项目提供的 API 时，再读取 [API usage boundary](references/api-usage-boundary.md)。
-5. 只有仍存在会改变分析含义的选择时，才在对话中按需简述问题、输入、预期产物、候选决定和待确认项；不要固定填写工作提要，也不要为此创建 spec 或 plan。
+## Entry
 
-需要补充公开源码佐证或迭代 Skill 时，再读 [公开仓库参考](references/public-repo-patterns.md)。本地范例为主要写作参考，公开来源用于补充，不要求日常任务联网读取所有来源。
+1. Identify the exact target type and read only its full guide:
+   - `.R`: [R analysis](references/r-analysis.md)
+   - `.py`: [Python analysis](references/python-analysis.md)
+   - `.sh`: [Bash analysis](references/bash-analysis.md)
+   - `.ipynb`: [Notebook analysis](references/notebook-analysis.md); identify its actual kernel and source language first.
+2. For edits, read the target and nearby **same-type** scripts. Preserve clear naming, section style, and analysis order. Keep changes local, but fix affected callers when an implementation changes; a small diff is not a reason to retain broken or obsolete paths. Respect an explicitly specified execution contract.
+3. For new code, optionally select at most one same-type primary and one useful complement from the [example index](examples/example-index.yaml), only when the user supplies a source root or it clearly resolves from the workspace. Do not guess `<SOURCE_ROOT>`, search the user's machine, or copy source paths, parameters, environment details, or conclusions. If unavailable, use the type guide and disclose that examples were not read.
+4. Read [API boundaries](references/api-usage-boundary.md) only when calling an API supplied by the user or project.
+5. Discuss unresolved scientific choices briefly in conversation when needed. Do not generate a fixed task brief or spec/plan document. **You may use superpowers, but do not write any spec or plan.** This does not prohibit discussing a scientific question, comparing methods, or explaining the next action; superpowers are optional.
 
-不得用另一种文件类型的范例推导具体写法。四种类型只共享本页的原则和边界；R section、Python CLI、Bash 调度或 Notebook cell 习惯均不可跨类型套用。
+Read [public source notes](references/public-repo-patterns.md) only for supplementary source evidence or skill iteration. Do not routinely browse every source. Never derive one file type's concrete style from another: R sections, Python CLI conventions, Bash scheduling, and notebook cells are not interchangeable.
 
-## 工作目录与相对路径
+## Implement only the current analysis
 
-- 默认以当前脚本或 Notebook 所在目录为工作目录；读入、中间存档、最终输出及项目 API 的文件路径都相对于它，不写机器特定绝对路径。
-- R 开头必须显式执行 `setwd()`、`getwd()`、`.libPaths()`，随后加载包和读取数据；`.libPaths()` 只展示，不默认修改库位置。目标根据实际启动位置填写，已在脚本目录也保留 `setwd(".")`。
-- Python、Bash、Notebook 使用各自语言或执行环境明确工作目录。只在会话入口初始化一次，后续片段复用已有对象，不反复切换目录；不新增自动搜索项目根的函数。具体写法见对应指南。
-- 路径变量与读写操作保持接近，文件名说明对象、处理状态或用途。保留项目的格式和命名习惯，让中间保存与后续读取一眼对应，不增加配置或存档框架。
+- **No speculative design or overengineering.** Implement confirmed needs on the current inputs. Do not prebuild interfaces, branches, configuration systems, runners, dispatchers, registries, state tracking, retry systems, completion markers, or pipelines for imagined future datasets or reuse. A genuinely requested reusable tool belongs to a separately scoped task; it is not an automatic extension of an analysis script.
+- **No speculative error recovery.** Do not add hypothetical fault branches, broad exception suppression, guessed inputs, automatic repair, or fallback methods. Let an unexpected failure expose its actual cause and fix that cause within the authorized scope.
+- **Keep scientific validity checks.** Concise checks for sample alignment, identifier uniqueness, matrix orientation, required expression layers, or comparable conditions are justified by the current computation, even if no error has occurred yet. Inspect data by default; stop on violations that could silently invalidate results. Do not build a generic validation framework.
+- **No backward-compatibility paths in analysis scripts.** Support current confirmed inputs and interfaces only. When changing an owned implementation, update affected known callers and remove superseded branches, aliases, and old-path probing within scope. Do not add adapters to keep obsolete behavior alive. An external API or out-of-scope caller is a boundary to report, not permission to rewrite it or hide the mismatch.
+- **No glue that conceals a needed fix.** Correct the owned producer or consumer rather than stacking wrappers and conversion layers over a defect. Direct format conversion, identifier mapping, and tool handoffs remain valid when explicitly required by the current analysis; keep their meaning and any information loss visible.
+- **No technical workaround in place of scientific judgment.** Never silently drop samples, impute missing values, switch assays/layers or tests, or suppress failed comparisons merely to finish. Investigate the cause; a change in scientific meaning needs evidence or an explicit decision.
 
-## 分段执行，依据实际结果继续
+These restrictions govern generated analysis code, not unrelated infrastructure or this skill's existing request schema. Simplicity limits incidental machinery, not the scientific scope requested by the user.
 
-- 每段围绕一个分析目的，有清楚标题及必要的简短说明，交代要做什么、为什么做或需要观察什么。标题已足够清楚时不重复解释；不逐行复述语法，不制造固定章节。
-- 逻辑组之间通常留一空行，紧密相关的语句连贯书写；长调用按参数换行。使用自然标题，不强制编号或“检查点／决策点”标签；保留项目已有的清楚约定。
-- 段落是可选择执行的分析单元，不是函数边界。使用已有上游对象，在同一个 R/Python 会话或 Notebook kernel 中运行当前片段；需要时启动普通交互进程，不为此新建 runner、服务或状态管理。
-- 检查实际输出后，才确定并执行依赖它的下一步。证据充分时 agent 自主继续；只有关键科学取舍无法确定时才询问用户，不要求逐段审批。可预告后续方向，不预先填满依赖未知结果的整套流程。
-- 分隔符和“检查输出”的注释不会让整份脚本自动暂停。不要用 `Run All`、连续 `Rscript`、Bash 循环或反复临时 Python 进程越过未决判断、批跑不同数据集；已确认的机械重复与外部工具调用仍可正常使用。
-- 上游筛选或参数改变后，重跑实际受影响的下游片段，不沿用失效结果。最终文件保留必要依赖、有效分析和选择依据，支持按顺序重放；会话中有价值的试做应写回文件，不能只留在终端历史里。
-- 只要求编写代码时，保留展示语句、清楚的分段和未决说明，不虚构执行结果。当前工具无法分段执行时如实说明，不用整脚本批跑冒充已完成探索。
+## Working directory and paths
 
-## 保留分析怎样发生
+- Use the current script/notebook directory as the working directory. Inputs, intermediate archives, final outputs, and project API paths are relative to it, not machine-specific absolute paths.
+- R starts explicitly with `setwd()`, `getwd()`, and `.libPaths()`, before loading packages or data. `.libPaths()` displays library paths; do not modify them by default. Set the relative target from the actual launch location; keep `setwd(".")` if already in the script directory.
+- Use each language's ordinary directory operations once at session entry. Reuse the session and objects; do not repeatedly change directories or add root-discovery functions.
+- Keep path variables near their reads/writes. Names identify the object, processing state, or purpose. Match saves to later reads using the project's existing formats; do not add configuration or archive frameworks.
 
-按当前问题保留下列探索链中实际需要的环节，不为凑模板制造空步骤：
+## Analysis-step headings and within-step spacing
 
-`问题 -> 具体试做 -> 检查或比较 -> 人工判断 -> 批量扩展 -> 保存证据 -> 解释、局限或下一问`
+- Headings identify the actual analysis step and its responsibility, such as “Align expression columns and sample metadata” or “Filter low-expression genes.” Name only steps present and scientifically determined. Do not prefill a whole workflow or impose bioinformatics stages on another discipline.
+- Short comments explain input meaning, scientific rationale, observations to examine, or output use. Do not repeat a clear heading or narrate syntax line by line. Agent instructions such as “run in sections,” “reuse this session,” and “continue after inspection” belong in the skill, not routine script comments. Keep necessary launch instructions at the start and specific unresolved scientific questions near the relevant call.
+- Within a step, separate input preparation, transformation, inspection, and saving into small groups with **one blank line between groups**. Keep closely related statements together. Do not insert blank lines after every statement or split by a fixed line count. Wrap long calls by argument; use type-specific conventions for pipes and plot layers.
+- Small operation groups usually need spacing, not separate headings. Preserve clear project delimiters; do not mandate numbering, fixed chapters, or checkpoint/decision-point labels.
 
-- 让科学对象和数据变换按真实执行顺序自上而下出现。
-- 读入后先展示少量实际内容，再进入下一步变换；不能只报维度或“读取成功”。按对象选择局部切片、表头或相关组件，在读入、提取组件或类型转换后适时查看类型，不要求每步打印全套检查。大型或稀疏对象只预览局部，不为预览转换整个对象或创建通用展示函数。
-- 在影响下一步判断的关键变换后，展示足够的内容、摘要或诊断图。不是每行代码都打印，也不是所有对象都套同一组检查；具体写法见各类型指南。
-- 选择读哪个路径或分析单元可以写在读入之前；依赖数据内容的字段名、分组水平、模型公式项、协变量列表和方法阈值，必须写在对已载入对象的观察之后（如 `names` / `unique` / `table` / `summary`，具体语法留在类型指南）。不要用论文、GEO 或其他先验，在观察之前假定或覆盖盘上真实列名与水平。
-- 默认把分析写在顶层，使语句可以按顺序逐行运行。减少把整段分析包进 named function、`main()` 或 `run_analysis()`；函数不禁用。比较循环里的短匿名函数可以保留。方法尚未在当前数据上站稳时，先把一个代表性案例内联跑通。看见输出并修正后，才把稳定的逐元素技术核提成局部函数或循环。
-- 候选参数或方法可以并列尝试。先查看比较证据，再将选择与依据写回调用附近；不要为一次决定创建 selector、config 或自动决策器。未决项用注释或待判断说明保留，不把 `NA` / `None` 占位值传进下游调用。
-- 任务没有给出、项目也没有明确约定的科学参数，不得用惯例值、来源值或 package default 悄悄补齐。若它阻止代码成立，先从当前数据设计比较，或在调用附近留下明确的待定值；只有会实质改变任务且无法安全留待判断时才询问用户。若用户指向一份项目内参数来源，可以把起始值写在调用附近，并标明这是起始方案而不是已验证最优。
-- 不要为了让代码显得完整而展开未要求的 package defaults、algorithm switches、random seed 或 plot sampling size。科学方法与影响结果的参数仍需依据；绘图宽高、单位和必要分辨率可以在保存附近直接设置，以清楚呈现当前图形，不照搬来源固定值。
-- 模糊的产物名称不等于方法授权。若生成该产物还需要确定 estimand、comparison unit、statistical test、group definition 或模型，必须把缺失决定留在主线；不要为了交付一份“完整可运行”脚本自行选标准方法。
-- 不伪造步骤依赖。若用户设想的后续分析并不实际使用上一步选择，应在代码或交付说明中指出概念缺口，并保留正确 handoff，而不是把无关对象接起来。
-- 允许脚本在人工编辑的中间表处暂停，分成 part，重载上一步对象，或缓存有明确科研用途的昂贵结果。这些是研究边界，不是任务状态系统。
-- 实际运行后可以记录观察到的结论、局限和下一问。未运行或未检查时明确写成“待判断”，不得编造结果。
+## Execute from evidence and preserve replay
 
-## 克制应用式结构
+- Sections are selectable analysis units, not function boundaries. Execute the current fragment in one R/Python session or notebook kernel, reusing upstream objects. An ordinary interactive process is enough; do not create a runner or service for it.
+- Inspect actual output before deciding and executing dependent steps. Continue autonomously when evidence is sufficient; ask only when a consequential scientific choice remains unresolved. Discussing a possible direction does not authorize implementing steps that depend on unknown results.
+- Headings and comments do not pause execution. Do not use `Run All`, repeated `Rscript` calls, Bash dataset loops, or fresh temporary Python processes to bypass unresolved choices. Confirmed mechanical repetition and external tool calls can still use direct loops or commands.
+- After an upstream filter or parameter changes, rerun affected downstream work. Reuse expensive saved results only after checking that their relevant inputs and settings still match; do not introduce a cache orchestration system.
+- Keep explicit dependencies, current valid code, and the rationale needed for sequential replay. Do not depend on objects that exist only in an unrecorded interactive session. Write valuable experiments back into the analysis or a concise research record.
+- Retire obsolete execution paths within the authorized scope, while preserving original inputs, meaningful failed attempts, negative findings, and selection evidence. Historical evidence need not remain executable code; version history or a short record can preserve it. Never delete unrelated work as “cleanup.”
+- For code-only requests, leave previews and concrete pending questions without claiming execution. If tools cannot execute interactively, report the limitation; batch execution is not evidence of completed exploration.
 
-- CLI、通用配置、runner、dispatcher、registry、状态追踪、retry、completion marker 和统一 pipeline 只在用户明确要求，或当前文件确实有跨输入复用契约时出现。
-- 项目内的样本、比较、阈值、相对路径和候选参数可以直接写在分析附近；不要仅因它们可能变化就建立参数平台。
-- 不以“重复两次”作为函数门槛。样本、方法、实验变体或 lineage 的大段平行代码，只要能让参数、顺序和输出独立可读，就可继续保留。
-- 只有真实维护漂移开始妨碍科学理解，或逐元素技术核已经稳定时，才抽取最小共同部分。核心判断仍留在主线。
-- 观察性检查是默认。减少用断言做 dry-run、缺参或单元发现闸门，不禁用断言；只有继续执行会静默污染科学结论的硬契约，才用简洁断言立即停止。具体语法留在各文件类型指南。
-- 对象名称让读者能从上下文辨认角色即可。允许项目常用的短名和科学缩写，不建立短名称禁用表，也不无意义地拉长变量名。
-- 绘图数据整理、绘图调用和保存位置留在主线。按对象与用途选择基础绘图、ggplot2 或包自带函数等合适工具，不强制一种绘图库或通用绘图／保存 wrapper。需要据图判断时先实际显示。
-- 不强制生成表格、图和对象三件套，不强制打印 operational completion summary，也不默认写 `run_summary`、`validation_pass` 或状态文件。每个输出都应有当前科研、复查、下游或复现用途。
+## Keep scientific choices visible
 
-简洁只约束表达方式，不缩减用户要求的科学分析。复杂问题应展开成可见的 analytical blocks，而不是升级成软件架构。
+Keep only the useful parts of this chain; do not manufacture empty stages:
 
-## 项目与 API 边界
+`question → concrete trial → inspection/comparison → judgment → stable repetition → saved evidence → interpretation/limitations/next question`
 
-- 把用户或项目提供的 API 当作不透明能力：只依据已知契约准备输入、调用、观察返回并保存所需结果。
-- 不打开、复制、猜测或重写未获授权的 API 实现。
-- 不自动设计 Pixi、Conda、容器、编辑器配置、公共函数库或 package。
-- 不把来源中的清空会话、现场安装包、路径自动猜测或方法流水线作为新脚本开头。
-- 来源范例始终只读，只修改用户指定的目标。
+- Show objects and transformations in actual execution order. After loading, display a small real slice, table head, or relevant component before transforming it; dimensions or a “loaded” message alone are insufficient. Inspect type after loading, component extraction, or conversion when it matters. Preview large/sparse objects locally without densifying the entire object or creating a general preview helper.
+- After consequential transformations, show the content, summary, or diagnostic needed for the next decision. Do not print every object or apply the same checks everywhere.
+- Paths and analysis units may be selected before reading. Data-dependent columns, group levels, formula terms, covariates, and thresholds must follow observation of the loaded object. Do not infer or overwrite actual fields from a paper, GEO description, or other prior expectation.
+- Keep analysis at the top level. Do not wrap the whole script in `main()` or `run_analysis()`. Functions are allowed for a current, stable technical task. When a method is not yet understood on these data, first run a representative case inline; then extract a narrow repeated calculation only when it is useful now.
+- Compare candidate methods or parameters when the question requires it. Inspect comparable evidence, then record the choice and rationale near the call. Distinguish exploratory selection from a prespecified choice; retain meaningful negative results. Do not create a selector/config platform or report only the successful branch.
+- Do not silently fill missing scientific parameters from habit, examples, or package defaults. Use confirmed project values, design a comparison from the current data, or leave a concrete unresolved question. A user-specified starting value is a starting proposal, not a verified optimum. Do not pass `NA`/`None` placeholders into dependent calls.
+- Do not enumerate unrequested defaults, algorithm switches, random seeds, or plot sampling settings for apparent completeness. Scientific choices need a reason; plot dimensions, units, and necessary resolution may be set near saving to suit the current figure.
+- An output name does not authorize a method. If its estimand, comparison unit, test, grouping, or model remains undecided, keep that decision visible rather than silently choosing a standard method to make the script runnable.
+- Do not fabricate dataflow. If a requested later analysis does not actually use an earlier choice, explain the conceptual gap and retain the correct handoff rather than connecting unrelated objects.
+- Human-edited tables, separate parts, reloaded objects, and saved expensive fits can be legitimate research boundaries. They do not justify a task-state platform.
+- Record conclusions, limitations, and next questions only after inspecting real results. Otherwise mark the specific interpretation as pending.
 
-## 模板
+## Minimal useful structure
 
-模板仅在新建文件且项目没有更近的同类型先例时使用：
+Keep current samples, comparisons, thresholds, paths, and candidates near their use. Possible future changes do not justify a parameter platform. Repetition alone is not a function threshold: parallel sample, method, or lineage blocks may remain separate when their inputs, order, and outputs are clearer that way. Extract the smallest common technical part only when actual maintenance drift impairs understanding or a stable computation has a present reuse need. Scientific choices remain in the main analysis.
 
-- [linear-analysis.R](templates/linear-analysis.R)
-- [linear-analysis.py](templates/linear-analysis.py)
-- [external-analysis.sh](templates/external-analysis.sh)
-- [linear-analysis.ipynb](templates/linear-analysis.ipynb)
+Use understandable names, including ordinary short names and scientific abbreviations. Keep plot preparation, plotting, display, and saving visible. Choose base plotting, ggplot2, package methods, or other appropriate tools by object and purpose; do not impose a plotting/saving wrapper. Show a plot before making a decision based on it.
 
-删除无关块并替换占位内容。脚本模板示例从项目根进入 `scripts/`；实际已在文件目录时使用 `.`，Notebook 模板以 kernel 已在文件目录为起点。模板提供初始化、读入和展示，以及按需采用的存档／绘图写法，不预设空 sweep 或批量阶段。按真实输入替换读取方法和局部查看范围；Notebook 模板使用 Python，不能原样用于 R kernel。模板不是必填章节清单，更不能替代当前分析判断。
+Save only outputs useful for the current science, review, handoff, or reproduction. Do not require a table/figure/object bundle, operational completion summary, `run_summary`, `validation_pass`, or status files.
 
-## Skill 迭代入口
+## Project and API boundaries
 
-只有用户要求用新范例审查或改进 `scripting-style` 时，才完整读取 [iteration interface](references/iteration-interface.md)。日常写脚本不加载迭代流程。
+Treat provided APIs as opaque capabilities: prepare known inputs, call the documented interface, inspect returns, and save needed results. Do not inspect excluded internals, copy implementations, guess behavior, or rewrite an API without authorization. Do not automatically build environments, editor settings, public libraries, or packages. Never copy source-example package installation, session clearing, path guessing, or scientific pipelines into a new script. Source examples remain read-only.
 
-迭代保持两阶段：Phase 1 只读比较并停止等待确认；Phase 2 仅实施当前对话已确认的 decisions、exclusions、holdouts 和 rule changes，同时验证新旧 holdout。`scripts/validate-iteration-request.py` 只做只读预检，不能授予写权限。
+## Templates
 
-## 交付前自检
+Use only for a new file without a closer same-type project precedent:
 
-- 工作目录是当前文件目录，读写路径相对它；各段有清楚目的、留白与适量说明，展示并检查真实结果后再继续，大对象只预览局部。
-- 科学选择与依据留在主线，未决步骤不执行，不伪造结果、默认值或上下游依赖。
-- 对象命名可读，窄 helper 与必要断言有实际用途，没有无契约的运行框架。
-- 上游改变后更新相关下游，有效分析与有用途的产物已保存。
-- 修改既有代码时保持局部差异与邻近同类型叙事。
+- [R](templates/linear-analysis.R)
+- [Python](templates/linear-analysis.py)
+- [Bash](templates/external-analysis.sh)
+- [Notebook](templates/linear-analysis.ipynb)
 
-若不理想，优先恢复可见的分析链并删除无科研作用的外围结构。
+Remove irrelevant blocks and replace every question, input, tool, and heading placeholder, including the Bash analysis-step title. Script templates enter `scripts/` from the project root; use `.` when already in the file directory. The notebook assumes its kernel starts in that directory and uses Python, not R. Templates provide initialization and reading/preview or a current tool call, not predetermined later stages. Use the type guide for purposeful saving and plotting. Adapt comment language to the user/project.
+
+## Skill iteration
+
+Read the full [iteration interface](references/iteration-interface.md) only when asked to review examples or improve this skill. Routine analysis does not load the maintenance workflow.
+
+Phase 1 reviews evidence without changing functional rules and waits for confirmation. Phase 2 implements only decisions, exclusions, holdouts, and rule changes approved in the current conversation; an existing approval does not need repeating. The request validator is read-only and cannot authorize edits. Keep current request-schema behavior separate from the prohibition on legacy branches in generated analysis code.
+
+## Final check
+
+- Can the researcher identify actual analysis steps from headings and small operation groups from blank lines? Are comments scientific rather than agent instructions?
+- Are relative paths anchored to the file directory, real previews local, and choices grounded in inspected data?
+- Have speculative branches, historical compatibility, concealed fixes, and silent scientific substitutions been excluded while necessary validity checks remain?
+- Are current dependencies explicit, affected downstream results refreshed, and meaningful evidence retained without obsolete execution paths?
+- Are changes scoped to the task, with no invented methods, outputs, execution claims, or unnecessary framework?
+
+If not, restore the visible analysis and remove machinery that has no current scientific purpose.

@@ -1,10 +1,10 @@
-# R 分析
+# R analysis
 
-只在目标文件为 `.R` 时读取本指南。学习 GZDlab 的路径、命名、留白、观察和绘图写法，不继承其中的方法顺序、科学参数或结论。
+Read only for `.R` targets. Learn paths, naming, spacing, previews, and plotting expression from same-type examples, not their scientific methods, parameters, or conclusions. Follow the core rules on current inputs only, no speculative recovery, visible scientific decisions, and preserving evidence. Example comments are English; adapt them to the user/project language.
 
-## 从脚本目录进入会话
+## Enter from the script directory
 
-脚本开头依次写 `setwd()`、`getwd()`、`.libPaths()`，然后加载需要的包、读入数据；`.libPaths()` 仅用于展示，不默认修改库位置。工作目录固定为当前脚本所在目录，输入、中间存档和最终输出都相对它书写。以下示例假设从项目根启动 `scripts/analysis.R`：
+Start with `setwd()`, `getwd()`, and `.libPaths()`, then load packages and data. Display library paths without changing them. Set the target from the actual launch location; for `scripts/analysis.R` launched from the project root:
 
 ```r
 setwd("scripts")
@@ -16,36 +16,51 @@ library(Matrix)
 data_path <- "../data"
 ```
 
-若启动时已经在脚本目录，将第一行改为 `setwd(".")`；其他布局按实际启动位置填写到脚本目录的相对路径。入口只运行一次，随后在同一会话选择当前片段执行，避免重复 `setwd("scripts")` 进入嵌套目录。不猜测脚本位置、不自动发现根目录，也不复制来源机器的绝对路径。
+If already in the script directory, use `setwd(".")`. Initialize once, then reuse the session; rerunning `setwd("scripts")` could enter a nested directory. Do not guess the script location, discover project roots, probe old paths, or copy machine paths. All input, intermediate, output, and project API paths are relative to the script directory.
 
-逐个文件读取时，通常先赋 `fn`，再读取和查看；需要同时保留多个路径时使用 `counts_file`、`metadata_file` 等描述名。简短的 `readRDS(file.path(...))` 也可保留，不为统一形式重写既有代码。
+Keep the filename near the read. `fn` is useful for sequential reads; use `counts_file` or `metadata_file` when multiple paths must coexist. A short `readRDS(file.path(...))` is also valid; do not rewrite existing code merely to standardize syntax.
 
 ```r
-## 读取样本信息 ====
-# 先看实际字段和记录，再决定样本对齐与分组。
+## Read sample metadata ====
+# Inspect available fields before choosing sample alignment and groups.
 fn <- file.path(data_path, "metadata.tsv")
 meta <- read.delim(fn, check.names = FALSE)
+
 class(meta)
 head(meta)
 names(meta)
 ```
 
-使用当前项目真实文件与读取方法；`data/`、`output/`、`results/` 是常见约定，不是必须创建的一套目录。目录只在确实需要写出时创建。
+Use actual project inputs and readers. `data/`, `output/`, and `results/` are examples, not a mandatory directory layout. Create directories only when writing there is needed.
 
-## 自然分段、留白和命名
+## Analysis-step headings and spacing
 
-一段处理一个当前目的，如读入矩阵、查看样本构成、比较候选结果或保存下一步对象。沿用邻近脚本的 `## 标题 ====`、`# 标题 ----` 或其他轻量约定；没有先例时默认 `## 标题 ====`。标题清楚时不重复解释，必要注释说明输入含义、为什么这样做、需要观察什么或下一步用途，不逐行复述语法。
+One section serves an actual analysis step. Preserve a nearby convention such as `## Title ====`, `# Title ----`, or another clear delimiter; use `## Title ====` when there is no precedent. Titles state the analysis content, not instructions such as “Continue after inspection.” Short comments explain input meaning, scientific rationale, an observation to examine, or downstream use. Do not repeat clear titles or narrate syntax.
 
-段落之间留一空行；同段内读取、整理、绘图等小组之间按需要留一行。紧密相关的操作放在一起，不逐行插空行，不用大片横幅撑开文件。运算符两侧、逗号后适当留空格；长调用分行缩进，管道或绘图的后续层各占一行。不要求固定章节、编号或“检查点／决策点”标签；已有清楚的标签可以保留。
+Leave one blank line between sections and between small operation groups within a section: input preparation, transformation, inspection, and saving. Keep closely related statements adjacent. Do not space every line, split by line count, or add large banners. Space operators and commas normally; wrap long calls by argument and put pipe steps or plot layers on separate lines. Do not impose numbering or checkpoint labels.
 
-对象名以当前读者能理解为准。`counts`、`exprSet`、`meta`、`seu`、`ref`、`obj`、`fit`、`res`、`p`、`fn` 都可使用；保留项目习惯，避免无意义的连续 `tmp1`、`tmp2`。同一对象逐步完善时名称可以不变；需要保留基线或多个比较结果时再给出不同名称。不为了会话命名改动存档对象的字段。
-
-## 在适当位置查看真实内容和类型
-
-读入后查看实际内容，再决定下一步，不能只显示维度或“读取成功”。按当前对象选择直接的观察语句，不把下面所有检查套在每个对象上：
+The following illustrates layout, assuming fields have been inspected and sample IDs are unique and fully matched. It does not authorize adding alignment to unrelated tasks:
 
 ```r
-# 已确认矩阵至少有五行五列时。
+## Align expression columns and sample metadata ====
+# Keep group labels in the same order as expression columns.
+sample_ids <- colnames(counts)
+sample_index <- match(sample_ids, meta$sample_id)
+
+meta <- meta[sample_index, , drop = FALSE]
+
+head(meta)
+identical(meta$sample_id, sample_ids)
+```
+
+Use names understandable in context, including `counts`, `exprSet`, `meta`, `seu`, `ref`, `obj`, `fit`, `res`, `p`, and `fn`. Avoid meaningless `tmp1`/`tmp2` chains, not all short names. Reuse a name as an object develops; use separate names when preserving a baseline or comparison matters. Do not rename stored object fields merely for style.
+
+## Preview real contents and types
+
+After reading, show actual contents before choosing the next step. Use checks appropriate to the object, not every check on every object:
+
+```r
+# This slice assumes the inspected matrix has at least five rows and columns.
 class(counts)
 dim(counts)
 counts[1:5, 1:5]
@@ -57,56 +72,65 @@ seu
 head(seu@meta.data)
 ```
 
-`class()` 适合首次遇到对象、转换类型或需要选择读取/绘图方法时使用；类型未变且没有疑问时无需反复打印。Seurat、list 等对象查看相关组件，如 `Assays(seu)`、`Layers(seu)` 或局部表格；不要无目的地展开整个对象。`meta$group` 等具体字段必须先在实际数据中确认。
+Inspect `class()` when an object is first encountered, converted, or its type affects the next operation. For Seurat or lists, inspect relevant components such as `Assays(seu)`, `Layers(seu)`, or local metadata; do not expand everything. Verify fields such as `meta$group` against the actual data first.
 
-小矩阵按实际尺寸取子集，例如 `counts[seq_len(min(5, nrow(counts))), seq_len(min(5, ncol(counts))), drop = FALSE]`。稀疏矩阵直接查看小切片；确需普通矩阵时只转换该切片，不将整个对象 `as.matrix()`。不新增通用展示函数。
-
-筛选、合并、转换或拟合后，在下一判断需要时再次查看局部内容、摘要或诊断图。不必每行代码都打印。交互会话中可使用 `View()`，但不把它放成非交互执行的必经步骤。
-
-## 让分析主线和选择可见
-
-默认在顶层依次写出读取、观察、尝试、比较和继续分析。运行当前单行或片段，检查实际输出后才写入并执行依赖它的下一段；标题不会让整份脚本自动暂停。复用当前会话，不靠连续 `Rscript` 重载对象推进探索。上游改变后，重跑实际受影响的下游片段。
-
-科学分组、阈值、模型选择和依据留在首次使用附近。来源脚本的固定值、教学步骤和默认方法不构成当前分析依据；依赖数据内容的选择先核对实际字段与水平。尚未决定时用简短注释保留问题，暂不生成或执行依赖它的下游调用，不自动选首个水平，不将 `NA` 传入模型。依据充分时自主继续，关键科学取舍无法确定时才询问用户，不逐段请求批准。
-
-某项重复计算仍待理解时，先将一个具体案例内联跑通并观察，再把稳定的逐元素计算、转换或重复绘图提成小函数或简单循环。短函数放在当前脚本、首次使用附近；科学判断仍留在主线。独立样本或方法的平行代码更易读时可以保留，不因重复两次就建立通用框架。
-
-篇幅较长、需要跨脚本或换到另一个数据项目再调用的自定义函数，单独写成 `.R`，放在该项目根的 `R/`。写法是普通 R 函数：`name <- function(...)`，函数前用注释写明用途、参数和返回值。不写 `DESCRIPTION`、`NAMESPACE`、roxygen，也不用 `library()` 加载。分析脚本仍以脚本目录为工作目录，用相对路径加载，例如在 `scripts/downstream` 中 `source("../../R/helpers.R")`。函数内部的数据路径仍相对于这个工作目录，不相对于 `R/` 文件自身。换项目时，把该文件放到另一个项目根的 `R/`，再用同样的相对 `source()`。不设跨项目共享库路径，也不自动搜索项目根。
-
-观察性检查为主，保留能防止样本错配、重复标识或矩阵方向错误等静默科学错误的简洁断言。不添加猜测性的 fallback、宽泛 `tryCatch()`、重试或 pass marker。没有实际运行时不记录虚构的观察结论。
-
-## 绘图沿用对象和问题的自然接口
-
-不强制所有图改写为 `ggplot()`。一般表格的定制图可直接用 ggplot2；Seurat、DESeq2 等已有适合对象的 `DimPlot()`、`FeaturePlot()`、`plotPCA()`、`plotMA()` 就直接使用。快速检查可用 base R 的 `plot()`、`hist()`、`boxplot()`；热图和网络图可用对应专用函数，不为统一外观包一层绘图接口。
-
-ggplot 对象常写成 `p <- ...`，在会话中先运行 `p` 查看，再沿用 `+ labs()`、`+ theme()` 等直接修改。多个图可用项目已有的 patchwork 或 cowplot。保存时明确对象与文件名，尺寸、分辨率、颜色沿用当前项目或图的用途；不继承来源数值，也不把展示设置当成科学方法选择。
+Adapt slices to small matrices:
 
 ```r
-# p 已是当前片段生成并检查过的 ggplot 图；仅在需要保留时保存。
+counts[
+  seq_len(min(5, nrow(counts))),
+  seq_len(min(5, ncol(counts))),
+  drop = FALSE
+]
+```
+
+For sparse objects, preview a small slice directly; convert only that slice if needed. Never densify the whole object for display or create a general preview helper. After filtering, merging, conversion, or fitting, inspect the contents, summary, or plot needed for the next decision. Interactive `View()` is optional, not a required noninteractive step.
+
+## Keep choices and execution visible
+
+Write reading, inspection, trials, comparison, and analysis at the top level. Run the current line or selection, inspect its output, then write and execute dependent code. Section delimiters do not pause a script. Reuse one session instead of repeatedly reloading objects with `Rscript`; after upstream changes, rerun affected downstream blocks and retain explicit dependencies for replay.
+
+Keep grouping, thresholds, model choices, and evidence near first use. Example defaults are not evidence. Leave specific unresolved questions as comments and omit or comment out dependent calls; never select the first level automatically or pass `NA` to a model just to complete the script. Continue when evidence supports the choice; ask only for consequential unresolved scientific tradeoffs.
+
+If a repeated computation is not yet understood, run one representative case inline first. Only then extract a stable local computation, conversion, or repeated plot into a small function or loop when current reuse warrants it. Parallel sample/method blocks can remain separate when clearer. Repetition twice does not mandate abstraction.
+
+For a substantial custom function with a confirmed need across scripts or projects, use an ordinary `.R` file in that project's root `R/` directory. Document purpose, parameters, and return value before `name <- function(...)`. Do not create `DESCRIPTION`, `NAMESPACE`, roxygen scaffolding, or load it with `library()`. From `scripts/downstream`, for example, use `source("../../R/helpers.R")`. Data paths inside the function remain relative to the analysis working directory, not the helper file. In another project, place the needed file under that project's `R/`; do not invent a shared-library path or automatic lookup. Do not extract it for merely possible future reuse.
+
+Use concise checks for scientific invariants even before a failure occurs. For example, after alignment where matching sample order is required:
+
+```r
+stopifnot(identical(meta$sample_id, colnames(counts)))
+```
+
+Do not add broad `tryCatch()`, retry, old-reader fallback, guessed fields, or silent sample removal. Fix the actual owned cause and affected callers; report out-of-scope boundaries. Preserve meaningful failed and negative results without retaining obsolete executable branches.
+
+## Plot directly with the appropriate tools
+
+Use base plots, ggplot2, or object-specific methods such as `DimPlot()`, `FeaturePlot()`, `plotPCA()`, and `plotMA()` as appropriate. Heatmaps and networks may use their relevant packages. Do not wrap everything in a single plotting interface.
+
+For ggplot, assign `p`, display it, and adjust directly with layers such as `labs()` or `theme()`. Use existing project composition tools when needed. Set dimensions, resolution, and colors for the current figure, not from example defaults. With a previously created and inspected ggplot object:
+
+```r
 out_path <- "../output"
 dir.create(out_path, showWarnings = FALSE, recursive = TRUE)
 fn <- file.path(out_path, "sample_overview.pdf")
+
 ggsave(fn, plot = p, width = 6, height = 4, units = "in")
 ```
 
-这里的尺寸仅示意保存语法，应按当前图修改。base R 或专用绘图的输出使用对应设备，例如 `pdf(fn)` → 绘图调用 → `dev.off()`；不用 `ggsave()` 强行保存不兼容对象。
+These dimensions illustrate saving syntax, not a standard. Use appropriate devices for base or package plots, such as `pdf(fn)` followed by plotting and `dev.off()`. Do not force incompatible objects through `ggsave()`.
 
-## 按用途存档和继续
+## Save for a concrete scientific use
 
-中间存档用于昂贵结果复查、后续绘图、人工编辑后的交接或下一分析片段。沿用项目已有的 `saveRDS()`/`readRDS()`、`qs::qsave()`/`qs::qread()` 或 `save()`/`load()`，不为风格统一强制换格式。文件名说明数据对象和所处阶段，例如 `sample_A.annotated.rds`、`comparison_A.markers.tsv`，不默认使用 `final_final`、时间戳或泛化 `result`。
+Intermediate saves support expensive-result review, later plotting, human-edited handoff, or another analysis fragment. Follow current project formats: `saveRDS()`/`readRDS()`, `qs::qsave()`/`qs::qread()`, or `save()`/`load()`. Name the object and stage, such as `sample_A.annotated.rds` or `comparison_A.markers.tsv`; avoid generic `result` or `final_final` defaults.
 
 ```r
-## 保存供后续注释复查的对象 ====
-# seu 已在当前分析中完成对应整理；需要交接时才保留这个存档。
+## Save the annotated object for review ====
 out_path <- "../output"
 dir.create(out_path, showWarnings = FALSE, recursive = TRUE)
 fn <- file.path(out_path, "sample_A.annotated.rds")
-saveRDS(seu, fn)
 
-# 在后续片段或会话中，从同一个脚本目录重载该文件。
-seu <- readRDS(fn)
-seu
-head(seu@meta.data)
+saveRDS(seu, fn)
 ```
 
-示例中的读写表示两个使用时机，不要求刚保存就重新读入；跨会话时先重新定义同一相对路径 `fn`。中间文件可以放在项目现有的 data、output 或专用中间目录中，但要和原始输入明确区分，不能覆盖原始数据。最终表、图和对象靠近对应分析块或明确阶段边界保存，只保留确有用途的产物，不强制三件套、完成摘要或状态系统。
+A later fragment/session can read the same relative `fn` and inspect `seu` and `head(seu@meta.data)`. Do not automatically save and immediately reload. Reestablish the path after a session restart and verify relevant inputs/settings before reusing expensive results. Keep intermediate artifacts distinct from original inputs; never overwrite raw data. Save final tables, figures, or objects near their analysis or a meaningful stage boundary, only when useful. No mandatory output bundle, completion summary, or state system.

@@ -1,77 +1,60 @@
-# Notebook 分析
+# Notebook analysis
 
-只在目标文件为 `.ipynb` 时读取本指南。Notebook 是一系列可交互的科学决定，不是加了一层 JSON 的 Python 脚本。
+Read only for `.ipynb` targets. A notebook records interactive scientific decisions, not a Python application wrapped in JSON. Apply the core limits on current needs, no speculative recovery or legacy adapters, and visible scientific choices. Adapt headings/comments to the user/project language.
 
-## 先识别语言，再按 cell 推进
+## Identify the language, then work by cells
 
-读取已有 Notebook 的 `kernelspec`、`language_info` 和 source cells，确认实际语言；不能把 `.ipynb` 等同于 Python。R kernel 使用 R 的对象观察与调用语法，Python kernel 使用 Python 语法。沿用既有 kernel；metadata 与代码明显冲突时先澄清，不能静默转换。新建文件按当前任务语言设定 kernel；随附模板仅适用于 Python。
+Inspect `kernelspec`, `language_info`, and source cells. `.ipynb` does not imply Python. Preserve the actual kernel and use its syntax; clarify a metadata/source conflict rather than silently converting languages. Set a new notebook's kernel to the task's language. The provided template is Python only.
 
-工作目录必须是当前 `.ipynb` 所在目录，所有读写路径相对于它。确认 kernel 的实际启动位置，在首个代码 cell 用该语言设置目录并显示当前位置；初始化只运行一次。Python 使用显式相对目标的 `os.chdir(...)` 与 `print(Path.cwd())`，已在文件目录时目标为 `"."`，不用不存在的 `__file__`。R kernel 在加载包前执行 `setwd(...)`、`getwd()`、`.libPaths()`；已在文件目录也保留 `setwd(".")`，`.libPaths()` 仅展示。不要猜测编辑器或服务默认工作目录，不新增自动定位框架。
+Use the notebook directory as the working directory for all relative input/output paths. Verify the kernel launch location, then set and display the directory in the first code cell. Initialize once. Python uses `os.chdir(...)` with an explicit relative target and `print(Path.cwd())`, using `"."` if already there; do not rely on absent `__file__`. R uses `setwd(...)`, `getwd()`, and `.libPaths()` before packages; retain `setwd(".")` if appropriate, and display library paths without changing them. Do not guess editor defaults or add directory discovery.
 
-每个 cell 推进一个可观察步骤。常见顺序是：
+Each cell advances an observable piece of the analysis. Use only needed parts of this sequence:
 
-1. 说明问题并定义当前输入；
-2. 只导入后续 cell 所需依赖；
-3. 读取对象并显示结构；
-4. 准备当前 features、groups 或 model inputs；
-5. 运行一个代表性 fit 或显式 candidate sweep；
-6. 显示可比诊断；
-7. 检查真实输出后，在后面的 cell 记录选择及依据；
-8. 用选定结果继续；
-9. 保存下游真正需要的结果；
-10. 有实际观察时，再记录解释、局限或下一问。
+`question/inputs → dependencies → read and inspect → prepare scientific inputs → representative fit or comparison → diagnostics → recorded choice → dependent analysis → useful save → interpretation`
 
-不要强制固定 cell 数量。cell 应足够小，使科研人员可以自然地重跑一个步骤并看见结果。
+Do not impose a fixed cell count. Cells should allow a researcher to rerun a coherent step and inspect its output.
 
-每个分析段用简短 Markdown 标题和说明，或沿用项目清楚的 cell 内注释，交代目的与需要观察的问题。一个说明可以覆盖相邻的计算与展示 cells；不为每行代码单设 Markdown，不用固定章节凑齐提纲。
+Use Markdown headings naming actual analysis steps, or clear existing cell comments. Keep scientific rationale and observations to examine in short explanations. Execution instructions such as “reuse the kernel” or “continue after inspection” belong here, not in routine output comments. One step can span adjacent computation and display cells; do not require a title for each cell or manufacture chapters.
 
-同一 cell 内的读取、查看和绘图等逻辑组之间留空行，长调用按当前语言换行。对象名与语言和上下文相符即可，不要求把 `df`、`seu`、`ref`、`p` 等常用短名改成长名。
+Within a cell, leave one blank line between input preparation, transformation, inspection, and saving groups. Keep related statements adjacent; do not split by line count or space every statement. Wrap arguments, pipes, and plot layers according to the actual language. Names such as `df`, `seu`, `ref`, and `p` remain valid when clear.
 
-在同一个 kernel 中执行当前 cell，检查输出后才执行依赖它的下一 cell。默认不 `Run All` 穿过尚未决定的分组、阈值或方法选择。证据充分时 agent 自主继续，不要求用户确认每个 cell。重跑上游筛选或参数后，更新实际受影响的下游 cells，不能继续引用旧结果。
+Execute the current cell in the same kernel and inspect output before dependent cells. Do not use `Run All` to cross unresolved groups, thresholds, or methods. Continue without per-cell approval when evidence is sufficient. After upstream changes, rerun affected cells instead of using stale results; record dependencies so the notebook can be replayed without hidden session objects.
 
-## 保留 sweep 和人工选择
+## Keep comparison and selection distinct
 
-candidate values 与结果诊断放在相邻 cell。selection cell 必须位于 comparison cell 之后：
+Keep candidates and diagnostics adjacent, with selection after comparison. Only add a sweep when the task actually compares candidates. This is structural pseudocode, not a method or parameter default:
 
 ```python
-candidate_values = [...]  # 当前分析有依据的候选值
+candidate_values = [...]  # Candidates justified for the current analysis.
 candidate_results = {}
 
 for value in candidate_values:
-    # 用该值拟合或变换，并保存可比较诊断。
+    # Fit or transform with this candidate and collect comparable diagnostics.
     ...
 ```
 
-下一个 cell 显示 metrics 或 plots，更后的 cell 才记录 selected value 与理由。尚未作出选择时，用 Markdown 或注释标记待判断，依赖选择的调用保持注释或暂不生成，不把 `None` / `NA` 传入下游。不得编造 optimum 或 diagnostic output。
+Display metrics/plots in the next cell and record the later choice with its rationale. Distinguish exploratory selection from prespecified settings and preserve meaningful negative or failed comparisons. When undecided, use Markdown or a comment to state the specific question and omit/comment out dependent calls. Do not pass `None`/`NA` onward or invent an optimum or diagnostics.
 
-不得仅因惯例而预填有科学含义的 cutoff、top-N、model setting 或 default。使用当前项目值，把它加入可见候选比较，或在独立 cell 明确保留为未决。
+Do not prefill scientific cutoffs, top-N, model settings, or defaults from habit. Use confirmed values, evidence-based comparisons, or a visible pending decision. Do not enumerate unrequested defaults, switches, seeds, sampling sizes, or extra diagnostics for apparent completeness. Set figure dimensions/resolution only to suit the current figure.
 
-不要为 Notebook 显得完整而增加未请求的 library defaults、algorithm switches、seed、plot sampling 或多余诊断 cell。绘图宽高、单位和必要分辨率可以在保存附近设置，不照搬来源固定值。
+If a requested output still lacks an estimand, comparison unit, test, or grouping, keep that decision visible. Do not choose a standard method merely for a runnable notebook. Explain a conceptual gap when a later result does not actually depend on a supposed upstream choice; do not invent dataflow.
 
-若一个下游产物仍需确定 estimand、comparison unit、statistical test 或 grouping，专门留一个 pending decision cell；不得为了使 Notebook 看似完成而选择常用方法。若后续步骤并不真正使用前一选择，应在相邻 Markdown 中指出这一点，不制造虚假数据流。
+Newly authored code cells start with `execution_count: null` and empty `outputs`; never fabricate outputs or execution history. Preserve existing user outputs unless clearing or rerunning was requested; do not treat stored outputs as newly verified evidence.
 
-新生成 Notebook 的所有 code cell 都必须使用 `execution_count: null` 和空 `outputs`。不得伪造 rich display、image、metric 或执行顺序。修改既有 Notebook 时，除非用户明确要求清空或重跑，否则保留用户已有 outputs；但不得把 stale output 当成已验证证据。
+## Extract only stable computations needed now
 
-## 先原型，再批量化
+When a transformation/model still needs understanding, run one representative item in a cell and inspect relevant intermediate results or controls. Extract a small per-item function only after behavior is stable and current repetition needs it. Keep biological groups, candidates, cutoffs, and interpretation in the visible analysis. Distinct method/dataset branches can remain in separate cells/notebooks when clearer.
 
-变换或模型仍待理解时，用独立 cell 跑一个代表性 item。需要时检查 intermediate object 和 positive、negative 或 null control。只有技术核稳定，且后面 cell 确实遍历一个显式集合后，才抽小型 per-item function。
+Do not add CLI entrypoints, YAML config loaders, runners, pipeline state, retries, or completion markers. Honor current explicit contracts without creating compatibility branches. Correct an owned cause and known consumers instead of adding cells that rename old fields, probe old paths, or silently substitute a layer or method to conceal defects. Necessary scientific identifier mapping or explicit format conversion remains valid.
 
-不要把 candidate choice、biological group、cutoff 或 interpretation 移进 helper。大型 method 或 dataset branch 在能保持实验可读时，可以留在独立 cells 或 notebooks 中。
+## Save and inspect for a purpose
 
-## 不要在 Notebook 外围搭 application
+Save expensive fits only when later diagnosis or interpretation needs them. Explain that use near saving/reloading, and verify relevant inputs/settings still match before reuse. Do not create a cache orchestration system. Follow current formats and relative object/state-specific filenames; saving every cell is unnecessary. Protect raw inputs and meaningful negative evidence when retiring obsolete execution paths.
 
-不要添加 `argparse`、CLI entrypoint、YAML config loading、runner、pipeline state、retry system 或 completion marker。除非当前项目已有其他契约，否则 Notebook 参数应放在控制相应分析的可见 cell 中。
+Use tools appropriate to the kernel and object: R may use base plots, ggplot2, or package methods; Python uses its current libraries. Keep plot preparation, display, and saving in adjacent cells without a general wrapper.
 
-昂贵 scientific fit 可以保存并重载，使诊断或解释无需重算即可继续。save/load cell 旁必须说明这一科研用途；不要扩张成 generic cache orchestration。
+After reading, show actual local contents, not just shape or a loaded message: table `.head()`, array slices, R `head()`, or appropriately sized matrix slices. Never densify a whole sparse object for display. Python displays only its final bare expression implicitly; use `display()`/`print()` for multiple results in a cell. Use the equivalent actual R display behavior for R kernels.
 
-存档使用相对文件路径和能说明对象／状态的文件名，后续读取对应同一产物；沿用项目格式，不强制每个 cell 存盘。绘图按实际 kernel 和对象选择工具：R 可混用基础绘图、ggplot2 和包自带函数，Python 使用其现有库。绘图准备、调用、显示和保存留在相邻片段，不增加统一 wrapper。
+Inspect `class()` in R or `type()`/`.dtypes` in Python after loading, extraction, or conversion when type matters. Do not apply all checks everywhere. After key transformations, show the contents, summaries, or diagnostics that guide the next decision. Concise assertions for actual scientific requirements, such as matching observation IDs or a required layer, are justified before an error occurs; do not build generic validation or silently repair scientific inputs.
 
-## 观察优先
-
-导入后展示少量实际内容，而不只是 shape 或载入消息。Python 的表可用 `.head()`，数组可用 `[:5, :5]`；R 的表可用 `head()`，矩阵按实际大小取局部切片。大型或稀疏对象只显示局部，不为预览将整个对象转成 dense。Python cell 的最后一个表达式可以隐式显示，若同一个 cell 需要看多个结果，使用 `display()` / `print()`；R kernel 使用对应语言的显示方式。
-
-读入、提取组件或转换类型后适时查看 `class()`（R）或 `type()` / `.dtypes`（Python）；只展示当前需要理解的类型，不在每个 cell 打印全套检查。
-
-在关键变换后，显示真正影响下一步判断的内容、摘要或诊断。不要堆叠无用途的打印或新建通用展示函数。只有 mismatched observation identifiers、missing required layer 等失败会静默破坏分析时，才用硬 assertion。
-
-只保存有当前科学、复查、下游或复现用途的产物。final completion cell 可有可无；诚实的待回答下一问往往更有用。
+Save only outputs useful for current science, review, handoff, or replay. An operational completion cell is unnecessary; an honest unresolved scientific question may be more useful.

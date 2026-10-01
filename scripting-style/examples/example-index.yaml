@@ -1,10 +1,11 @@
-# 本地 GZDlab 是主要写作来源；只学习路径、命名、分段、展示及绘图表达，不学习科学方法。
-# SOURCE_ROOT 指 GZDlab 根目录，其下有 2025guozi/、sc06/、SP01_reframework/。
-# primary 为主要同类型范例；complement 仅补足缺口；counterexample 用于识别工具边界。
-# 本索引的 validation_holdout 是历史同类型回归，不是盲测；新迭代应另留未读范例。
-# 仅在 SOURCE_ROOT 明确可解析时读取来源；缺失时使用类型指南，不搜索机器或宣称已读。
-# R 开头 setwd()/getwd()/.libPaths() 及以脚本目录为基准的相对路径是用户要求；
-# 来源并非全部如此，不能把缺少这些调用或不同路径锚点解释为允许省略用户要求。
+# Local GZDlab examples are primary writing evidence, not scientific method defaults.
+# SOURCE_ROOT is the GZDlab root containing 2025guozi/, sc06/, and SP01_reframework/.
+# Select a same-type primary; use a complement only for a gap and a counterexample for boundaries.
+# validation_holdout entries are historical regression sources, not new blind evaluations.
+# Read sources only when SOURCE_ROOT resolves explicitly; otherwise use the type guide.
+# Do not search the user's machine or claim unread sources were inspected.
+# R setwd()/getwd()/.libPaths() and script-relative paths are user requirements;
+# sources that lack them do not override those requirements.
 schema_version: "2.0"
 skill: "scripting-style"
 source_root: "<SOURCE_ROOT>"
