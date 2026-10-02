@@ -40,9 +40,9 @@ test('report chrome uses the warm archive palette without external assets', () =
  const report=buildAdvisorReport({project:{domainProfile:'general',interests:[{name:'Ecology'}]},advisors:[{advisor_id:'general-pi',name:'General fixture'}],candidates:[],programs:[],evidence:[]});
  assert.match(report,/class="eyebrow"/);
  assert.match(report,/class="toc-brand"/);
- assert.match(report,/--canvas:#f5f0e8/);
- assert.match(report,/--accent:#934b35/);
- assert.match(report,/--sidebar:#efe8db/);
+ assert.match(report,/--canvas:#f7f4ee/);
+ assert.match(report,/--accent:#8b503b/);
+ assert.match(report,/--sidebar:#eee7dc/);
  assert.match(report,/Georgia,"Songti SC",serif/);
  assert.doesNotMatch(report,/fonts\.googleapis|cdn\.|@import|href="https:\/\/fonts/);
  assert.match(report,/min-width:1200px[\s\S]*left:16px/);

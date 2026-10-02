@@ -49,6 +49,15 @@ function urlKey(value) {
 function citationLabel(row) {
   return row.citation_label || row.page_title || row.title || ({ institutional_profile: "机构导师介绍", official_profile: "机构导师介绍", publication: "研究论文", grant_database: "基金库检索记录", official_database: "官方数据库记录" }[row.source_type]) || (urlKey(sourceUrl(row)) ? `原始来源｜${new URL(sourceUrl(row)).hostname}` : "未提供来源标题");
 }
+function citationChip(row) {
+  const url = sourceUrl(row);
+  if (!urlKey(url)) return '<span class="citation-state">未提供可用公开链接</span>';
+  const types = {institutional_profile:"机构主页", official_profile:"机构主页", publication:"论文来源", conference_programme:"会议议程", event_announcement:"活动预告", event_report:"活动报道", recording:"报告录像", official_database:"官方数据库", grant_database:"基金数据库"};
+  const full = citationLabel(row);
+  const short = types[row.source_type] || (Array.from(full).length <= 10 ? full : "原始来源");
+  const detail = `${full} · ${new URL(url).hostname} · 查阅：${row.accessed_at || row.accessedAt || "未记录"}`;
+  return `<a href="${html(new URL(url).href)}" class="citation-chip" target="_blank" rel="noopener noreferrer" title="${html(detail)}" aria-label="${html(detail)}">${html(short)}<span aria-hidden="true"> ↗</span></a>`;
+}
 function linkedUrls(content) { return [...content.matchAll(/href="([^"]+)"/g)].map((match) => match[1].replaceAll("&amp;", "&")); }
 
 function link(url, label = "打开来源") {
@@ -84,7 +93,7 @@ function sourcedValue(value, evidence) {
     const references = value.sourceIds || value.source_ids;
     const content = Object.entries(value).filter(([key]) => !["sourceIds", "source_ids"].includes(key))
       .map(([key, item]) => `${html(FIELD_LABELS[key] || key)}：${sourcedValue(item, evidence)}`).join("；");
-    return `${content}${references?.length ? `<br><span class="sources">${evidenceReferences(references, evidence, linkedUrls(content))}</span>` : ""}`;
+    return `${content}${references?.length ? ` <span class="sources">${evidenceReferences(references, evidence, linkedUrls(content))}</span>` : ""}`;
   }
   // Link only URLs actually present in the record; never synthesize a source.
   return typeof value === "string" && /^https?:\/\/\S+$/i.test(value) ? link(value, value) : html(text(value));
@@ -95,7 +104,7 @@ function facts(items, evidence) {
     const content = evidence ? sourcedValue(value, evidence) : html(text(value));
     const references = sourceIds?.length ? evidenceReferences(sourceIds, evidence || [], linkedUrls(content))
       : evidence && !content.includes("<a ") ? "对应来源待补，信息待核验" : "";
-    return `<div><dt>${html(label)}</dt><dd>${content}${references ? `<br><span class="sources">${references}</span>` : ""}</dd></div>`;
+    return `<div><dt>${html(label)}</dt><dd>${content}${references ? ` <span class="sources">${references}</span>` : ""}</dd></div>`;
   }).join("")}</dl>`;
 }
 
@@ -114,15 +123,17 @@ function evidenceReferences(ids, evidence, excludedUrls = []) {
   const groups = new Map();
   for (const { row, index } of matched) { const key = urlKey(sourceUrl(row)) || `missing-${index}`; const group = groups.get(key) || []; group.push(row); groups.set(key, group); }
   const excluded = new Set(excludedUrls.map(urlKey).filter(Boolean));
+  const warnings = [];
   const links = [...groups].flatMap(([key, rows]) => {
     const states = [...new Set(rows.map((row) => row.status || "not_checked"))].filter((state) => state !== "verified");
-    const note = states.length ? `（${html(states.map(text).join("、"))}）` : "";
-    if (excluded.has(key)) return note ? [note] : [];
+    if (states.length) warnings.push(...states.map(text));
+    if (excluded.has(key)) return [];
     const row = rows.find((item) => item.citation_label) || rows[0];
-    return [`${link(sourceUrl(row), citationLabel(row))}${note}`];
+    return [citationChip(row)];
   });
-  if (matched.length < sourceIds.size) links.push("部分来源关联尚待补齐");
-  return links.join(" · ");
+  if (new Set(matched.map(({row}) => row.evidence_id || row.evidenceId)).size < sourceIds.size) warnings.push("部分来源关联尚待补齐");
+  const extra = links.length > 2 ? `<button class="citation-more" type="button" hidden aria-expanded="false" aria-label="展开其余 ${links.length - 2} 个来源">+${links.length - 2}</button><span class="citation-extra">${links.slice(2).join(" ")}</span>` : "";
+  return `${links.slice(0,2).join(" ")}${extra}${warnings.length ? ` <span class="citation-state">${html([...new Set(warnings)].join("、"))}</span>` : ""}`;
 }
 
 function fieldEvidenceIds(evidence, entities, fields, intake) {
@@ -163,6 +174,19 @@ ${advisors.map((row, index) => {
 <a href="#coverage">检索与来源</a></div></details></nav>`;
 }
 const REPORT_NAV_SCRIPT = `(() => {
+  document.querySelectorAll('.citation-more').forEach((button, index) => {
+    const extra = button.nextElementSibling;
+    extra.id = 'citation-extra-' + index;
+    button.setAttribute('aria-controls', extra.id);
+    extra.hidden = true; button.hidden = false;
+    const label = button.textContent;
+    button.addEventListener('click', () => {
+      extra.hidden = !extra.hidden;
+      button.setAttribute('aria-expanded', String(!extra.hidden));
+      button.setAttribute('aria-label', extra.hidden ? '展开其余 ' + label.slice(1) + ' 个来源' : '收起其余来源');
+      button.textContent = extra.hidden ? label : '收起';
+    });
+  });
   const nav = document.querySelector('.report-toc');
   if (!nav) return;
   const shell = nav.querySelector('.toc-shell');
@@ -236,7 +260,7 @@ function workItem(work, evidence) {
   // Unsafe or missing URLs never drop the (escaped) title itself.
   const heading = anchor.startsWith("<a ") ? anchor : `${html(work.title || "标题待核验")}${external ? "（未提供可用公开链接）" : ""}`;
   const refs = sources(work.sourceIds, evidence, [external]);
-  return `<li>${heading}${meta ? `<br><span class="muted">${meta}</span>` : ""}${refs ? `<br>${refs}` : ""}</li>`;
+  return `<li>${heading}${refs ? ` ${refs}` : ""}${meta ? `<br><span class="muted">${meta}</span>` : ""}</li>`;
 }
 
 function workList(works, evidence, empty) {
@@ -408,7 +432,7 @@ function responsiveTables(report) {
 }
 
 const REPORT_STYLE = `
-:root{--ink:#191919;--muted:#655c50;--line:#e2d9c8;--canvas:#f5f0e8;--card:#fbf8f2;--accent:#934b35;--accent-dark:#793c2b;--accent-soft:#f1dfd3;--green:#52633d;--green-soft:#e9eddf;--amber:#80571e;--amber-soft:#f1e6d1;--sidebar:#efe8db;--shadow:0 14px 34px rgba(70,55,35,.09)}
+:root{--ink:#352f29;--muted:#75695e;--line:#e6ddd0;--canvas:#f7f4ee;--card:#fffcf7;--accent:#8b503b;--accent-dark:#6e3c2b;--accent-soft:#f1e2d8;--green:#52633d;--green-soft:#e9eddf;--amber:#80571e;--amber-soft:#f1e6d1;--sidebar:#eee7dc;--shadow:0 14px 34px rgba(70,55,35,.055)}
 *{box-sizing:border-box}html{scroll-padding-top:24px;background:var(--canvas)}
 body{margin:0;padding:20px 18px 48px;color:var(--ink);background:var(--canvas);font:17px/1.7 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;-webkit-font-smoothing:antialiased;overflow-wrap:anywhere}
 main{max-width:1000px;margin:0 auto}
@@ -420,40 +444,45 @@ h3{margin:8px 0 12px;font:500 26px/1.3 Georgia,"Songti SC",serif}
 h4{margin:22px 0 12px;font:500 18px/1.35 Georgia,"Songti SC",serif}
 h5{margin:20px 0 8px;font-size:16px}h6{margin:16px 0 6px;font-size:15px}p{margin:10px 0}
 a{color:var(--accent);text-underline-offset:3px}a:hover{color:var(--accent-dark)}
-a:focus-visible,summary:focus-visible,[id]:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
+a:focus-visible,button:focus-visible,summary:focus-visible,[id]:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
 .muted,.sources,.status-line,.person-meta,.person-role,.field-label{color:var(--muted);font-size:14px}
-.sources{display:inline-block;margin:4px 0 0 4px}.status-line{margin:0 0 8px}
-header>p:last-of-type,.status-line{padding:8px 12px;border-radius:10px;background:#efe8db}
+.sources{display:inline;margin-inline-start:5px;line-height:1.9}
+.citation-chip,.citation-more{display:inline-block;vertical-align:baseline;max-width:100%;padding:1px 7px;margin:2px 2px;border:1px solid #dfd2c2;border-radius:999px;background:#f1eade;color:#72513c;font:500 12px/1.7 ui-sans-serif,system-ui,sans-serif;text-decoration:none;cursor:pointer}
+.citation-chip:hover,.citation-more:hover{background:#e8dccd;color:var(--accent-dark);border-color:#b99a83}
+.citation-more[hidden],.citation-extra[hidden]{display:none}
+.citation-state{color:var(--amber);font-size:12px;margin-inline-start:4px}
+@media(pointer:coarse){.citation-chip,.citation-more{padding:5px 9px;min-height:32px}}.status-line{margin:0 0 8px}
+header>p:last-of-type,.status-line{padding:8px 12px;border-radius:10px;background:var(--sidebar)}
 article{padding:8px 0 4px;margin:28px 0 0;border:0}
 .advisor>h3{margin:8px 0 10px;padding:0;border:0}
-.module{margin:18px 0;padding:20px 22px 18px;border:1px solid var(--line);border-radius:14px;background:var(--card);box-shadow:0 8px 20px rgba(35,31,60,.04)}
+.module{margin:18px 0;padding:20px 22px 18px;border:1px solid var(--line);border-radius:14px;background:var(--card);box-shadow:0 8px 20px rgba(70,55,35,.035)}
 .module>h4{display:flex;gap:12px;align-items:center;margin:0 0 16px;padding:0 0 14px;border-bottom:1px solid var(--line);background:none;color:var(--ink)}
 .module-number{display:inline-grid;place-items:center;min-width:32px;height:32px;border-radius:10px;background:var(--module-chip,var(--accent-soft));color:var(--module-ink,var(--accent-dark));font:700 12px/1 ui-sans-serif,system-ui,sans-serif;font-variant-numeric:tabular-nums}
 .module-a{--module-chip:var(--accent-soft);--module-ink:var(--accent-dark)}.module-b{--module-chip:var(--green-soft);--module-ink:var(--green)}.module-e{--module-chip:#ece9df;--module-ink:#5c564c}
 dl{margin:12px 0}dl>div{display:grid;grid-template-columns:190px minmax(0,1fr);gap:20px;margin:14px 0}dt{font-weight:650}dd{margin:0;min-width:0}
 .table-wrap{max-width:100%;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#faf6ef}
-table{border-collapse:collapse;width:100%;font-size:14px;table-layout:fixed}th,td{text-align:left;vertical-align:top;border-bottom:1px solid var(--line);padding:12px 14px}th{color:#5c564c;background:#efe8db;font-weight:650}tr:last-child td{border-bottom:0}
+table{border-collapse:collapse;width:100%;font-size:14px;table-layout:fixed}th,td{text-align:left;vertical-align:top;border-bottom:1px solid var(--line);padding:12px 14px}th{color:#5c564c;background:var(--sidebar);font-weight:650}tr:last-child td{border-bottom:0}
 li{margin:12px 0}ul,ol{padding-left:22px}details{margin:14px 0}summary{cursor:pointer;font-weight:650}details>p,details>div{margin-left:16px}
-pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;padding:12px;border-radius:10px;background:#efe8db}
-.source-detail{border-bottom:1px solid var(--line);padding:10px 0}.source-claim{border-top:1px solid #eee;padding-top:8px}.search-record{margin:18px 0}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;padding:12px;border-radius:10px;background:var(--sidebar)}
+.source-detail{border-bottom:1px solid var(--line);padding:10px 0}.source-claim{border-top:1px solid var(--line);padding-top:8px}.search-record{margin:18px 0}
 .person-entry{margin:22px 0;padding:0 0 18px;border-bottom:1px solid var(--line)}.person-entry:last-child{border-bottom:0;padding-bottom:0}
 .person-heading{display:flex;align-items:baseline;gap:8px 16px;flex-wrap:wrap;margin:0 0 6px}
 .person-heading h5,.person-heading h6{margin:0;font:500 18px/1.35 Georgia,"Songti SC",serif}.person-meta{margin:4px 0 12px}.field-label{display:block;margin-bottom:3px}.person-work h6{font-weight:500}.works{padding-left:20px}.works li{margin:14px 0}.person-entry details{margin:12px 0}
-.toc-brand{display:flex;align-items:center;gap:11px;margin:0 4px 18px;color:#191919}
-.toc-mark{width:35px;height:35px;border-radius:11px;display:grid;place-items:center;background:linear-gradient(145deg,#cc785c,#a85a40);color:#fff;font:italic 20px/1 Georgia,serif;box-shadow:0 8px 20px rgba(168,90,64,.22)}
+.toc-brand{display:flex;align-items:center;gap:11px;margin:0 4px 18px;color:var(--ink)}
+.toc-mark{width:35px;height:35px;border-radius:11px;display:grid;place-items:center;background:linear-gradient(145deg,#a96b50,#854830);color:#fff;font:italic 20px/1 Georgia,serif;box-shadow:0 8px 20px rgba(168,90,64,.22)}
 .toc-brand strong{display:block;font:16px/1.2 Georgia,"Songti SC",serif}.toc-brand small{display:block;margin-top:3px;color:#655c50;font-size:10px;letter-spacing:.12em}
-.report-toc{display:block;position:sticky;top:0;z-index:5;margin:0 0 16px;padding:16px 16px 10px;border:1px solid #d8cdb8;border-radius:0 0 16px 16px;background:var(--sidebar);color:#191919;font-size:14px;line-height:1.5;box-shadow:0 12px 28px rgba(12,10,17,.18)}
+.report-toc{display:block;position:sticky;top:0;z-index:5;margin:0 0 16px;padding:16px 16px 10px;border:1px solid #d8cdb8;border-radius:0 0 16px 16px;background:var(--sidebar);color:var(--ink);font-size:14px;line-height:1.5;box-shadow:0 12px 28px rgba(70,55,35,.08)}
 .report-toc details{margin:0}.report-toc summary{padding:10px 8px;color:#5c564c}
 .report-toc a{display:block;padding:8px 12px;border:0;border-radius:10px;color:#5c564c;text-decoration:none;transition:background .16s ease,color .16s ease}
-.report-toc a:hover{background:#e5d5c2;color:#191919}
-.report-toc a[aria-current]{color:#793c2b;background:#e5d5c2;box-shadow:inset 3px 0 0 #a85a40;font-weight:600}
+.report-toc a:hover{background:#e8dccd;color:var(--ink)}
+.report-toc a[aria-current]{color:var(--accent-dark);background:#e8dccd;box-shadow:inset 3px 0 0 #a85a40;font-weight:600}
 .report-toc .toc-content{margin:0;max-height:65vh;overflow-y:auto;overscroll-behavior:contain;padding:4px 0 8px;scrollbar-width:thin;scrollbar-color:#b5a68e transparent}
 .report-toc .toc-advisor>div{margin:0 0 4px 8px}.report-toc .toc-advisor>summary{font-weight:600;overflow-wrap:anywhere;padding-left:8px}
 .report-toc .toc-advisor a{font-size:13px}.report-toc .toc-advisor>summary>a{display:inline;padding:2px 0;font-size:14px;box-shadow:none}
 html{scroll-padding-top:76px}
 @media(max-width:700px){body{padding:12px 12px 36px;font-size:16px}h1{font-size:26px}h2{font-size:20px}header,main>section{padding:20px 16px}dl>div{grid-template-columns:1fr;gap:3px}table,tbody,tr,td{display:block;width:100%}thead{display:none}tr{border-bottom:1px solid var(--line);padding:12px 0}td{border:0;padding:6px 14px}td:before{content:attr(data-label);display:block;color:#5c564c;font-weight:650;margin-bottom:2px}details>p,details>div{margin-left:0}.table-wrap{border:0;background:transparent}}
 @media(min-width:1200px){body{padding:34px 36px 54px 280px}main{margin:0}.report-toc{position:fixed;left:16px;top:50%;transform:translateY(-50%);width:216px;max-height:70vh;overflow:hidden;padding:16px 12px;border:1px solid var(--line);border-radius:14px;margin:0;box-shadow:0 12px 28px rgba(70,55,35,.13)}.report-toc .toc-shell>summary{display:none}.report-toc .toc-content{max-height:calc(70vh - 100px)}html{scroll-padding-top:28px}}
-@media print{html,body{background:#fff;color:#191919}body{max-width:none;padding:0;font-size:11pt}nav,.technical,.report-toc{display:none!important}header,main>section,.module,.table-wrap{box-shadow:none;border-color:#ccc}h2,h3,h4,h5,h6{break-after:avoid}tr,.source-claim,.person-entry{break-inside:avoid}a{color:var(--accent-dark)}details{display:block}details>*{display:block}details::details-content{content-visibility:visible;display:block}summary{list-style:none}.source-detail{break-inside:auto}table{font-size:10pt}.advisor>h3{margin-top:20px}}
+@media print{.citation-more{display:none!important}.citation-extra[hidden]{display:inline!important}.citation-chip{background:transparent;border-color:#ccc}html,body{background:#fff;color:var(--ink)}body{max-width:none;padding:0;font-size:11pt}nav,.technical,.report-toc{display:none!important}header,main>section,.module,.table-wrap{box-shadow:none;border-color:#ccc}h2,h3,h4,h5,h6{break-after:avoid}tr,.source-claim,.person-entry{break-inside:avoid}a{color:var(--accent-dark)}details{display:block}details>*{display:block}details::details-content{content-visibility:visible;display:block}summary{list-style:none}.source-detail{break-inside:auto}table{font-size:10pt}.advisor>h3{margin-top:20px}}
 @media(prefers-reduced-motion:reduce){.report-toc a{transition:none}}
 `;
 

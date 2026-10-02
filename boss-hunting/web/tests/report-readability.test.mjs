@@ -88,6 +88,23 @@ test("module 02 and Excel collect old and new publications and deduplicate expli
   assert.doesNotMatch(cell,/Earlier preprint/);
 });
 
+test('compact citations retain full provenance, deduplicate URLs and keep hidden-source warnings visible', async () => {
+  const input=await fixture();
+  const profile=input.advisors[0].evidence_profile;
+  profile.research_question_fit.source_ids=['c1','c2','c3','c4','duplicate','missing'];
+  input.evidence=Array.from({length:4},(_,i)=>({evidence_id:`c${i+1}`,url:`https://example.org/c${i+1}`,source_type:'institutional_profile',page_title:'完整来源标题 <不应执行>',accessed_at:'2026-10-02',status:i===3?'partial':'verified'}));
+  input.evidence.push({...input.evidence[0],evidence_id:'duplicate',url:'https://example.org/c1#bio'});
+  const report=buildAdvisorReport(input);
+  const block=report.match(/与您的研究需求：[\s\S]*?<\/p>/)[0];
+  assert.equal((block.match(/class="citation-chip"/g)||[]).length,4);
+  assert.equal((block.match(/href="https:\/\/example.org\/c1"/g)||[]).length,1);
+  assert.match(block,/aria-label="展开其余 2 个来源">\+2<\/button>/);
+  assert.match(block,/class="citation-extra">/); // Visible without JavaScript.
+  assert.match(block,/<\/span> <span class="citation-state">部分核实、部分来源关联尚待补齐/);
+  assert.match(block,/完整来源标题 &lt;不应执行&gt; · example.org · 查阅：2026-10-02/);
+  assert.doesNotMatch(block,/<br>|已核实|<不应执行>/);
+});
+
 test('retired modules no longer appear in normalized profiles while legacy publications remain in module 02', async () => {
   const {normalizeMedicalEvidenceProfile}=await import('../../skills/advisor-pipeline/scripts/medical-evidence.mjs');
   const input=await fixture();

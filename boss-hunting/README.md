@@ -97,7 +97,7 @@ tar -C /path/to/boss-hunting/skills --exclude='./boss-hunting/credentials.env' -
 
 ## 产物
 
-所有产物位于**申请项目**。主报告为 `outputs/<学科或方向>-导师调研.html`，在具体研究、项目与比较理由旁附来源链接；缺失来源标为待核验。导师与证据记录为 `outputs/advisor_records.json`、`outputs/evidence.json`；运行记录位于 `runs/<run-id>/`。Excel 为按阶段生成的补充产物；确认精确目标后，RP／套磁信位于 `outputs/application-materials/<advisorProgramId>/`。
+所有产物位于**申请项目**。主报告为 `outputs/<学科或方向>-导师调研.html`，采用米纸白、燕麦色与陶土色的暖色阅读界面，在对应描述旁以小标签显示来源；超过两个来源可展开，悬停查看完整标题、域名与查阅日期。论文标题直接链接原文，同一描述内不重复展示相同网址；缺失、部分核实与冲突状态始终保留。关闭 JavaScript 或打印时展示全部来源。导师与证据记录为 `outputs/advisor_records.json`、`outputs/evidence.json`；运行记录位于 `runs/<run-id>/`。Excel 为按阶段生成的补充产物；确认精确目标后，RP／套磁信位于 `outputs/application-materials/<advisorProgramId>/`。
 
 在仓库根目录从共享记录重建 HTML：
 
