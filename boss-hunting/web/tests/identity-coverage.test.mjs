@@ -81,6 +81,8 @@ test('identity gaps alone override a complete audit; missing grants do not block
   row.evidence_profile.doctoral_trajectory = { searches: ['corresponding_papers', 'lab_website'].map(kind => ({ kind, database: 'Official fixture pages', query: 'Fictional PI', checkedAt: '2026-09-23', status: 'not_found', sourceIds: ['search'] })) };
   sources.push({ evidence_id: 'search', entity_id: row.advisor_id, status: 'not_found', url: 'https://example.org/search', claim: 'No results in the fictional checked scope' });
   const input = { project, advisors: [row], evidence: sources, programs: [], candidates: [], audit: { completionTier: 'complete' } };
+  assert.match(buildAdvisorReport(input), /部分完成：会议与演讲检索尚有缺口/);
+  row.evidence_profile.researchMainline = {talkSearches:[{database:'Fictional official events',query:'Fictional PI + conference',checkedAt:'2026-09-23',windowStart:'2024-09-23',windowEnd:'2026-09-23',status:'not_found',sourceIds:['search']}]};
   assert.match(buildAdvisorReport(input), /已完成本轮设定范围的检索/);
   delete row.evidence_profile.identity.currentPosition;
   assert.match(buildAdvisorReport(input), /部分完成：身份信息尚有缺口/);

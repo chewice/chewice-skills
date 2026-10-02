@@ -232,7 +232,8 @@ The projection contains:
 - `researchMainline` (`longTermQuestion`, `continuingThemes`, `newDirections`,
   `researchObjects`, `methods`, `recentShift`, `participationOnlyWorks`,
   `representativeWorks[{title, year, venue, doi, url, verifiedRole, relationToMainline, isPreprint, publicationStatus, publishedVersionDoi, sourceIds}]`,
-  `latestPapers[]`, `preprints[]` (same work schema), `backSearchWindow`).
+  `latestPapers[]`, `preprints[]` (same work schema), `backSearchWindow`,
+  `academicTalks[]`, `talkSearches[]` (past-two-year conference/talk records and query receipts; see investigation-contract.md)).
 - `doctoralTrajectory` (`firstAuthorProfiles[]`, `labWebsites[]`, `searches[]` as defined in investigation-contract.md, `currentDoctoral[]`, `formerDoctoral[]` with
   supervision evidence / degree or year / topic / outputs / first destination /
   latest public role / information date, `graduateProgram`, `emergingPiNote`,

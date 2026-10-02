@@ -13,7 +13,7 @@ export function buildPhaseOneTaskPrompt({ project, filePath = "" }) {
 复用已保存研究画像 ${JSON.stringify(project.medicalProfile || {})}；只补缺失信息，按 领域 → 疾病/机制/科学问题 → 目标地区 三步推进，研究对象/尺度/范式/方法偏好为可选。
 地区：${project.target || "尚未询问"}；目标数量：${project.shortlistTarget || 10}。
 流程：科学问题 → Map/Research Seeds → PI 识别与验证（Level A–D）→ 近五年回查→ 饱和 → shortlist（展示顺序）。
-不调查合作研究者或科研基金；近期论文、预印本及期刊核验归入研究模块；导师通讯论文不筛第一作者学历。
+不调查合作研究者或科研基金；近期论文、预印本及期刊核验归入研究模块，同时查近两年会议/论坛个人演讲标题，预告与实际报告分开，未来活动单列；导师通讯论文不筛第一作者学历。
 探索不读取 CV、成绩或申请者能力；申请筛选才使用真实背景，未知资格保持待确认。
 以五维证据画像（研究问题契合 / 主线连续性 / PI 角色置信 / 证据充分度 / 当前活跃度）比较，不计算综合分、引用量排名或 reach 配额；不评估训练匹配、资源、博士资助或培养环境。未映射真实项目的导师保存在 advisor_records 中；深查仍需精确目标和三模块维度确认。凭据只报告状态词，不得输出 key 值。`;
   const interests = project?.interests?.length

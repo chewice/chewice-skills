@@ -6,6 +6,7 @@
 // Training fit, lab resources, doctoral personal funding, training environment,
 // applicant ability and overall quality scores are intentionally absent.
 import { doctoralAdditions } from "./doctoral-evidence.mjs";
+import { academicEvents, mergeAcademicEvents } from "./academic-events.mjs";
 import { hasStructuredApplicantBackground } from "./project-contract.mjs";
 import { open, realpath } from "node:fs/promises";
 import { isAbsolute, relative, resolve } from "node:path";
@@ -124,6 +125,7 @@ function researchMainline(profile) {
   const source = pick(profile, "researchMainline", "research_mainline") || {};
   const legacy = pick(profile, "latestSignals", "latest_signals") || {};
   return {
+    ...academicEvents(source),
     longTermQuestion: pick(source, "longTermQuestion", "long_term_question") ?? null,
     continuingThemes: list(pick(source, "continuingThemes", "continuing_themes")),
     newDirections: list(pick(source, "newDirections", "new_directions")),
@@ -164,6 +166,7 @@ export function mergeResearchMainline(current, prior) {
     representativeWorks: [...current.representativeWorks, ...prior.representativeWorks],
     latestPapers: [...current.latestPapers, ...prior.latestPapers],
     preprints: [...current.preprints, ...prior.preprints],
+    ...mergeAcademicEvents(current, prior),
   };
 }
 

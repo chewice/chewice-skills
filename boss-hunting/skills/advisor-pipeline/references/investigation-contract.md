@@ -163,6 +163,15 @@ writes `outputs/advisor_records.json`, `outputs/evidence.json` and
 
 `researchMainline.representativeWorks/latestPapers/preprints` 保存研究模块论文：title、year/date、venue/journal、doi、url、verifiedRole、relationToMainline、isPreprint、publicationStatus、publishedVersionDoi、sourceIds。预印本须查期刊发表状态；正式版关联有来源才去重。旧 latestSignals 中论文仍读入研究模块；合作和基金字段不再归一化或接收新增结果；已有原始记录不改写。
 
+## 近期会议与演讲字段
+
+在 `researchMainline` 中追加（兼容 snake_case）：
+
+- `academicTalks[]`: `{eventName, date, role, talkTitle, talkTitleZh, url, participationStatus, identityStatus, checkedAt, sourceIds, limitations}`。date 为活动日期，checkedAt 为核验日期；role 为 keynote/invited/oral/speaker/panelist/chair/attendee/unknown。talkTitle 只写来源明确给出的个人演讲标题，talkTitleZh 为可选翻译。participationStatus 为 scheduled/delivered/unknown，identityStatus 为 verified/not_checked/conflict 等。字段未知留空，不用会议名补标题。
+- `talkSearches[]`: `{database, query, checkedAt, windowStart, windowEnd, status, sourceIds, limitations}`。checkedAt 为 YYYY-MM-DD，windowEnd 等于 checkedAt，windowStart 向前两年（闰日取二月末）；未来活动在记录中单列。status 为 found/not_found/partial/inaccessible/not_checked。查无需保留实际查询和范围的证据。
+- `evidence.source_type`: conference_programme/event_announcement 支持预告安排；event_report/recording 可支持实际报告，须在 claim/excerpt 中明确导师、活动、署名角色及标题，entity_id 绑定导师，status=verified 且 URL 可用。仅有预告不能把 participationStatus=delivered 投影为已确认报告。
+
+合并仅增补活动与检索记录、去除完全相同的重复记录，不覆盖既有科研主线、论文或冲突证据。HTML 与 Excel 同源展示；缺少有效检索过程显示部分完成，找不到活动不作为负面评价。
 
 ## 博士指导增补字段
 

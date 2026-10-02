@@ -1,8 +1,8 @@
 # 医学来源能力注册表（Source Capability Registry）
 
-来源目录仅服务身份任职、研究论文、导师通讯论文与作者情况三个模块。
+来源目录仅服务身份任职、研究论文与会议演讲、导师通讯论文与作者情况三个模块。
 
-这是唯一人工维护的来源目录。先加载 Global Core，再加载用户所选地区的 Regional Adapter；不是封闭白名单，不逐站爬取。具体主张引用记录页/文件，不以数据库首页替代。官方招生证据不能证明研究贡献，论文也不能证明当批次招生。来自官方页面、论文的新来源可按任务使用，注明主体和用途。
+这是唯一人工维护的来源目录。先加载 Global Core，再加载用户所选地区的 Regional Adapter；不是封闭白名单，不逐站爬取。具体主张引用记录页/文件，不以数据库首页替代。官方招生证据不能证明研究贡献，论文也不能证明当批次招生。来自官方页面、论文、会议议程的新来源可按任务使用，注明主体和用途。
 
 每条来源同时声明 `capabilities`（能证明什么）、`retrieval`（preferred / fallback，按 [browser-research-policy.md](browser-research-policy.md) 四级降级）、`authority`（authoritative / supporting / discovery_only）和 `credentials.env` 变量（可选加速器，缺失不阻塞）。运行时实际路由写入 `runs/<run-id>/provider-capabilities.json`。
 
@@ -29,6 +29,7 @@
 | GC-EPMC | [Europe PMC](https://europepmc.org/) · [API](https://europepmc.org/RestfulWebService) | 文献与版本、预印本—正式版关系、可用全文 | anonymous_api → browser → PubMed/出版商 | authoritative（记录）；全文按版本解释 | 无 |
 | GC-PREPRINT | [bioRxiv](https://www.biorxiv.org/) · [medRxiv](https://www.medrxiv.org/) | 预印本 DOI、版本、日期、正式版关联 | anonymous_api（bioRxiv API）→ browser → Europe PMC | supporting；未同行评议，无预印本不扣分 | 无 |
 | GC-CREDIT | [CRediT](https://credit.niso.org/) · [ICMJE](https://www.icmje.org/recommendations/browse/roles-and-responsibilities/defining-the-role-of-authors-and-contributors.html) | 贡献角色定义，用于读论文贡献声明 | browser（静态） | authoritative（定义）；作者次序不能代替贡献 | 无 |
+| GC-EVENTS | 运行时定位会议官网议程/摘要集、主办方论坛/讲座页面、机构活动回顾及官方录像 | 活动日期、报告人、演讲标题和角色；预告不证明实际出席 | browser → 机构回顾/官方录像 | authoritative（仅限明确支持的活动主张）；姓名+机构+方向消歧 | 无 |
 | GC-INSTITUTION | 当前机构 / 实验室 / 研究生院 / 机构库（运行时定位） | 当前职位、导师名册、Graduate Program、学位论文、官方公告 | browser（静态优先）→ 图书馆导航 → 公开履历互证 | authoritative（身份、任职、博士指导关联的最终依据） | 无 |
 | GC-SCHOLAR | [Google Scholar](https://scholar.google.com/) | 补充发现、作者页 backcheck | browser（CAPTCHA/登录即停）| discovery_only；不作证据来源 | 无 |
 

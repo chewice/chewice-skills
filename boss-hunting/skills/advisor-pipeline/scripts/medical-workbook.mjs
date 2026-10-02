@@ -1,4 +1,5 @@
 import { doctoralWorkbookSummary, overlayDoctoralProfile } from "./doctoral-evidence.mjs";
+import { academicTalkSummary } from "./academic-events.mjs";
 import { dateCell, formulaCell } from "./workbook-runtime.mjs";
 import { buildMedicalDiscoveryView, evidenceProfile, medicalProject, normalizeMedicalCandidate, researchPublications, mergeResearchMainline } from "./medical-evidence.mjs";
 
@@ -40,7 +41,7 @@ function profileTable(name, candidates, project, advisorOnly = false) {
     "真实项目", "学位", "入学批次", "发现路径", "PI 角色置信 / Level", "证据充分度", "当前活跃度",
     "研究问题契合", "契合理由与证据", "主线连续性", "连续性理由",
     "A 当前科研定位", "A 博士指导关联", "B 长期科学问题", "B 持续主题 / 新方向 / 近期转向", "B 代表性与近期论文 / 预印本（含期刊信息）",
-    "C 当前博士生（已有补充信息）", "C 已毕业博士（已有补充信息）", "C 通讯作者论文、作者与实验室",
+    "B 近期学术会议与演讲", "C 当前博士生（已有补充信息）", "C 已毕业博士（已有补充信息）", "C 通讯作者论文、作者与实验室",
     "正式记录", "方向契合边界", "关键未知", "下一步核验",
     "项目/岗位路径", "申请资格", "招生机会", "硬条件状态与依据", "比较分组", "最后核验日期", "来源",
   ];
@@ -68,6 +69,7 @@ function profileTable(name, candidates, project, advisorOnly = false) {
       text(mainline.longTermQuestion),
       text([mainline.continuingThemes.length ? `持续：${mainline.continuingThemes.join("；")}` : "", mainline.newDirections.length ? `新方向：${mainline.newDirections.join("；")}` : "", mainline.recentShift ? `近期转向：${mainline.recentShift}` : ""].filter(Boolean)),
       works(researchPublications(mainline)),
+      academicTalkSummary(mainline, project.evidenceRecords, row.advisor_id || row.advisorId),
       people(doctoralView.currentDoctoral), people(doctoralView.formerDoctoral),
       text([doctoralView.graduateProgram.graduateSchool, doctoralView.graduateProgram.doctoralProgram, doctoralView.graduateProgram.supervisorListing,
         doctoralView.emergingPiNote ? `新兴 PI：${doctoralView.emergingPiNote}` : null, doctoralWorkbookSummary(doctoralView, project.evidenceRecords)].filter(Boolean)),

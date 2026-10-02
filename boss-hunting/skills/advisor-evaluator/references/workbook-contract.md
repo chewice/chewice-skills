@@ -10,7 +10,7 @@ It requires no external website assets or browser package. Re-exporting reads
 local records and does not repeat the investigation.
 
 In the HTML comparison and each information section, place direct, concrete
-source links beside each study, author profile, doctoral record,
+source links beside each study, academic talk, author profile, doctoral record,
 eligibility condition, deadline and comparison reason.
 Resolve each item's `sourceIds` / `source_ids` through the shared evidence
 records using the field-level rules in

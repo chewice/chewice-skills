@@ -110,7 +110,7 @@ Module scope (details in
 | ID | Public-evidence scope |
 | --- | --- |
 | `identity_research_positioning` | Current institution / department / position, official profile, identifiers and name variants, current research positioning, the minimum doctoral-supervision link (graduate school / doctoral programme / supervisor listing); earlier institutions are preserved as history |
-| `research_mainline_5y` | Long-term scientific question, continuing themes, new directions, research objects and methods, recent shift, representative works with verified roles; participation-only works listed separately and not counted as the mainline; five-year back-search window; recent papers, preprints and journal-publication checks |
+| `research_mainline_5y` | Long-term scientific question, continuing themes, new directions, research objects and methods, recent shift, representative works with verified roles; participation-only works listed separately and not counted as the mainline; five-year back-search window; recent papers, preprints and journal-publication checks; past-two-year conferences/talks with exact titles and scheduled-versus-delivered evidence; upcoming events separate |
 | `doctoral_trajectory` | Lab website checks and past-five-year papers with verified advisor corresponding/co-corresponding roles; first/co-first author names and research summaries from these papers. Include papers regardless of first-author degree or unknown identity; known public roles and independently documented supervision are optional context. |
 
 Mentoring style, feedback speed, working hours, atmosphere, resources,

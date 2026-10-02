@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { overlayDoctoralProfile, labWebsiteVerified, doctoralCoverage, doctoralWindow, firstAuthorPaperState, firstAuthorSummary, firstAuthorIdentity } from "./doctoral-evidence.mjs";
+import { academicTalkRows, talkWindow, talkSearchComplete } from "./academic-events.mjs";
 import { createHash } from "node:crypto";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -242,6 +243,23 @@ function workList(works, evidence, empty) {
   return works.length ? `<ul class="works">${works.map((work) => workItem(work, evidence)).join("")}</ul>` : `<p class="muted">${html(empty)}</p>`;
 }
 
+function academicTalkSection(mainline, evidence, advisorId) {
+  const window = talkWindow(mainline.talkSearches);
+  const rows = academicTalkRows(mainline, evidence, advisorId);
+  const searches = mainline.talkSearches.map(row => `<p>${html(row.database || "来源未记录")} · ${html(text(row.status))} · 查阅日期：${html(row.checkedAt || "未记录")}</p>
+<details><summary>会议检索范围与限制</summary>${facts([["实际查询", row.query], ["时间范围", [row.windowStart,row.windowEnd]], ["限制", row.limitations || "未记录"]])}${sources(row.sourceIds,evidence)}</details>`).join("");
+  return `<h5>近期学术会议与演讲</h5><p class="muted">${window ? `检索范围：${html(window.start)} 至 ${html(window.end)}；未来活动单列。` : "未记录有效的近两年检索范围。"}议程安排不等于实际报告；演讲信息用于补充近期研究动向。</p>
+${searches || '<p class="muted">未记录会议与演讲检索，不代表没有活动。</p>'}
+${["近两年活动","即将举行","日期或检索范围待核实","范围外记录"].map(group => {
+    const selected = rows.filter(row => row.timing === group);
+    return selected.length ? `<h6>${group}</h6><ul class="academic-talks">${selected.map(row => `<li><strong>${html(row.eventName || "活动名称未记录")}</strong> · ${html(row.date || "日期待核实")}<br>
+${html(row.roleLabel)} · ${html(row.status)}<br><span class="field-label">演讲标题</span>${row.title === row.talkTitle && urlKey(row.url) ? link(row.url,row.title) : html(row.title)} ${sources(row.sourceIds,evidence,row.title === row.talkTitle && urlKey(row.url) ? [row.url] : [])}
+${row.titleZh ? `<br>中文译名：${html(row.titleZh)}` : ""}
+${row.limitations ? `<br>${html(row.limitations)}` : ""}
+${row.url && row.title !== row.talkTitle ? ` ${link(row.url,"活动页面")}` : ""}</li>`).join("")}</ul>` : "";
+  }).join("")}`;
+}
+
 function doctoralList(people, evidence, empty) {
   if (!people.length) return `<p class="muted">${html(empty)}</p>`;
   return `<ul>${people.map((person) => `<li><strong>${html(person.name || "姓名未公开")}</strong>${person.degreeOrYear ? ` · ${html(person.degreeOrYear)}` : ""}
@@ -334,6 +352,7 @@ ${moduleHeading(index, "b")}${facts([
   ["是否持续研究这一方向", [label("continuity", profile.researchRouteContinuity.status), ...profile.researchRouteContinuity.reasons], profile.researchRouteContinuity.sourceIds],
 ], evidence)}${facts([["论文检索时间范围", mainline.backSearchWindow || row.back_search?.window || "未记录实际检索范围"]])}
 <h5>代表性与近期论文、预印本</h5>${workList(researchPublications(mainline), evidence, "尚未登记已核实的论文。")}
+${academicTalkSection(mainline, evidence, advisorId)}
 ${mainline.participationOnlyWorks.length ? `<h5>仅参与型工作（不计入主线）</h5>${workList(mainline.participationOnlyWorks, evidence, "")}` : ""}</div>
 ${moduleHeading(index, "e")}
 ${doctoralSupplement(doctoral, evidence)}
@@ -568,7 +587,8 @@ export function buildAdvisorReport({ project = {}, advisors = [], programs = [],
   const missingDoctoralChecks = medical ? advisorRows.filter((row) => !doctoralCoverage(row.evidenceProfile.doctoralTrajectory, evidence)) : [];
   const identityChecks = medical ? advisorRows.map((row) => ({ row, ...identityCoverage(row, evidence) })) : [];
   const missingIdentityChecks = identityChecks.filter((check) => !check.complete);
-  const completion = medical && missingDoctoralChecks.length ? "部分完成：第一作者或实验室补查尚有缺口" : missingIdentityChecks.length ? "部分完成：身份信息尚有缺口" : audit.completionTier === "complete" ? "已完成本轮设定范围的检索" : audit.completionTier === "blocked" ? "检索受阻" : "部分完成或完成情况未记录";
+  const missingTalkChecks = medical ? advisorRows.filter(row => !talkSearchComplete(row.evidenceProfile.researchMainline,evidence,row.advisor_id || row.advisorId)) : [];
+  const completion = medical && missingDoctoralChecks.length ? "部分完成：第一作者或实验室补查尚有缺口" : missingIdentityChecks.length ? "部分完成：身份信息尚有缺口" : missingTalkChecks.length ? "部分完成：会议与演讲检索尚有缺口" : audit.completionTier === "complete" ? "已完成本轮设定范围的检索" : audit.completionTier === "blocked" ? "检索受阻" : "部分完成或完成情况未记录";
   const prose = (value, fallback) => typeof value === "string" && !/^[a-z0-9_]+$/i.test(value) ? value : fallback;
   const pageCount = new Set(evidence.map((row) => urlKey(sourceUrl(row))).filter(Boolean)).size;
   const pendingCount = evidence.filter((row) => ["partial", "inaccessible", "not_checked", "conflict", "stale"].includes(row.status)).length;
@@ -578,6 +598,7 @@ ${facts([["实际检索范围", prose(audit.searchCoverage || audit.coverage, `�
 ["检索是否充分", prose(audit.saturation, "尚无充分的文字说明支持已查全；停止检索的记录见下方详情")],
 ["仍需补查", audit.limitations?.length ? audit.limitations : "请结合各导师的待核实事项阅读"]])}
 ${medical && missingDoctoralChecks.length ? `<p>第一作者或实验室补查尚未完成：${html(missingDoctoralChecks.map((row) => row.name || row.advisorName).join("、"))}。详见指导相关论文与作者情况。</p>` : ""}
+${missingTalkChecks.length ? `<p>会议与演讲检索尚未完成或受限：${html(missingTalkChecks.map(row => row.name || row.advisorName).join("、"))}。详见研究方向与近年论文。</p>` : ""}
 ${missingIdentityChecks.length ? `<h3>身份信息待补查</h3><ul>${missingIdentityChecks.map(({row, gaps}) => `<li><strong>${html(row.name || row.advisorName)}</strong><ul>${gaps.map((gap) => `<li>${html(gap.label)}：${html(gap.reason)}</li>`).join("")}</ul></li>`).join("")}</ul>` : ""}
 <details class="technical"><summary>查询与工具记录（复核用）</summary>${coverage}</details>
 ${sourceAppendix(evidence, advisorRows)}

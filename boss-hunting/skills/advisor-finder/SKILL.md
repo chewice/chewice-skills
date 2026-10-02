@@ -320,7 +320,7 @@ fields plainly. Regeneration reads shared records and does not rerun research.
 
 Follow [the shared medical report contract](../advisor-pipeline/references/medical-profile.md).
 Use three modules: identity; research mainline including recent papers, preprints
-and journal-publication checks;
+and journal-publication checks, plus recent academic conferences/talks;
 corresponding-author papers and their authors.
 Do not investigate or render collaborator profiles or research grants, and do
 not treat missing grant searches as incomplete work. Preserve historical records.
@@ -332,3 +332,8 @@ supervision. Check the attributable lab website and record sources and dates.
 Generate the shared HTML and supplementary Excel from the same records.
 
 医学身份采集和交付前检查：遵循 [身份字段落表与报告前检查](../advisor-pipeline/references/medical-profile.md#身份字段落表与报告前检查)。已读正文中的任职等事实须写入 identity 并关联字段级 evidence；链接标题不能代替字段。生成前运行 build_advisor_report.mjs 的 --check-identity，处理缺口或记录无法核实的原因，再交付部分或完整报告。
+
+In medical module 02, also search public conferences, forums and seminars from
+the past two years. Follow the shared medical contract’s “近期学术会议与演讲”
+section: preserve exact talk titles and sources, separate upcoming events, and
+distinguish a scheduled speaker from a confirmed delivered talk.

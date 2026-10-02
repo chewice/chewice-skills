@@ -7,6 +7,7 @@
 // `conflict` evidence, and is the single writer of outputs/advisor_records.json
 // and outputs/evidence.json for that merge.
 import { mergeDoctoralAdditions } from "./doctoral-evidence.mjs";
+import { mergeAcademicEvents } from "./academic-events.mjs";
 import { createHash } from "node:crypto";
 import { mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -174,6 +175,12 @@ export function mergeSubagentOutputs(outputs, { advisorRecords = [], evidenceRec
         if (existing) {
           const currentProfile = existing.evidenceProfile || existing.evidence_profile;
           const incomingProfile = record.evidenceProfile || record.evidence_profile;
+          const eventAdditions = incomingProfile?.researchMainline || incomingProfile?.research_mainline;
+          if (currentProfile && eventAdditions) {
+            const key = currentProfile.researchMainline ? "researchMainline" : currentProfile.research_mainline ? "research_mainline" : "researchMainline";
+            const previous = currentProfile[key] || {};
+            currentProfile[key] = {...previous, ...mergeAcademicEvents(previous, eventAdditions)};
+          }
           const addition = incomingProfile?.doctoralTrajectory || incomingProfile?.doctoral_trajectory;
           if (currentProfile && addition) {
             const key = currentProfile.doctoralTrajectory ? "doctoralTrajectory" : currentProfile.doctoral_trajectory ? "doctoral_trajectory" : "doctoralTrajectory";

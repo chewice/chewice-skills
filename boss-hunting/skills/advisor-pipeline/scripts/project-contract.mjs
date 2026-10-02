@@ -184,7 +184,7 @@ export function medicalIntakeStatus(project = {}) {
 
 function medicalScopeFingerprint(project) {
   return createHash("sha256").update(JSON.stringify({
-    reportScope: "three_modules_corresponding_papers",
+    reportScope: "three_modules_corresponding_papers_and_talks",
     domainProfile: project.domainProfile, searchMode: project.searchMode,
     evaluationMode: project.evaluationMode, medicalProfile: project.medicalProfile,
     target: project.target, degree: project.degree, season: project.season,

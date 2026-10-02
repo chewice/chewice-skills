@@ -36,6 +36,7 @@ function commonPrompt({ userPrompt, projectPath, runDirectory, provider, mode })
 - 保留 status.json 的 schemaVersion 2 和现有字段，只更新本阶段真实 phase、stage 与计数；尚未产生的结果保持 0。
 - Finder/Evaluator 的主要交付是按学科方向命名的简洁 HTML。执行 advisor-pipeline/scripts/build_advisor_report.mjs --project-root 当前项目目录，从共享记录生成 outputs/{topic}-导师调研.html；保留现有 Excel 补充导出，不能只生成 Excel 就宣称报告完成。材料生成仍按其独立格式。
 - 医学报告只含三个模块：身份与任职、研究方向与近年论文、指导相关论文与作者情况。不调查或展示合作研究者及科研基金，不因缺少基金检索降低完成度。近期论文、预印本与期刊发表状态核验放入 researchMainline.latestPapers/preprints，保留期刊/平台、日期、DOI、publicationStatus、publishedVersionDoi 与来源；正式版关联有据才去重。HTML 顺序为要求、简短对照、三模块详情、检索与来源；语义链接紧邻事实，任职核对/网页查阅/页面更新时间分开。
+- 医学 02 模块另查近两年学术会议、论坛和讲座：用姓名变体+机构+研究方向消歧，提取活动名、日期、角色、个人演讲标题原文及可选译名，写 researchMainline.academicTalks/talkSearches。future 活动单列；议程/预告仅证明 scheduled，event_report/recording 明确支持实际报告才写 delivered。主持/讨论/参会不自动当作演讲，分会场名不替代标题。保存实际两年窗口、查询、证据来源及缺口；旧记录未查不等于没有。
 - 指导相关论文模块查实验室官网及近五年导师通讯/共同通讯论文，记录第一/共同第一作者与共同论文方向总结；导师通讯署名已核实、日期符合窗口即可纳入，不考虑第一作者学历，也不因身份未知排除论文或阻止完成。已知身份与明确指导关系可作补充，不从共同署名推断博士生身份。保存 doctoralTrajectory.firstAuthorProfiles/labWebsites/searches 及来源；末位不等于通讯。
 - 不执行 git commit/push、发布、发送邮件或提交申请/RP。`;
 }

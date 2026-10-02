@@ -166,7 +166,7 @@ Use separate sheets for fit, evidence, sources/freshness, and configuration.
 
 Follow [the shared medical report contract](../advisor-pipeline/references/medical-profile.md).
 Use three modules: identity; research mainline including recent papers, preprints
-and journal-publication checks;
+and journal-publication checks, plus recent academic conferences/talks;
 corresponding-author papers and their authors.
 Do not investigate or render collaborator profiles or research grants, and do
 not treat missing grant searches as incomplete work. Preserve historical records.
@@ -176,3 +176,8 @@ Record first/co-first names from the paper; known public roles are optional
 context, never an inclusion requirement. Coauthorship alone does not establish
 supervision. Check the attributable lab website and record sources and dates.
 Generate the shared HTML and supplementary Excel from the same records.
+
+In medical module 02, also search public conferences, forums and seminars from
+the past two years. Follow the shared medical contract’s “近期学术会议与演讲”
+section: preserve exact talk titles and sources, separate upcoming events, and
+distinguish a scheduled speaker from a confirmed delivered talk.

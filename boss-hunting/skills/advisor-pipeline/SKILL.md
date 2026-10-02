@@ -72,7 +72,7 @@ with `node scripts/build_advisor_report.mjs --project-root "$PWD"` using this
 skill's script path. It writes `outputs/{topic}-导师调研.html`; do not use a generic
 date-only title. Existing Excel exports remain supplemental compatibility
 artifacts. A workbook alone does not satisfy the report requirement.
-Place specific external source links beside the corresponding studies,
+Place specific external source links beside the corresponding studies, academic talks,
 doctoral outcomes, qualifications, deadlines and comparison reasons. Resolve
 item-level source IDs through shared evidence; a footer-only bibliography is
 insufficient. Missing concrete sources stay explicitly pending verification.
@@ -462,7 +462,7 @@ regenerate the workbook from structured state.
 
 Follow [the shared medical report contract](../advisor-pipeline/references/medical-profile.md).
 Use three modules: identity; research mainline including recent papers, preprints
-and journal-publication checks;
+and journal-publication checks, plus recent academic conferences/talks;
 corresponding-author papers and their authors.
 Do not investigate or render collaborator profiles or research grants, and do
 not treat missing grant searches as incomplete work. Preserve historical records.
@@ -474,3 +474,8 @@ supervision. Check the attributable lab website and record sources and dates.
 Generate the shared HTML and supplementary Excel from the same records.
 
 医学身份采集和交付前检查：遵循 [身份字段落表与报告前检查](references/medical-profile.md#身份字段落表与报告前检查)。已读正文中的任职等事实须写入 identity 并关联字段级 evidence；链接标题不能代替字段。生成前运行 build_advisor_report.mjs 的 --check-identity，处理缺口或记录无法核实的原因，再交付部分或完整报告。
+
+In medical module 02, also search public conferences, forums and seminars from
+the past two years. Follow the shared medical contract’s “近期学术会议与演讲”
+section: preserve exact talk titles and sources, separate upcoming events, and
+distinguish a scheduled speaker from a confirmed delivered talk.
