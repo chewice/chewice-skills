@@ -46,7 +46,7 @@ test("Web and CLI share one ordered investigation option contract", async () => 
   assert.match(storeSource, /detectiveSectionCatalog: getDetectiveSectionCatalog\(metadata\)/);
   assert.deepEqual(getDetectiveSectionCatalog({ domainProfile: "medical" })
     .filter((section) => section.defaultSelected).map((section) => section.id), MEDICAL_DEFAULT_DETECTIVE_SECTIONS);
-  const medicalReference = parseReferenceMenu(reference, /## Medical five-module menu([\s\S]*?)Module scope/);
+  const medicalReference = parseReferenceMenu(reference, /## Medical three-module menu([\s\S]*?)Module scope/);
   assert.deepEqual(medicalReference.map(({ id, label, defaultSelected }) => ({ id, label, defaultSelected })),
     MEDICAL_DETECTIVE_SECTION_CATALOG.map(({ id, label, defaultSelected }) => ({ id, label, defaultSelected })));
   assert.deepEqual(getDetectiveSectionCatalog({ domainProfile: "medical" }).map(({ id }) => id), medicalReference.map(({ id }) => id));

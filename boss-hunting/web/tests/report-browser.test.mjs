@@ -40,9 +40,9 @@ test('report browser: floating long directory, anchors, keyboard, mobile and pri
     await settle();
     const geometry = await evaluate(`(() => { const n=document.querySelector('.report-toc'), r=n.getBoundingClientRect(), c=n.querySelector('.toc-content'); return {left:r.left,width:r.width,height:r.height,center:r.top+r.height/2,main:document.querySelector('main').getBoundingClientRect().left,right:r.right,scrollable:c.scrollHeight>c.clientHeight}; })()`);
     assert.equal(geometry.left, 16); assert.equal(geometry.width, 216); assert.ok(geometry.height <= 630); assert.equal(geometry.center, 450); assert.ok(geometry.main > geometry.right); assert.ok(geometry.scrollable);
-    await evaluate(`document.getElementById('advisor-16-c').scrollIntoView()`); await settle();
+    await evaluate(`document.getElementById('advisor-16-b').scrollIntoView()`); await settle();
     assert.equal(await evaluate(`document.querySelector('.toc-advisor[data-advisor="advisor-16"]').open`), true);
-    assert.equal(await evaluate(`document.querySelector('.report-toc a[aria-current]').hash`), '#advisor-16-c');
+    assert.equal(await evaluate(`document.querySelector('.report-toc a[aria-current]').hash`), '#advisor-16-b');
     assert.ok(await evaluate(`(() => {const a=document.querySelector('.report-toc a[aria-current]').getBoundingClientRect(), c=document.querySelector('.toc-content').getBoundingClientRect();return a.top>=c.top && a.bottom<=c.bottom;})()`));
     await evaluate(`document.querySelector('.report-toc a[href="#overview"]').focus()`);
     await page('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });

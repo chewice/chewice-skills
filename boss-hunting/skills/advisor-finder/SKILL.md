@@ -6,7 +6,7 @@ description: >
   map shortlisted advisors to programs, verify objective application facts,
   and produce source-backed candidate records and a workbook. Medical discovery
   starts from a scientific question without a CV and runs Seeds → PI validation
-  → back-search → collaboration network → saturation → shortlist; medical
+  → back-search → saturation → shortlist; medical
   application screening also accepts sufficient attributed background and
   compares evidence profiles without total scores.
 ---
@@ -129,13 +129,10 @@ medical-profile.md, executed by the Main Agent with subagents that write only
 3. **Back-search**: a five-year author back-search per PI decides
    `researchRouteContinuity`; one matching paper never proves a sustained
    mainline.
-4. **Network expansion** (max two rounds) through `collaboration-network.mjs`:
-   collaboration edges (co-authorship, shared project / grant / trial) and
-   research-neighbor edges (citation, co-citation, similarity) stay separate;
-   consortium papers do not create collaborators; new leads return to step 2.
-5. **Saturation**: stop when a round adds no validated PIs, or adds <10%
-   (configurable) with no new sub-direction, or the round cap is reached.
-6. Merge with `../advisor-pipeline/scripts/merge_subagent_findings.mjs`
+4. **Coverage and saturation**: supplement candidates from original papers and
+   official rosters; stop when new queries add no relevant PI or sub-direction.
+   Record the scope and stopping reason. Do not investigate collaborators or grants.
+5. Merge with `../advisor-pipeline/scripts/merge_subagent_findings.mjs`
    (`--dry-run` first). Emerging PIs (new group, no graduated doctoral
    students, low citations) are never excluded for seniority metrics.
 
@@ -160,7 +157,7 @@ In medical `evidence_profile`, replace the numeric instructions below with the
 five-dimension profile: `researchQuestionFit`, `researchRouteContinuity`,
 `piRoleConfidence` (with Level A–D), `evidenceSufficiency`, `currentActivity`,
 each with reasons and source IDs, plus the module blocks `identity`,
-`researchMainline`, `collaborationNetwork`, `latestSignals`,
+`researchMainline` (including recent papers, preprints and journal checks),
 `doctoralTrajectory`, `formalRecords`, `fitBoundary`, `keyUnknowns`,
 `nextVerification`. Follow medical-profile for original work, contribution
 statements and preprint/version deduplication. Do not produce training fit,
@@ -311,7 +308,7 @@ fields plainly. Regeneration reads shared records and does not rerun research.
 - Use `verified`, `partial`, `not_found`, `not_checked`, `inaccessible`,
   `conflict`, `stale`, and `not_applicable` consistently.
 - Never write API key values into records, prompts or logs; a public-database
-  `not_found` never becomes "the PI has no funding".
+  `not_found` never becomes "the PI has no relevant record".
 - Never turn access failure, skipped research, or failed PDF extraction into
   “no requirement” or “no record”.
 - Verify recruiting for the target degree.
@@ -319,12 +316,19 @@ fields plainly. Regeneration reads shared records and does not rerun research.
 - Stop and report missing real input instead of inventing CV details, advisors,
   programs, or application facts.
 
-## Minimal medical report and grant-search evidence
+## Medical report scope
 
-Per-advisor official grant-database searching and its recorded process are mandatory baseline work for every medical report, even when the user never mentions grants. Do not require an extra prompt, a selected Detective section, or a deep-investigation request to include this baseline. Silence is not an exclusion; only an explicit user restriction can narrow it, and each excluded, blocked or unfinished search must still appear with its reason in a partial report.
-
-Follow [the shared medical report contract](../advisor-pipeline/references/medical-profile.md#证据与续跑): record per-advisor official grant searches in `latestSignals.projectSearches`, separate supplementary sources, and mark missing/blocked searches as partial. Respect confirmed investigation scope. Use the shared minimalist HTML generator, descriptive citations and separate verification/access/update dates.
-
-Medical minimum reports also include the [doctoral first-author and lab-website checks](../advisor-pipeline/references/medical-profile.md#博士指导第一作者画像与实验室网站默认最低内容), without an extra user request. Verify the advisor's corresponding/co-corresponding role and first/co-first authors on papers from the past five years; summarize only those joint papers. Seek an attributable lab website and check members/alumni/publications. First authors are not automatically doctoral students; preserve independent identity evidence, dates, sources and search gaps in `doctoralTrajectory`.
+Follow [the shared medical report contract](../advisor-pipeline/references/medical-profile.md).
+Use three modules: identity; research mainline including recent papers, preprints
+and journal-publication checks;
+corresponding-author papers and their authors.
+Do not investigate or render collaborator profiles or research grants, and do
+not treat missing grant searches as incomplete work. Preserve historical records.
+Include past-five-year papers when the advisor's corresponding/co-corresponding
+role is verified, regardless of the first author's degree or unknown identity.
+Record first/co-first names from the paper; known public roles are optional
+context, never an inclusion requirement. Coauthorship alone does not establish
+supervision. Check the attributable lab website and record sources and dates.
+Generate the shared HTML and supplementary Excel from the same records.
 
 医学身份采集和交付前检查：遵循 [身份字段落表与报告前检查](../advisor-pipeline/references/medical-profile.md#身份字段落表与报告前检查)。已读正文中的任职等事实须写入 identity 并关联字段级 evidence；链接标题不能代替字段。生成前运行 build_advisor_report.mjs 的 --check-identity，处理缺口或记录无法核实的原因，再交付部分或完整报告。

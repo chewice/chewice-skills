@@ -148,7 +148,7 @@ export function renderInvestigationMenu(menu) {
   }
   if (medical) {
     lines.push("");
-    lines.push("医学证据画像不计算综合分、引用量排名或录取概率。维度目录为五模块（A 身份定位 / B 近五年主线 / C 合作网络 / D 最新动向与项目 / E 博士培养轨迹），不含训练匹配、资源、博士资助或培养环境。尚无真实项目/批次映射的导师保留在 advisor_records.json 的探索视图中，不能虚构 advisorProgramId 进入此精确项目确认菜单。");
+    lines.push("医学证据画像不计算综合分、引用量排名或录取概率。维度目录为三模块（A 身份定位 / B 近五年主线与论文期刊核验 / C 指导相关论文与作者情况），不含训练匹配、资源、博士资助或培养环境。尚无真实项目/批次映射的导师保留在 advisor_records.json 的探索视图中，不能虚构 advisorProgramId 进入此精确项目确认菜单。");
   }
   lines.push("");
   lines.push("## 2. 背调维度");

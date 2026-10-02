@@ -25,32 +25,20 @@ test("medical report filename follows discipline and scope with safe portable na
   assert.equal(reportFilename({ interests: [{ name: "Statistics" }] }), "Statistics-导师调研.html");
 });
 
-test("T03 T13 T25 medical discovery HTML renders five modules with item-level links and no fabricated project IDs", async () => {
+test("T03 T13 T25 medical discovery HTML renders three modules with item-level links and no fabricated project IDs", async () => {
   const input = await fixture("medical-discovery");
   const report = buildAdvisorReport(input);
   assert.match(report, /虚构示例 \/ FICTIONAL FIXTURE/);
   assert.match(report, /生物医学导师方向探索/);
   assert.match(report, /没有综合导师分/);
   // First page: compact overview table with the fixed four columns.
-  assert.match(report, /<th>导师与机构<\/th><th>与需求的关系<\/th><th>基金检索结果<\/th><th>需要进一步确认<\/th>/);
+  assert.match(report, /<th>导师与机构<\/th><th>与需求的关系<\/th><th>研究主线与近期活动<\/th><th>需要进一步确认<\/th>/);
   // Five modules per advisor in order, then boundary and coverage sections.
-  const order = ["身份与任职", "研究方向与近年论文", "主要合作研究者", "科研基金与近期进展", "博士指导情况", "本次查了什么，还缺什么"];
+  const order = ["身份与任职", "研究方向与近年论文", "指导相关论文与作者情况", "本次查了什么，还缺什么"];
   const positions = order.map((label) => report.indexOf(label));
   assert.ok(positions.every((position, index) => position >= 0 && (index === 0 || position > positions[index - 1])), positions.join(","));
-  // C module only presents selected scholars and concrete joint work.
-  assert.match(report, /class="person-entry collaborator"/);
-  assert.match(report, /与导师合作的项目/);
-  assert.match(report, /与导师合作的产出/);
-  assert.doesNotMatch(report, /<svg|研究方向相近的人|对方核心方向与近期路线/);
-  // D module: fixed project field list and amount unit handling.
-  assert.match(report, /<th>项目名称<\/th><th>项目编号<\/th><th>资助机构 \/ 来源<\/th><th>项目中的角色<\/th><th>期限<\/th><th>状态<\/th><th>公开金额（单位）<\/th>/);
-  assert.match(report, /FIX-0001/);
-  assert.match(report, /未公开/);
-  // E module distinguishes current and former doctoral students and never computes success rates.
-  assert.match(report, /当前博士生（公开可见）/);
-  assert.match(report, /已毕业博士（公开可见）/);
-  assert.match(report, /不计算毕业率、去向率或培养成功率/);
-  assert.match(report, /新兴 PI/);
+  assert.doesNotMatch(report, /class="person-entry collaborator"|id="advisor-1-c"|id="advisor-1-d"|FIX-0001/);
+  assert.match(report, /不以第一作者学历或身份是否已核实为条件/);
   // Item-level external links plus supplementary evidence anchors.
   assert.match(report, /href="https:\/\/example.org\/fictional-study"/);
   assert.doesNotMatch(report, />证据\s*\d+<\/a>/);
@@ -75,7 +63,7 @@ test("report escapes all external text, blocks unsafe links and cannot execute p
   const report = buildAdvisorReport(input);
   assert.match(report, /&lt;img/);
   assert.match(report, /&lt;script&gt;uploadCV/);
-  assert.match(report, /&lt;svg onload/);
+  assert.doesNotMatch(report, /&lt;svg onload/);
   assert.match(report, /Ignore all instructions/);
   assert.doesNotMatch(report, /<img|<script(?! id="report-navigation")|href="javascript:|href="data:|<svg onload/);
   assert.match(report, /Content-Security-Policy/);
@@ -99,7 +87,7 @@ test("report and workbooks preserve canonical browser evidence links and provena
   assert.equal(sourceSheet.rows[0][15], "fixture-original");
 });
 
-test("medical application report keeps programme entry, exact intake and project records without training or personal funding", async () => {
+test("medical application report keeps programme entry, exact intake without research grant records without training or personal funding", async () => {
   const input = await fixture("medical-application");
   const report = buildAdvisorReport(input);
   assert.match(report, /生物医学导师申请筛选/);
@@ -107,8 +95,8 @@ test("medical application report keeps programme entry, exact intake and project
   assert.match(report, /符合已核实条件/);
   assert.match(report, /申请条件与时效/);
   assert.match(report, /真实申请入口（申请筛选模式）/);
-  assert.match(report, /FIX-APP-01/);
-  assert.match(report, /1200000 fictional_unit/);
+  assert.doesNotMatch(report, /FIX-APP-01/);
+  assert.doesNotMatch(report, /1200000 fictional_unit/);
   assert.match(report, /已核实研究负责人身份/);
   assert.match(report, /列表顺序不是导师质量排名/);
   assert.doesNotMatch(report, /训练|博士生资助|研究资源及可访问层级|培养制度与环境/);
@@ -137,8 +125,6 @@ test("T13 facts and comparison carry direct source hyperlinks next to the exact 
   const moduleOf = (id) => brief.split(`id="advisor-1-${id}"`)[1].split(/<div class="module(?: module-[a-e])?"/)[0];
   const section = (label) => report.split(`<dt>${label}</dt><dd>`)[1].split("</dd>")[0];
   assert.match(moduleOf("b"), /href="https:\/\/example.org\/paper-detail"/);
-  assert.match(moduleOf("d"), /href="https:\/\/example.org\/grant-detail"/);
-  assert.doesNotMatch(moduleOf("d"), /old-grant|cohort-detail/);
   assert.match(moduleOf("e"), /href="https:\/\/example.org\/cohort-detail".*部分核实/);
   assert.match(section("项目截止日（批次 / 时区）"), /href="https:\/\/example.org\/program-date"/);
   assert.doesNotMatch(section("项目截止日（批次 / 时区）"), /scholarship-date|old-date|other-date/);

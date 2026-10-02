@@ -5,8 +5,7 @@ description: >
   biomedical research discovery from a scientific question alone (no CV, grades
   or applicant ability), application screening with real applicant background,
   and the existing general advisor workflow. Use when the user asks Boss Hunting
-  to discover advisors, map a research direction's PIs and collaboration
-  network, compare research-question fit, or resume an advisor search. Skill
+  to discover advisors, map a research direction's PIs and publication trajectories, compare research-question fit, or resume an advisor search. Skill
   development requests do not start a search.
 ---
 
@@ -41,10 +40,9 @@ regions. Research objects, scales, paradigm and method preferences are optional
 and never block. Do not read a CV, transcript, publication list or applicant
 ability for discovery, and do not ask for desired training or current skills —
 those fields no longer exist. Discovery then follows the pipeline's medical
-orchestration: Seeds → PI validation → five-year back-search → collaboration
-network → saturation → shortlist → five-module deep dive (A identity and
-research positioning, B five-year mainline, C collaboration network, D latest
-signals and projects, E doctoral trajectory). Exploration never invents a
+orchestration: Seeds → PI validation → five-year back-search → saturation → shortlist → three-module research (A identity
+and research positioning, B five-year mainline including recent papers/preprints
+and journal checks, C corresponding-author papers and author profiles). Exploration never invents a
 program, intake or candidate ID.
 
 Default to the actual host's web tools, following their current schema: a GPT
@@ -60,7 +58,7 @@ institution and dates, submit, wait, inspect results, paginate and open details.
 Discover deferred tools if needed; an already available equivalent browser may be
 used with its real provider recorded. Never install a backend automatically.
 If no interactive tool exists, report missing host capability distinctly from a
-website access failure. Follow [the mandatory interaction procedure](../advisor-pipeline/references/browser-research-policy.md#动态基金库查询必须执行).
+website access failure. Follow [the mandatory interaction procedure](../advisor-pipeline/references/browser-research-policy.md#动态检索交互).
 Two static failures do not consume the two distinct interactive attempts allowed.
 Stop for CAPTCHA/login requiring human intervention; never bypass them. Follow the
 pipeline capability detection and evidence rules; built-in web retrieval is
@@ -88,14 +86,17 @@ safe HTTP(S) URLs. Display order is never a PI quality ranking, and no total
 score, training-fit, resource, personal-funding or training-environment
 judgement is produced.
 
-## Minimal medical report and grant-search evidence
+## Medical report scope
 
-Per-advisor official grant-database searching and its recorded process are mandatory baseline work for every medical report, even when the user never mentions grants. Do not require an extra prompt, a selected Detective section, or a deep-investigation request to include this baseline. Silence is not an exclusion; only an explicit user restriction can narrow it, and each excluded, blocked or unfinished search must still appear with its reason in a partial report.
-
-For a medical report, follow [the shared report contract](../advisor-pipeline/references/medical-profile.md#证据与续跑). Each advisor needs regional official grant-database searches using name variants and institution, covering active and past-five-year projects. Store the actual query, dates, scope, status, limitations and sources in `latestSignals.projectSearches[]`; store found grants in `projects[]`. Supplementary institutional/search-engine pages do not complete a database search. Respect user-selected investigation scope; report missing or blocked searches as partial, never infer “no grants” from empty data. Use descriptive `citation_label` links and separate appointment verification, page access and page update dates. Generate the shared minimalist HTML with five readable modules; do not replace it with custom decorated HTML.
-
-For collaborator selection and concise profiles, follow the medical contract: one documented, direction-relevant collaboration may suffice; report only who the scholar is, current appointment, research direction, and concrete joint projects and outputs with links.
-
-Medical minimum reports also include the [doctoral first-author and lab-website checks](../advisor-pipeline/references/medical-profile.md#博士指导第一作者画像与实验室网站默认最低内容), without an extra user request. Verify the advisor's corresponding/co-corresponding role and first/co-first authors on papers from the past five years; summarize only those joint papers. Seek an attributable lab website and check members/alumni/publications. First authors are not automatically doctoral students; preserve independent identity evidence, dates, sources and search gaps in `doctoralTrajectory`.
-
-报告导航与分区：沿用共享 HTML 生成器的五模块卡片及 01–05 编号，使用米白画布、暖白卡片、浅卡其目录及深陶土色链接。桌面左侧垂直居中的紧凑悬浮目录（宽 216px、距左 16px、最大高度 70vh、内部滚动，正文留出空间）可跳到导师和模块，窄屏使用顶部折叠目录。保持离线单文件、系统字体；只允许内置导航脚本的 CSP 哈希，不加载外部框架。基金过程仍默认展开，打印隐藏目录。
+Follow [the shared medical report contract](../advisor-pipeline/references/medical-profile.md).
+Use three modules: identity; research mainline including recent papers, preprints
+and journal-publication checks;
+corresponding-author papers and their authors.
+Do not investigate or render collaborator profiles or research grants, and do
+not treat missing grant searches as incomplete work. Preserve historical records.
+Include past-five-year papers when the advisor's corresponding/co-corresponding
+role is verified, regardless of the first author's degree or unknown identity.
+Record first/co-first names from the paper; known public roles are optional
+context, never an inclusion requirement. Coauthorship alone does not establish
+supervision. Check the attributable lab website and record sources and dates.
+Generate the shared HTML and supplementary Excel from the same records.

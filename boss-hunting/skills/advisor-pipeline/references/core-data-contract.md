@@ -231,15 +231,8 @@ The projection contains:
   `affiliationAsOf`).
 - `researchMainline` (`longTermQuestion`, `continuingThemes`, `newDirections`,
   `researchObjects`, `methods`, `recentShift`, `participationOnlyWorks`,
-  `representativeWorks[{title, year, venue, doi, url, verifiedRole, relationToMainline, isPreprint, sourceIds}]`,
-  `backSearchWindow`).
-- `collaborationNetwork` (`depth: 1`, `coreCollaborators[{name, currentInstitution, currentPosition, ownCoreDirection, collaborationEvidence: [{type, title, year, url, sourceIds}], sourceIds}]`,
-  `edges[{type: coauthorship|shared_project|shared_grant|shared_trial, target, count, years, sourceIds}]`,
-  `researchNeighbors[{type: citation|co_citation|bibliographic_coupling|semantic_similarity|related_papers}]`,
-  `heuristics`).
-- `latestSignals` (`latestPapers`, `preprints`,
-  `projects[{title, projectId, fundingBody, piRole, period, status, amount, amountUnit, amountBasis, source, sourceIds}]`,
-  `registries`, `trials`).
+  `representativeWorks[{title, year, venue, doi, url, verifiedRole, relationToMainline, isPreprint, publicationStatus, publishedVersionDoi, sourceIds}]`,
+  `latestPapers[]`, `preprints[]` (same work schema), `backSearchWindow`).
 - `doctoralTrajectory` (`firstAuthorProfiles[]`, `labWebsites[]`, `searches[]` as defined in investigation-contract.md, `currentDoctoral[]`, `formerDoctoral[]` with
   supervision evidence / degree or year / topic / outputs / first destination /
   latest public role / information date, `graduateProgram`, `emergingPiNote`,
@@ -250,8 +243,7 @@ Every sub-item carries `sourceIds` into shared evidence. Removed and never
 projected: `trainingFit`, `resources`, `researchFunding`, `doctoralFunding`,
 `doctoralOutcomes`, `trainingEnvironment`, `supportedRisks`, `overallScore`,
 `qualityScore`, `mentoringSuccess`, `placementRate` (`REMOVED_MEDICAL_PROFILE_KEYS`).
-Older stored records keep these keys untouched. Doctoral samples distinguish
-doctoral students from postdocs / residents / masters; no graduation, placement
+Older stored records keep these keys untouched. Corresponding-author papers include masters, doctoral students, postdocs and unknown first-author identities alike; independently verified degree labels are optional context; no graduation, placement
 or success rate is ever computed.
 
 Advisor records additionally carry `pi_evidence_level: A|B|C|D`,
@@ -369,5 +361,3 @@ Evidence statuses are `verified`, `partial`, `not_found`, `not_checked`,
 - Never repeat program-level browsing for advisors in the same program.
 
 ### 动态查询完成记录（兼容增补）
-
-基金 `projectSearches[]` 可增 `requiresInteraction` 与 `interactionAttempts[]`（provider/tool/checkedAt/url/outcome/reason/sourceIds）。NSFC 动态查询必须填写。对应 evidence 增 `interaction_required`、`query_submitted`、`filters_confirmed`、`results_loaded`、`pagination_complete`、`result_count`；布尔字段按实际观察填写，result_count 是完整结果数。保留 page_state、complete_results、searched_sources。静态空框架不能证明查无。详见 [交互执行规则](browser-research-policy.md#动态基金库查询必须执行)。旧记录兼容，不推断完成交互；合并保留尝试与结果证据。

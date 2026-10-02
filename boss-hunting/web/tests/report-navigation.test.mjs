@@ -14,7 +14,7 @@ test('navigation links resolve uniquely; same names and hostile labels cannot in
  for(const match of nav.matchAll(/href="#([^"]+)"/g)) assert.ok(ids.includes(match[1]),match[1]);
  assert.doesNotMatch(nav,/<script>/);
  assert.match(nav,/&lt;script&gt;/);
- for(const key of 'abcde') assert.match(report,new RegExp('class="module module-'+key+'"'));
+ for(const key of 'abe') assert.match(report,new RegExp('class="module module-'+key+'"'));
  const scripts=[...report.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)];
  assert.equal(scripts.length,1);
  const hash=createHash('sha256').update(scripts[0][1]).digest('base64');

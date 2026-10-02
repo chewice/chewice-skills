@@ -1,4 +1,4 @@
-// Additive doctoral evidence; first authors are never inferred to be students.
+// Corresponding-author papers qualify regardless of the first author's degree.
 const list = (v) => Array.isArray(v) ? v : [];
 const value = (row, key, fallback = null) => row?.[key] ?? row?.[key.replace(/[A-Z]/g, c => `_${c.toLowerCase()}`)] ?? fallback;
 const refs = (row, key = "sourceIds") => [...new Set(list(value(row, key, [])).map(String))];
@@ -14,6 +14,7 @@ export function doctoralAdditions(source = {}) {
       identitySourceIds: refs(person, "identitySourceIds"), researchSummary: value(person, "researchSummary"),
       summarySourceIds: refs(person, "summarySourceIds"), sourceIds: refs(person),
       papers: objects(person.papers).map(paper => ({title: paper.title || null, doi: paper.doi || null, url: paper.url || null,
+        venue: paper.venue || paper.journal || null, isPreprint: value(paper, "isPreprint", false) === true,
         date: paper.date || null, year: paper.year || null, firstAuthorRole: value(paper, "firstAuthorRole", "unknown"),
         advisorRole: value(paper, "advisorRole", "unknown"), roleStatus: value(paper, "roleStatus", "not_checked"), sourceIds: refs(paper)})),
     })),
@@ -59,7 +60,6 @@ function supported(ids, evidence, statuses = ["verified"]) {
 
 export function firstAuthorPaperState(paper, window, evidence) {
   if (paper.roleStatus !== "verified" || !supported(paper.sourceIds, evidence)
-    || !["first_author", "co_first_author"].includes(paper.firstAuthorRole)
     || !["corresponding_author", "co_corresponding_author"].includes(paper.advisorRole)) return "作者角色尚未核实或不符合条件";
   if (!window) return "未记录有效的近五年检索范围";
   if (validDate(paper.date)) return paper.date >= window.start && paper.date <= window.end ? "eligible" : "不在近五年范围内";
@@ -77,7 +77,7 @@ export function firstAuthorSummary(person, window, evidence) {
 }
 
 export function firstAuthorIdentity(person, evidence) {
-  return person.identityStatus === "verified" && supported(person.identitySourceIds, evidence) && person.publicRole ? person.publicRole : "身份待核实";
+  return person.identityStatus === "verified" && supported(person.identitySourceIds, evidence) && person.publicRole ? person.publicRole : "";
 }
 
 export function labWebsiteVerified(site, evidence) {
@@ -103,7 +103,7 @@ export function doctoralCoverage(doctoral, evidence) {
 
 export function doctoralWorkbookSummary(doctoral, evidence) {
   const window = doctoralWindow(doctoral);
-  const rows = ["实验室网站与第一作者检索"];
+  const rows = ["实验室网站与通讯作者论文检索；第一作者学历不影响纳入"];
   for (const kind of ["lab_website", "corresponding_papers"]) {
     const searches = doctoral.searches.filter(row => row.kind === kind);
     rows.push(searches.length ? searches.map(row => `${kind} | ${row.status} | ${row.query || ""} | ${row.checkedAt || ""} | ${row.limitations || ""} | ${row.sourceIds.join(", ")}`).join("\n") : `${kind}：未记录此项检索`);

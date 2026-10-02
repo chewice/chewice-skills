@@ -2,7 +2,7 @@
 
 本目录是 Boss Hunting 项目仓库，包含 Pixi 环境、Web 控制台和 Skills；真正被 Codex／Claude Code 识别的主 Skill 入口是 [skills/boss-hunting/SKILL.md](skills/boss-hunting/SKILL.md)。`skills/` 下的 Finder、Detective、Evaluator 等目录是协作模块，不是另一套同名系统。
 
-Boss Hunting 根据公开证据发现和比较博士导师。医学探索的最低输入只有**医学领域、疾病／机制／科学问题、目标地区**，无需 CV。流程从种子研究发现 PI、核验身份、回查近五年研究、扩展合作网络，再调查五个模块：身份与科研定位、近五年主线、合作网络、最新研究与项目、博士培养轨迹。五维证据画像分别呈现方向契合、主线连续性、PI 角色置信度、证据充分性和当前活跃度；未知事项会标明，不生成导师质量总分。申请筛选需要相关真实背景；RP 和套磁信另需真实 CV、确切导师—项目目标与用户确认。
+Boss Hunting 根据公开证据发现和比较博士导师。医学探索的最低输入只有**医学领域、疾病／机制／科学问题、目标地区**，无需 CV。流程从种子研究发现 PI、核验身份、回查近五年研究、再调查三个模块：身份与任职、研究方向与近年论文（含预印本、期刊发表核验）、指导相关论文与作者情况（按导师通讯署名纳入，不筛第一作者学历）。五维证据画像分别呈现方向契合、主线连续性、PI 角色置信度、证据充分性和当前活跃度；未知事项会标明，不生成导师质量总分。申请筛选需要相关真实背景；RP 和套磁信另需真实 CV、确切导师—项目目标与用户确认。
 
 设计参考 Ben A. Barres 的 NeuroView [*How to pick a graduate advisor*](https://doi.org/10.1016/j.neuron.2013.10.005)（[PubMed](https://pubmed.ncbi.nlm.nih.gov/24139033/)）。文章讨论导师选择与指导质量，**并非对 Boss Hunting 的验证或认可**。本 Skill 只比较可公开核验的研究、项目及指导关系等事实，不推断导师人格或组内氛围。
 
@@ -21,11 +21,11 @@ Boss Hunting 根据公开证据发现和比较博士导师。医学探索的最�
 | 推荐 | `OPENALEX_API_KEY` | 论文、作者、机构及合作线索；当前任职仍须官方页面核实 | [OpenAlex 设置](https://openalex.org/settings/api) |
 | 推荐 | `NCBI_API_KEY` | PubMed／E-utilities 生物医学文献；提高匿名检索额度 | [My NCBI 设置](https://www.ncbi.nlm.nih.gov/account/settings/) |
 | 按需 | `ORCID_CLIENT_ID`＋`ORCID_CLIENT_SECRET` | 作者身份消歧、姓名变体及公开履历 | [ORCID Public API 注册](https://info.orcid.org/documentation/integration-guide/registering-a-public-api-client/) |
-| 日本方向按需 | `CINII_APP_ID` | CiNii／KAKEN 论文、研究者和科研费记录 | [CiNii 开发者注册](https://support.nii.ac.jp/en/cinii/api/developer) |
+| 日本方向按需 | `CINII_APP_ID` | CiNii 论文、研究者和机构记录 | [CiNii 开发者注册](https://support.nii.ac.jp/en/cinii/api/developer) |
 | 按需 | `SEMANTIC_SCHOLAR_API_KEY` | 论文、引文及相关研究线索；引文关系不等于合作 | [Semantic Scholar 申请](https://www.semanticscholar.org/product/api#api-key-form) |
 | 有机构权限时按需 | `WOS_API_KEY` | Web of Science 文献与引文交叉核对；Key 不代表拥有 Expanded API 或特定订阅层级 | [Clarivate Developer Portal](https://developer.clarivate.com/) |
 
-申请时打开对应入口：OpenAlex 登录后在 API 设置复制 Key；NCBI 在 Account Settings 的 API Key Management 创建；ORCID 在 Developer Tools 注册 Public API client；CiNii/KAKEN 填写 Web API 开发者表单；Semantic Scholar 提交 Request an API Key 表单并查收邮件；WoS 在门户注册应用并申请订阅计划，需向机构确认 API 权限。
+申请时打开对应入口：OpenAlex 登录后在 API 设置复制 Key；NCBI 在 Account Settings 的 API Key Management 创建；ORCID 在 Developer Tools 注册 Public API client；CiNii 填写 Web API 开发者表单；Semantic Scholar 提交 Request an API Key 表单并查收邮件；WoS 在门户注册应用并申请订阅计划，需向机构确认 API 权限。
 
 **提供形式：**在用户自己的 `credentials.env` 中按 `变量名=申请到的值` 每行填写一项；这是纯文本 `.env` 文件，不是 JSON。只填写已经申请到的凭据，其他项留空或删除；ORCID 的 Client ID 和 Client Secret 要一起填写。例如（尖括号内容仅是占位符，不是真实 Key）：
 
@@ -63,15 +63,13 @@ $boss-hunting 探索肿瘤免疫治疗反应的博士导师。医学领域是肿
 
 ## Codex／Claude Code 的 Subagents
 
-主 Agent 规划子方向、调度、裁决冲突、合并证据并生成报告。独立方向或不同 PI 可并行；同一 PI 先做身份核验，再做近五年回查和网络扩展；证据审计最后执行。
+主 Agent 规划子方向、调度、裁决冲突、合并证据并生成报告。独立方向或不同 PI 可并行；同一 PI 先做身份核验，再做近五年回查与论文核验；证据审计最后执行。
 
 | 角色 | 责任 |
 | --- | --- |
 | Seed Scout | 用综述绘制概念范围，从近五年原创研究产生 PI 候选 |
 | Identity Resolver | 消歧作者，并用机构页面及作者贡献核定 PI 证据等级 |
 | Trajectory Mapper | 回查每位 PI 近五年研究，区分持续主线与偶发参与 |
-| Network Expander | 扩展合作，区分共同研究／项目与研究邻近关系 |
-| Regional Project Investigator | 按地区核对公开项目、角色、期限和状态 |
 | Doctoral Trajectory Investigator | 核对可证实的博士指导关系与培养轨迹 |
 | Evidence Auditor | 最后检查来源、时点、冲突、缺口及结论边界 |
 

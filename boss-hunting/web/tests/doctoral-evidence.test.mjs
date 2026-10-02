@@ -13,11 +13,11 @@ const raw = () => ({first_author_profiles:[{person_id:"person-1",name:"Same Name
     {kind:"corresponding_papers",database:"Publisher",query:"Fixture PI corresponding",checkedAt:"2026-09-23",windowStart:"2021-09-23",windowEnd:"2026-09-23",status:"found",sourceIds:["paper"]}]});
 const fixture = async (name="medical-discovery") => JSON.parse(await readFile(new URL(`./fixtures/${name}.json`,import.meta.url),"utf8"));
 
-test("five-year author eligibility requires both verified roles and precise boundary dates",()=>{
+test("five-year author eligibility requires verified advisor roles and precise boundary dates",()=>{
  const d=doctoralAdditions(raw()); const window=doctoralWindow(d);
  assert.deepEqual(window,{start:"2021-09-23",end:"2026-09-23"});
  for(const firstAuthorRole of ["first_author","co_first_author"]) for(const advisorRole of ["corresponding_author","co_corresponding_author"]) assert.equal(firstAuthorPaperState(paper({firstAuthorRole,advisorRole}),window),"eligible");
- for(const change of [{advisorRole:"last_author"},{roleStatus:"partial"},{sourceIds:[]},{firstAuthorRole:"coauthor"}]) assert.notEqual(firstAuthorPaperState(paper(change),window),"eligible");
+ for(const change of [{advisorRole:"last_author"},{roleStatus:"partial"},{sourceIds:[]}]) assert.notEqual(firstAuthorPaperState(paper(change),window),"eligible");
  for(const date of ["2021-09-23","2026-09-23"]) assert.equal(firstAuthorPaperState(paper({date}),window),"eligible");
  for(const date of ["2021-09-22","2026-09-24"]) assert.equal(firstAuthorPaperState(paper({date}),window),"不在近五年范围内");
  assert.equal(firstAuthorPaperState(paper({date:null,year:2024}),window),"eligible");
@@ -28,8 +28,8 @@ test("five-year author eligibility requires both verified roles and precise boun
 
 test("first authors are not inferred to be students and summaries require qualifying-paper references",()=>{
  const d=doctoralAdditions(raw()); const person=d.firstAuthorProfiles[0]; const window=doctoralWindow(d);
- assert.equal(firstAuthorIdentity(person),"身份待核实");
- person.identityStatus="verified"; assert.equal(firstAuthorIdentity(person),"身份待核实");
+ assert.equal(firstAuthorIdentity(person),"");
+ person.identityStatus="verified"; assert.equal(firstAuthorIdentity(person),"");
  person.identitySourceIds=["member-page"];assert.equal(firstAuthorIdentity(person),"PhD student");
  assert.equal(firstAuthorSummary(person,window),"Mechanisms supported by joint work");
  person.papers[0].advisorRole="last_author";assert.match(firstAuthorSummary(person,window),/待补充或核实/);
@@ -67,8 +67,8 @@ test("HTML and Excel retain new doctoral information and expose legacy gaps",asy
  input.evidence.push(...["lab","paper"].map(id=>({evidence_id:id,entity_id:advisor.advisor_id,url:`https://example.org/${id}`,status:"verified",citation_label:id==="paper"?"共同研究论文":"实验室成员页"})));
  const report=buildAdvisorReport(input); const section=report.split('id="advisor-1-e"')[1].split("</article>")[0];
  assert.ok(section.indexOf("实验室官网与查阅情况")<section.indexOf("近五年通讯作者论文中的第一作者"));
- assert.ok(section.indexOf("近五年通讯作者论文中的第一作者")<section.indexOf("当前博士生（公开可见）"));
- assert.match(section,/页面更新时间：页面未注明/);assert.match(section,/身份待核实/);assert.match(section,/Mechanisms supported by joint work/);
+ assert.match(section,/不以第一作者学历或身份是否已核实为条件/);
+ assert.match(section,/页面更新时间：页面未注明/);assert.doesNotMatch(section,/身份待核实/);assert.match(section,/Mechanisms supported by joint work/);
  const item=section.match(/<li><a[^>]+>Joint mechanisms paper[\s\S]*?<\/li>/)[0];assert.equal((item.match(/href=/g)||[]).length,1);
  const sheets=buildMedicalWorkbookSheets({project:input.project,advisorRecords:input.advisors,evidence:input.evidence});
  assert.match(JSON.stringify(sheets),/Joint mechanisms paper/);assert.match(JSON.stringify(sheets),/https:\/\/example.org\/members/);
@@ -107,4 +107,25 @@ test("missing or unverified evidence cannot certify author roles, lab attributio
  d.searches[0].status="inaccessible";assert.equal(doctoralCoverage(d,evidence),false);
  d.searches[0].status="found";d.labWebsites[0].pages[0].accessedAt=null;assert.equal(doctoralCoverage(d,evidence),false);
  assert.match(firstAuthorPaperState(paper({date:"2025-02-31",year:2025}),window),/日期待核实/);
+});
+
+
+test("masters, doctoral and unknown first-author identities do not gate corresponding papers or completion", async()=>{
+ const input=await fixture();
+ const evidence=["paper","lab"].map(id=>({evidence_id:id,status:"verified",url:`https://example.org/${id}`}));
+ for(const publicRole of ["Master student","PhD student",null]) {
+  const addition=raw();
+  addition.first_author_profiles[0].public_role=publicRole;
+  addition.first_author_profiles[0].identity_status="not_checked";
+  addition.first_author_profiles[0].papers[0].firstAuthorRole="unknown";
+  const d=doctoralAdditions(addition);
+  assert.equal(firstAuthorPaperState(d.firstAuthorProfiles[0].papers[0],doctoralWindow(d),evidence),"eligible");
+  assert.equal(doctoralCoverage(d,evidence),true);
+  input.advisors[0].evidence_profile.doctoral_trajectory=addition;
+  input.evidence=evidence;
+  const report=buildAdvisorReport(input);
+  assert.match(report,/Joint mechanisms paper/);
+  assert.match(report,/Mechanisms supported by joint work/);
+  assert.doesNotMatch(report,/身份待核实|第一作者或实验室补查尚有缺口/);
+ }
 });

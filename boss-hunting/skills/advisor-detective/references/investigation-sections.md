@@ -84,16 +84,16 @@ is selected, ask a separate yes/no question about local third-party
 community-source download and parsing. The default is no. Declining does not
 remove the section and does not block research from other public sources.
 
-Medical projects never trigger this question: none of the five medical modules
+Medical projects never trigger this question: none of the three medical modules
 is community-relevant, and medical `sourcePolicy` defaults to `public_only`.
 A user must explicitly expand the source policy before the independent
 community consent mechanism applies. Browser permission does not bypass either
 the candidate/section confirmation or source-policy gate.
 
-## Medical five-module menu
+## Medical three-module menu
 
 Medical / biomedical projects do not use the generic catalog above. The
-renderer (`getDetectiveSectionCatalog`) returns exactly these five public-
+renderer (`getDetectiveSectionCatalog`) returns exactly these three public-
 evidence modules, all selected by default. Training fit, lab resources,
 doctoral personal funding, training environment / atmosphere, applicant
 ability and overall quality scores are not selectable and are not investigated.
@@ -102,9 +102,7 @@ ability and overall quality scores are not selectable and are not investigated.
 | ---: | --- | --- | --- |
 | 1 | `identity_research_positioning` | A. 导师身份与当前科研定位 | selected by default |
 | 2 | `research_mainline_5y` | B. 近五年科研主线与研究路线 | selected by default |
-| 3 | `collaboration_network` | C. 科研合作网络 | selected by default |
-| 4 | `latest_signals_projects` | D. 最新公开研究动向与项目支撑 | selected by default |
-| 5 | `doctoral_trajectory` | E. 博士培养轨迹 | selected by default |
+| 3 | `doctoral_trajectory` | C. 指导相关论文与作者情况 | selected by default |
 
 Module scope (details in
 [medical-profile.md](../../advisor-pipeline/references/medical-profile.md)):
@@ -112,10 +110,8 @@ Module scope (details in
 | ID | Public-evidence scope |
 | --- | --- |
 | `identity_research_positioning` | Current institution / department / position, official profile, identifiers and name variants, current research positioning, the minimum doctoral-supervision link (graduate school / doctoral programme / supervisor listing); earlier institutions are preserved as history |
-| `research_mainline_5y` | Long-term scientific question, continuing themes, new directions, research objects and methods, recent shift, representative works with verified roles; participation-only works listed separately and not counted as the mainline; five-year back-search window |
-| `collaboration_network` | Selected direct collaborators: one direction-relevant, documented joint paper/project/grant/trial can suffice; consortium papers still need specific participation evidence. Report only name, current appointment, research direction, and concrete joint projects/outputs with links. Citation/similarity leads stay separate internally; no recursive investigation |
-| `latest_signals_projects` | Latest papers and preprints (flagged), public project records with the fixed field list (title, project id, funding body, PI role, period, status, published amount + unit), registries and trials; `not_found` in a public database never means "no funding" |
-| `doctoral_trajectory` | Default lab website/member/alumni/publication checks and first-author profiles of the advisor’s verified corresponding/co-corresponding papers in the past five years; first authors require separate identity evidence to count as doctoral students. Verified current and former doctoral students, supervision evidence, topics, outputs, first public destination, latest public role and information date; graduate-programme mapping; no graduation rate, destination rate or training success rate; an emerging PI without graduates is not a negative signal |
+| `research_mainline_5y` | Long-term scientific question, continuing themes, new directions, research objects and methods, recent shift, representative works with verified roles; participation-only works listed separately and not counted as the mainline; five-year back-search window; recent papers, preprints and journal-publication checks |
+| `doctoral_trajectory` | Lab website checks and past-five-year papers with verified advisor corresponding/co-corresponding roles; first/co-first author names and research summaries from these papers. Include papers regardless of first-author degree or unknown identity; known public roles and independently documented supervision are optional context. |
 
 Mentoring style, feedback speed, working hours, atmosphere, resources,
 personal funding and applicant fit remain out of scope; do not infer them from
@@ -124,7 +120,7 @@ retractions and institutional announcements are recorded as formal records
 with source independence preserved.
 
 Legacy medical drafts that still name generic section IDs are re-scoped to the
-five modules during normalization; the earlier confirmed snapshot is kept as
+three modules during normalization; the earlier confirmed snapshot is kept as
 history but no longer counts as current confirmation.
 
 ## Guidance and group ecology subdimensions

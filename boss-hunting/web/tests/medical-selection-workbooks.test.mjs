@@ -177,7 +177,7 @@ test("medical real program validation rejects invented IDs and mismatched intake
   assert.equal(result.selected[0].overallMatch, null, "stale mode cannot enable old numeric fallback");
 });
 
-test("T04 T10 medical workbook keeps five-module columns, public project records and no training/resource/funding columns", () => {
+test("T04 T10 medical workbook keeps three-module columns without public grant records and no training/resource/funding columns", () => {
   const input = { project, applicationRows: [candidate("funding", {
     evidenceProfile: { researchQuestionFit: { status: "direct" },
       researchRouteContinuity: { status: "sustained_core" },
@@ -193,10 +193,10 @@ test("T04 T10 medical workbook keeps five-module columns, public project records
   })] };
   const sheet = buildMedicalWorkbookSheets(input)[0];
   const byHeader = Object.fromEntries(sheet.headers.map((header, index) => [header, sheet.rows[0][index]]));
-  assert.match(byHeader["D 公开项目记录"], /FIX-1.*Fixture Funder.*PI.*1000000 USD/);
+  assert.doesNotMatch(JSON.stringify(sheet), /FIX-1|Fixture Funder|1000000 USD|核心合作者|研究邻居|公开项目记录/);
   assert.match(byHeader["PI 角色置信 / Level"], /verified[\s\S]*A/);
-  assert.match(byHeader["E 已毕业博士"], /Fixture graduate/);
-  assert.match(byHeader["E Graduate Program"], /First cohort still in progress/);
+  assert.match(byHeader["C 已毕业博士（已有补充信息）"], /Fixture graduate/);
+  assert.match(byHeader["C 通讯作者论文、作者与实验室"], /First cohort still in progress/);
   assert.match(byHeader["主线连续性"], /sustained_core/);
   assert.ok(!sheet.headers.some((header) => /综合匹配分|申请定位|QS|训练|研究资源|博士生资助|培养制度|研究项目经费|培养成功/.test(header)), sheet.headers.join("|"));
   assert.doesNotMatch(JSON.stringify(sheet.rows[0]), /annual_parent_award|institution_owned|supported/);

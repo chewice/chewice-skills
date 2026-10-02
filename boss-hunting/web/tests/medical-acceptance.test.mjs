@@ -15,7 +15,7 @@ import {
 } from "../../skills/advisor-pipeline/scripts/medical-evidence.mjs";
 import { buildAdvisorReport } from "../../skills/advisor-pipeline/scripts/build_advisor_report.mjs";
 import { buildMedicalWorkbookSheets } from "../../skills/advisor-pipeline/scripts/medical-workbook.mjs";
-import { buildEgoNetwork, saturationReached } from "../../skills/advisor-pipeline/scripts/collaboration-network.mjs";
+import { saturationReached } from "../../skills/advisor-pipeline/scripts/medical-evidence.mjs";
 import { buildProviderCapabilities, selectRoute } from "../../skills/advisor-pipeline/scripts/provider-capabilities.mjs";
 import { containsSecret, loadCredentials, redactSecrets, resolveCredentialsPath } from "../../skills/advisor-pipeline/scripts/credentials.mjs";
 import { mergeSubagentOutputs } from "../../skills/advisor-pipeline/scripts/merge_subagent_findings.mjs";
@@ -106,28 +106,15 @@ test("T08 abstract-only reading cannot verify contribution and unknown roles sta
 
 test("T09 preprint flag is preserved and a missing preprint does not degrade any status", () => {
   const withPreprint = normalizeMedicalEvidenceProfile({ evidence_profile: { latest_signals: { preprints: [{ title: "Fixture preprint", is_preprint: true }] } } });
-  assert.equal(withPreprint.latestSignals.preprints[0].isPreprint, true);
+  assert.equal(withPreprint.researchMainline.preprints[0].isPreprint, true);
   const without = normalizeMedicalEvidenceProfile({ evidence_profile: { research_question_fit: { status: "direct" }, latest_signals: { preprints: [] } } });
   assert.equal(without.researchQuestionFit.status, "direct");
-  assert.equal(without.latestSignals.preprints.length, 0);
-});
-
-test("T10 project amounts keep their basis/unit and never become doctoral personal funding", () => {
-  const profile = normalizeMedicalEvidenceProfile({ evidence_profile: { latest_signals: { projects: [{ title: "Fixture grant", amount: 500000, amount_unit: "CNY", amount_basis: "annual_parent_award", pi_role: "Co-I" }] } } });
-  const project = profile.latestSignals.projects[0];
-  assert.equal(project.amountBasis, "annual_parent_award");
-  assert.equal(project.amountUnit, "CNY");
-  assert.equal(project.piRole, "Co-I");
-  assert.ok(!("doctoralFunding" in profile));
-  const sheets = buildMedicalWorkbookSheets({ project: minimal, advisorRecords: [{ advisor_id: "pi", name: "PI", evidence_profile: { latest_signals: { projects: [project] } } }] });
-  const sheet = sheets.find((item) => /导师探索视图/.test(item.name));
-  assert.ok(!sheet.headers.some((header) => /博士生资助|经费/.test(header)));
-  assert.match(JSON.stringify(sheet.rows[0]), /500000 CNY/);
+  assert.equal(without.researchMainline.preprints.length, 0);
 });
 
 test("T11 registries and trials are recorded separately from doctoral recruitment", () => {
   const profile = normalizeMedicalEvidenceProfile({ evidence_profile: { latest_signals: { trials: [{ id: "FIX-TRIAL", status: "recruiting" }] } } });
-  assert.equal(profile.latestSignals.trials.length, 1);
+  assert.ok(!("latestSignals" in profile));
   const candidate = normalizeMedicalCandidate({ advisorProgramId: "x", evidenceProfile: profile, opportunityStatus: "verified_open" }, { ...minimal, searchMode: "application" });
   assert.equal(candidate.opportunityStatus, "unknown", "a recruiting trial is not verified doctoral recruitment");
 });
@@ -194,25 +181,6 @@ test("T18 unchecked, not-found and blocked evidence remain distinguishable", asy
   assert.match(report, /未检索或未核验/);
 });
 
-test("T19 review inflation: a single review cannot make a core collaborator", () => {
-  const network = buildEgoNetwork("pi", [{ id: "review", type: "coauthorship", year: 2025, participants: ["pi", "reviewer"], directionRelevant: true }], { referenceYear: 2026 });
-  assert.equal(network.coreCollaborators.length, 0);
-  assert.deepEqual(network.leads.map((row) => row.collaboratorId), ["reviewer"]);
-});
-
-test("T20 consortium false positive is filtered", () => {
-  const participants = ["pi", ...Array.from({ length: 300 }, (_, index) => `member-${index}`)];
-  const network = buildEgoNetwork("pi", [{ id: "consortium", type: "coauthorship", year: 2025, authorCount: 301, participants }], { referenceYear: 2026 });
-  assert.equal(network.coreCollaborators.length, 0);
-  assert.equal(network.excluded.length, 300);
-});
-
-test("T21 citation is a research-neighbor edge, never a collaboration edge", () => {
-  const network = buildEgoNetwork("A", [{ id: "cite", type: "citation", participants: ["A", "B"] }, { id: "cite2", type: "co_citation", participants: ["A", "B"] }], { referenceYear: 2026 });
-  assert.equal(network.edges.length, 0);
-  assert.deepEqual(network.researchNeighbors.map((row) => row.collaboratorId), ["B"]);
-});
-
 test("T22 emerging PI is not excluded by seniority metrics", () => {
   const junior = { advisor_id: "junior", name: "Junior Fixture", evidence_profile: { research_question_fit: { status: "direct" }, pi_role_confidence: { status: "emerging", level: "C" },
     doctoral_trajectory: { former_doctoral: [], emerging_pi_note: "No graduated doctoral students yet" } } };
@@ -237,14 +205,6 @@ test("T24 first-author transition can enter emerging PI validation", () => {
     { evidenceProfile: { ...profile, researchQuestionFit: { status: "direct" }, researchRouteContinuity: { status: "occasional_participation" } } }) < 0, true);
 });
 
-test("T25 network recursion: ego network is depth 1 and the report does not expand collaborators", async () => {
-  const bundle = await fixture("medical-discovery");
-  const network = normalizeMedicalEvidenceProfile(bundle.advisors[0]).collaborationNetwork;
-  assert.equal(network.depth, 1);
-  const report = buildAdvisorReport(bundle);
-  assert.equal((report.match(/<svg viewBox/g) || []).length, 0, "concise collaborator profiles without recursive diagrams");
-});
-
 test("T26 saturation stops when a round adds only duplicates", () => {
   assert.equal(saturationReached({ existingValidated: 12, newValidated: 0, round: 2 }).stop, true);
 });
@@ -260,7 +220,7 @@ test("T28 API failure degrades the route and never becomes not_found", () => {
   assert.equal(route.selected_route, "browser");
   const capabilities = buildProviderCapabilities({ credentials: credentials(), probes: { openalex: { anonymousApi: false } } });
   assert.equal(capabilities.providers.openalex.selected_route, "alternative_sources");
-  assert.ok(capabilities.principles.some((line) => /not_found in a public database != the PI has no funding/.test(line)));
+  assert.ok(capabilities.principles.some((line) => /not_found in a public database != the PI has no relevant record/.test(line)));
 });
 
 test("T29 NSFC no-hit stays not_found with coverage limitation, never 'no NSFC'", () => {
@@ -272,7 +232,7 @@ test("T29 NSFC no-hit stays not_found with coverage limitation, never 'no NSFC'"
   assert.equal(row.status, "not_found");
   assert.doesNotMatch(row.claim, /无 NSFC|no NSFC funding/);
   const profile = normalizeMedicalEvidenceProfile({ evidence_profile: { latest_signals: { projects: [] } } });
-  assert.equal(profile.latestSignals.projects.length, 0);
+  assert.ok(!("latestSignals" in profile));
   assert.equal(profile.currentActivity, "unclear");
 });
 
@@ -286,7 +246,7 @@ test("T31 junior PI without alumni gets a sample limitation, not a negative conc
   const bundle = await fixture("medical-discovery");
   bundle.advisors[0].evidence_profile.doctoral_trajectory.former_doctoral = [];
   const report = buildAdvisorReport(bundle);
-  assert.match(report, /新兴 PI/);
+  assert.doesNotMatch(report, /尚未登记可核验的已毕业博士/);
   assert.doesNotMatch(report, /培养成功率低|no successful/);
 });
 

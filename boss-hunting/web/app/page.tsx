@@ -2699,7 +2699,7 @@ export default function Home() {
                   ] as const).map(([key, label, hint]) => <label key={key}><span>{label}</span><textarea value={medicalDraft[key]} placeholder={hint} rows={2} onChange={(event) => { setIntakeDirty(true); setMedicalDraft((current) => ({ ...current, [key]: event.target.value, ...(["education", "researchExperience", "qualifications"].includes(key) ? { backgroundSource: "self_reported", backgroundEdited: true } : {}) })); }} /></label>)}
                   <label><input type="checkbox" checked={medicalDraft.browserEnabled} onChange={(event) => { setIntakeDirty(true); setMedicalDraft((current) => ({ ...current, browserEnabled: event.target.checked })); }} />允许已可用浏览器查询公开资料</label>
                   <label><input type="checkbox" checked={medicalDraft.browserDownloads} onChange={(event) => { setIntakeDirty(true); setMedicalDraft((current) => ({ ...current, browserDownloads: event.target.checked })); }} />允许下载必要公开文件</label>
-                  <small>不包含安装、登录、付费、上传材料或提交申请。第 3 步在下方填写目标国家/地区；保存后开始发现，五模块深查另行确认。API 凭据放在用户配置目录的 credentials.env，不要在此粘贴。</small>
+                  <small>不包含安装、登录、付费、上传材料或提交申请。第 3 步在下方填写目标国家/地区；保存后开始发现，三模块深查另行确认。API 凭据放在用户配置目录的 credentials.env，不要在此粘贴。</small>
                 </>}
               </div>
               <div className="intake-progress" aria-label="申请资料完成进度">

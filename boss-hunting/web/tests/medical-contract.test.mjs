@@ -122,11 +122,11 @@ test("target is authoritative and medical fields survive repeated normalization"
   assert.deepEqual(cleared.medicalProfile.regions, []);
 });
 
-test("T04 medical default sections are the five modules and remain public-only even with community resources requested", () => {
+test("T04 medical default sections are the three modules and remain public-only even with community resources requested", () => {
   const project = medical();
   assert.deepEqual(project.investigation.draft.selectedSections, MEDICAL_DEFAULT_DETECTIVE_SECTIONS);
   assert.deepEqual(MEDICAL_DEFAULT_DETECTIVE_SECTIONS, [
-    "identity_research_positioning", "research_mainline_5y", "collaboration_network", "latest_signals_projects", "doctoral_trajectory",
+    "identity_research_positioning", "research_mainline_5y", "doctoral_trajectory",
   ]);
   assert.deepEqual(getDetectiveSectionCatalog(project).map((s) => s.id), MEDICAL_DEFAULT_DETECTIVE_SECTIONS);
   assert.deepEqual(getDetectiveSectionCatalog(project).filter((s) => s.defaultSelected).map((s) => s.id), MEDICAL_DEFAULT_DETECTIVE_SECTIONS);
@@ -243,4 +243,15 @@ test("migration never overwrites a same-timestamp backup", async () => {
     assert.equal(await readFile(previous, "utf8"), "previous backup");
     assert.equal(await readFile(result.backups[0], "utf8"), '{"schemaVersion":8}');
   } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("retired medical modules leave defaults while old confirmations retain their historical scope", () => {
+  const sections = ["identity_research_positioning", "research_mainline_5y", "collaboration_network", "latest_signals_projects", "doctoral_trajectory"];
+  const selection = {selectedAdvisorProgramIds:["fictional-target"], selectedSections:sections, sourcePolicy:"public_only", researchScopeFingerprint:"old-five-module-scope"};
+  const project = normalizeProjectMetadata({domainProfile:"medical", searchMode:"discovery", investigation:{
+    draft:{...selection, revision:1}, confirmed:{...selection, revision:1, fingerprint:investigationFingerprint(selection)},
+  }});
+  assert.deepEqual(project.investigation.draft.selectedSections, MEDICAL_DEFAULT_DETECTIVE_SECTIONS);
+  assert.deepEqual(project.investigation.confirmed.selectedSections, sections);
+  assert.equal(isInvestigationConfirmationCurrent(project.investigation), false);
 });

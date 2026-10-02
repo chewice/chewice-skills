@@ -23,7 +23,7 @@ export const WOS_TIERS = ["starter", "researcher", "expanded", "limited", "unava
 // controls. Google Scholar is discovery/backcheck only, never authoritative.
 export const PROVIDER_REGISTRY = {
   openalex: { label: "OpenAlex", anonymousApi: true, browser: true, credential: "openalex",
-    roles: ["researcher_discovery", "works_authors_institutions", "coauthor_graph", "author_back_search"],
+    roles: ["researcher_discovery", "works_authors_institutions", "author_back_search"],
     cannotProveAlone: ["current_position", "doctoral_supervision", "author_contribution", "current_project_status"],
     alternatives: ["pubmed", "orcid", "official_institution_page"] },
   ncbi: { label: "NCBI E-utilities / PubMed", anonymousApi: true, browser: true, credential: "ncbi",
@@ -33,9 +33,9 @@ export const PROVIDER_REGISTRY = {
   orcid: { label: "ORCID", anonymousApi: true, browser: true, credential: "orcid",
     roles: ["identity_resolution", "name_variants", "affiliation_history", "public_works_linkage"],
     cannotProveAlone: ["current_affiliation"], alternatives: ["official_institution_page"] },
-  cinii: { label: "CiNii / KAKEN", anonymousApi: false, browser: true, credential: "cinii",
-    roles: ["jp_researchers", "jp_papers", "jp_institutions", "kaken_grants"],
-    note: "Without CINII_APP_ID use the CiNii Research and KAKEN websites through Browser Use; do not claim API parity.",
+  cinii: { label: "CiNii Research", anonymousApi: false, browser: true, credential: "cinii",
+    roles: ["jp_researchers", "jp_papers", "jp_institutions"],
+    note: "Without CINII_APP_ID use the CiNii Research website through Browser Use; do not claim API parity.",
     alternatives: ["researchmap", "official_institution_page"] },
   semantic_scholar: { label: "Semantic Scholar", anonymousApi: true, browser: true, credential: "semantic_scholar",
     roles: ["citations", "references", "related_papers", "research_neighborhood"],
@@ -46,7 +46,7 @@ export const PROVIDER_REGISTRY = {
     alternatives: ["openalex", "semantic_scholar", "pubmed"] },
   google_scholar: { label: "Google Scholar", anonymousApi: false, browser: true, credential: null,
     roles: ["discovery_backcheck"], authority: "not_authoritative",
-    note: "Leads must be re-verified in PubMed, DOI/publisher, ORCID, the current institution or official funding records. Stop at CAPTCHA/login.",
+    note: "Leads must be re-verified in PubMed, DOI/publisher, ORCID, the current institution. Stop at CAPTCHA/login.",
     alternatives: ["pubmed", "openalex"] },
 };
 
@@ -128,7 +128,7 @@ export function buildProviderCapabilities({ credentials, hostTools = {}, probes 
     principles: [
       "credentials are optional accelerators, not prerequisites",
       "browser fallback seeks sufficient evidence for the research question; it does not reproduce every API field",
-      "not_found in a public database != the PI has no funding / no record",
+      "not_found in a public database != the PI has no relevant record",
       "no CAPTCHA, login or paywall bypass; Browser never manufactures paid entitlement",
     ],
   };

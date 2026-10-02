@@ -26,15 +26,13 @@ export const GENERIC_DETECTIVE_SECTIONS = [
   "collaboration_industry_network",
 ];
 
-// Medical / biomedical discovery investigates exactly five public-evidence
+// Medical / biomedical discovery investigates exactly three public-evidence
 // modules. Training environment, lab resources, doctoral personal funding,
 // applicant ability and overall quality scores are not selectable here.
 export const MEDICAL_DETECTIVE_SECTION_CATALOG = [
   { id: "identity_research_positioning", label: "A. 导师身份与当前科研定位", defaultSelected: true },
   { id: "research_mainline_5y", label: "B. 近五年科研主线与研究路线", defaultSelected: true },
-  { id: "collaboration_network", label: "C. 科研合作网络", defaultSelected: true },
-  { id: "latest_signals_projects", label: "D. 最新公开研究动向与项目支撑", defaultSelected: true },
-  { id: "doctoral_trajectory", label: "E. 博士培养轨迹", defaultSelected: true },
+  { id: "doctoral_trajectory", label: "C. 指导相关论文与作者情况", defaultSelected: true },
 ];
 
 export const MEDICAL_DETECTIVE_SECTIONS = MEDICAL_DETECTIVE_SECTION_CATALOG.map((section) => section.id);
@@ -186,6 +184,7 @@ export function medicalIntakeStatus(project = {}) {
 
 function medicalScopeFingerprint(project) {
   return createHash("sha256").update(JSON.stringify({
+    reportScope: "three_modules_corresponding_papers",
     domainProfile: project.domainProfile, searchMode: project.searchMode,
     evaluationMode: project.evaluationMode, medicalProfile: project.medicalProfile,
     target: project.target, degree: project.degree, season: project.season,
@@ -412,6 +411,12 @@ function normalizeConfirmed(input, now) {
       requested: Boolean(input.communitySources?.consented),
     },
   });
+  // Retain removed modules in historical confirmations, never in new drafts.
+  const originalSections = input.selectedSections ?? input.selected_sections;
+  if (Array.isArray(originalSections)) {
+    selection.selectedSections = [...new Set(originalSections.map(String).filter(section =>
+      DETECTIVE_SECTIONS.includes(section) || ["collaboration_network", "latest_signals_projects"].includes(section)))];
+  }
   const consented =
     selection.sourcePolicy !== "public_only" &&
     hasCommunitySections(selection.selectedSections) &&
@@ -865,7 +870,7 @@ export function normalizeProjectMetadata(
     const policy = medical ? (draft.sourcePolicy === "community_allowed" ? "community_allowed" : "public_only")
       : "community_allowed";
     const declaredSections = draft.selectedSections ?? draft.selected_sections;
-    // Medical projects only investigate the five public-evidence modules. A
+    // Medical projects only investigate the three public-evidence modules. A
     // legacy medical draft that still names generic sections (resources,
     // environment, community) is re-scoped to the current defaults; the old
     // confirmed snapshot then no longer matches and returns to the draft gate.

@@ -76,9 +76,8 @@ test('identity preflight is read only and returns actionable gaps for old record
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
-test('identity gaps alone override a complete audit; completed facts restore completion', () => {
+test('identity gaps alone override a complete audit; missing grants do not block completion', () => {
   const row = advisor(); const sources = evidence();
-  row.evidence_profile.latest_signals = { projectSearches: [{ database: 'Official fixture database', sourceKind: 'official_database', query: 'Fictional PI + Example University', scope: 'active and past five years', checkedAt: '2026-09-23', status: 'not_found', sourceIds: ['search'] }] };
   row.evidence_profile.doctoral_trajectory = { searches: ['corresponding_papers', 'lab_website'].map(kind => ({ kind, database: 'Official fixture pages', query: 'Fictional PI', checkedAt: '2026-09-23', status: 'not_found', sourceIds: ['search'] })) };
   sources.push({ evidence_id: 'search', entity_id: row.advisor_id, status: 'not_found', url: 'https://example.org/search', claim: 'No results in the fictional checked scope' });
   const input = { project, advisors: [row], evidence: sources, programs: [], candidates: [], audit: { completionTier: 'complete' } };

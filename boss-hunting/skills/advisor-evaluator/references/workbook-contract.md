@@ -10,7 +10,7 @@ It requires no external website assets or browser package. Re-exporting reads
 local records and does not repeat the investigation.
 
 In the HTML comparison and each information section, place direct, concrete
-source links beside each study, project record, collaborator, doctoral record,
+source links beside each study, author profile, doctoral record,
 eligibility condition, deadline and comparison reason.
 Resolve each item's `sourceIds` / `source_ids` through the shared evidence
 records using the field-level rules in
@@ -100,7 +100,7 @@ fake IDs to this material-selection artifact.
 The HTML exporter merges a current confirmed evaluation into the matching
 candidate by ID, preserving real advisor/program/degree/intake identity. Its
 updated fit / continuity reasons, boundary, unknowns and next actions appear in
-both the overview table and the advisor's five-module section. Unknown or repeated evaluation IDs
+both the overview table and the advisor's three-module section. Unknown or repeated evaluation IDs
 and identity changes are rejected. The comparison shows readable reasons and
 evidence links rather than raw source-ID objects.
 

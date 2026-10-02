@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {discoverResearchCapabilities, nextResearchAction, executePublicResearchStep, interactiveQueryComplete, researchEvidence} from '../../skills/advisor-pipeline/scripts/browser-research.mjs';
-import {projectSearchCoverage} from '../../skills/advisor-pipeline/scripts/medical-evidence.mjs';
 import {selectRoute} from '../../skills/advisor-pipeline/scripts/provider-capabilities.mjs';
 const tools = {web_open_tab() {}, web_scan() {}, web_execute_js() {}};
 const receipt = {retrieval_method:'browser', retrieval_provider:'wisp_science_browser', retrieval_tool:'web_scan', interaction_required:true, query_submitted:true, filters_confirmed:true, results_loaded:true, pagination_complete:true, result_count:0, extraction_status:'success', status:'not_found', accessed_at:'2026-09-23', final_url:'https://example.org/results', complete_results:true, searched_sources:['fixture'], query_or_filter_summary:'A; B; 2021–2026'};
@@ -26,18 +25,15 @@ test('actual dispatch is awaited; missing tools and denied mutations do not prod
   await assert.rejects(executePublicResearchStep({...args,tool:'absent'}),/unavailable/);
   await assert.rejects(executePublicResearchStep({...args,action:{kind:'upload',publicReadOnly:true}}),/rejected/);
 });
-test('dynamic grant completion requires query, filters, loading, pagination and correct zero result', () => {
-  const search={database:'fixture',query:'A B',checkedAt:'2026-09-23',scope:'five years',status:'not_found',sourceKind:'official_database',sourceIds:['ev'],requiresInteraction:true};
+test('dynamic query completion requires query, filters, loading, pagination and correct zero result', () => {
   const ev={...receipt,evidence_id:'ev',entity_id:'pi'};
-  assert.equal(projectSearchCoverage([search],[ev],'pi').complete,true);
+  assert.equal(interactiveQueryComplete(ev),true);
   for (const field of ['query_submitted','filters_confirmed','results_loaded','pagination_complete']) {
     const bad={...ev,[field]:false};
     assert.equal(interactiveQueryComplete(bad),false);
     assert.equal(researchEvidence(bad).status,'not_checked');
-    assert.equal(projectSearchCoverage([search],[bad],'pi').complete,false);
   }
   assert.equal(interactiveQueryComplete({...ev,result_count:1}),false);
-  assert.equal(projectSearchCoverage([search],[{...ev,page_state:'empty_shell'}],'pi').complete,false);
   assert.equal(selectRoute('cinii',{hostTools:{builtinWeb:'unavailable',interactiveBrowser:'unavailable'}}).selected_route,'alternative_sources');
   assert.equal(selectRoute('cinii',{hostTools:{builtinWeb:true},probe:{requiresInteraction:true}}).selected_route,'alternative_sources');
 });

@@ -8,7 +8,7 @@ import { isExecutedDirectly } from "./direct-execution.mjs";
 import { isMedicalRankingCurrent, normalizeProjectMetadata } from "./project-contract.mjs";
 import {
   buildMedicalDiscoveryView, compareMedicalCandidates, hasReadableProjectCv, isMedicalEvidenceProfile,
-  evidenceProfile, normalizeMedicalCandidate, validateMedicalCandidateMappings, projectSearchCoverage, identityCoverage,
+  evidenceProfile, normalizeMedicalCandidate, validateMedicalCandidateMappings, researchPublications, mergeResearchMainline, identityCoverage,
 } from "./medical-evidence.mjs";
 
 function html(value) {
@@ -20,7 +20,7 @@ function html(value) {
 const WORDS = {
   verified: "已核实", partial: "部分核实", not_found: "在所查范围内未找到", not_checked: "未检索或未核验",
   inaccessible: "访问受阻", conflict: "来源存在冲突", stale: "信息可能过期", not_applicable: "不适用", unknown: "尚不清楚",
-  found: "找到记录", official_database: "官方基金库", supplementary: "补充来源",
+  found: "找到记录", official_database: "官方数据库", supplementary: "补充来源",
   corresponding_author: "通讯作者", co_corresponding_author: "共同通讯作者", co_first_author: "共同第一作者", first_author: "第一作者", last_author: "末位作者",
   coauthor: "共同作者", principal_investigator: "项目负责人", co_investigator: "项目参与者",
   research_seed: "原创研究论文", map_seed: "综述提供的线索", collaboration: "合作研究线索", research_neighbor: "相关研究线索", official_roster: "机构导师名录",
@@ -142,11 +142,10 @@ function profileReferences(profile) {
 }
 
 // ---------------------------------------------------------------------------
-// Medical five-module rendering
+// Medical three-module rendering
 const REPORT_MODULES = [
   ["a", "01", "身份与任职"], ["b", "02", "研究方向与近年论文"],
-  ["c", "03", "主要合作研究者"], ["d", "04", "科研基金与近期进展"],
-  ["e", "05", "博士指导情况"],
+  ["e", "03", "指导相关论文与作者情况"],
 ];
 function moduleHeading(index, key) {
   const [, number, title] = REPORT_MODULES.find(([id]) => id === key);
@@ -215,7 +214,6 @@ const LABELS = {
   role: { verified: "已核实研究负责人身份", probable: "研究负责人身份尚待确认", emerging: "新近独立的研究负责人", identity_unresolved: "身份尚未确认" },
   sufficiency: { strong: "证据充分", adequate: "证据足够", sparse: "证据稀少", conflicted: "证据冲突" },
   activity: { active: "近期活跃", recent_signal: "有近期信号", unclear: "活跃度不明", apparently_inactive_in_checked_scope: "在已检查范围内未见近期活动" },
-  edge: { coauthorship: "共同发表", shared_project: "共同项目", shared_grant: "共同基金", shared_trial: "共同试验" },
 };
 
 function label(group, value) {
@@ -229,7 +227,8 @@ function sources(ids, evidence, excludedUrls = []) {
 
 function workItem(work, evidence) {
   const meta = [work.year, work.venue, work.verifiedRole && work.verifiedRole !== "unknown" ? `作者角色：${text(work.verifiedRole)}` : null,
-    work.relationToMainline ? `与研究方向的关系：${work.relationToMainline}` : null, work.isPreprint ? "预印本（未经同行评审）" : null]
+    work.relationToMainline ? `与研究方向的关系：${work.relationToMainline}` : null, work.isPreprint ? "预印本（未经同行评审）" : null, work.publicationStatus,
+    work.isPreprint && !work.publicationStatus ? "期刊发表状态待核实" : null]
     .filter(Boolean).map(html).join(" · ");
   const external = work.url || (work.doi ? `https://doi.org/${String(work.doi).replace(/^https?:\/\/doi\.org\//i, "")}` : null);
   const anchor = external ? link(external, work.title || external) : "";
@@ -241,53 +240,6 @@ function workItem(work, evidence) {
 
 function workList(works, evidence, empty) {
   return works.length ? `<ul class="works">${works.map((work) => workItem(work, evidence)).join("")}</ul>` : `<p class="muted">${html(empty)}</p>`;
-}
-
-function collaboratorProfiles(network, evidence) {
-  if (!network.coreCollaborators.length) return `<p class="muted">尚未筛选出有公开合作依据的研究者。</p>`;
-  const records = (person, project) => {
-    const items = person.collaborationEvidence.filter((item) => typeof item === "object" && item !== null
-      && (project ? ["shared_project", "shared_grant", "shared_trial"].includes(item.type) : item.type === "coauthorship"));
-    const legacy = project ? [] : person.collaborationEvidence.filter((item) => typeof item === "string");
-    if (!items.length && !legacy.length) return `<p class="muted">未记录可核验的${project ? "合作项目" : "合作产出"}。</p>`;
-    const content = `<ul class="works">${items.map((item) => {
-      const name = item.title || item.project_title || `${label("edge", item.type)}（具体名称未记录）`;
-      const content = `${item.url ? link(item.url, name) : html(name)}${item.year ? ` · ${html(item.year)}` : ""}`;
-      return `<li>${content}${sources(item.sourceIds || item.source_ids || person.sourceIds, evidence, linkedUrls(content))}</li>`;
-    }).join("")}${legacy.map((item) => `<li>${html(item)} ${sources(person.sourceIds, evidence)}</li>`).join("")}</ul>`;
-    return items.length + legacy.length > 3 ? `<details><summary>${project ? "合作项目" : "合作产出"}（${items.length + legacy.length} 项）</summary>${content}</details>` : content;
-  };
-  return `<div class="people-list">${network.coreCollaborators.map((person) => `<div class="person-entry collaborator">
-    <header class="person-heading"><h5>${html(person.name || "姓名待核验")}</h5></header>
-    <p class="person-meta">${html(text([person.currentInstitution, person.currentPosition]))}${person.sourceIds.length ? ` ${sources(person.sourceIds, evidence)}` : ""}</p>
-    <p><span class="field-label">科研方向</span>${html(text(person.ownCoreDirection))}</p>
-    <div class="person-work"><h6>与导师合作的项目</h6>${records(person, true)}
-    <h6>与导师合作的产出</h6>${records(person, false)}</div>
-  </div>`).join("")}</div>`;
-}
-
-function projectTable(projects, evidence) {
-  if (!projects.length) return `<p class="muted">尚未登记可核验的项目详情。是否查过基金库，请看上方检索记录；未找到公开记录不等于没有基金。</p>`;
-  return `<div class="table-wrap"><table><thead><tr><th>项目名称</th><th>项目编号</th><th>资助机构 / 来源</th><th>项目中的角色</th><th>期限</th><th>状态</th><th>公开金额（单位）</th></tr></thead><tbody>${projects.map((project) => `<tr>
-    <td>${html(text(project.title))}<br>${sources(project.sourceIds, evidence)}</td>
-    <td>${html(text(project.projectId))}</td>
-    <td>${html(text([project.fundingBody, project.source]))}</td>
-    <td>${html(text(project.piRole))}</td>
-    <td>${html(text(project.period))}</td>
-    <td>${html(text(project.status))}</td>
-    <td>${project.amount === null || project.amount === undefined ? "未公开" : `${html(project.amount)} ${html(project.amountUnit || "")}${project.amountBasis ? `（${html(project.amountBasis)}）` : ""}`}</td>
-  </tr>`).join("")}</tbody></table></div>`;
-}
-
-function projectSearchList(searches, evidence, advisorId) {
-  const coverage = projectSearchCoverage(searches, evidence, advisorId);
-  return `<p><strong>${html(coverage.summary)}</strong></p>${searches.length ? searches.map((search) => `<div class="search-record">
-<h6>${html(search.database || "数据库未记录")} · ${html(search.status === "partial" ? "部分完成" : text(search.status))}</h6>
-${facts([["查询姓名与机构", search.query], ["检索日期", search.checkedAt || "未记录"], ["检索范围", search.scope],
-  ["来源类别", text(search.sourceKind)], ["访问限制与补查说明", search.limitations || "未记录限制说明"]])}
-${search.requiresInteraction ? `<p>${html(projectSearchCoverage([search], evidence, advisorId).complete ? "已完成交互查询与结果核验" : "交互查询尚未完成核验")}</p>` : ""}
-${search.interactionAttempts?.length ? `<details><summary>实际交互尝试与限制</summary>${search.interactionAttempts.map(attempt => facts([["执行日期", attempt.checkedAt], ["执行结果", attempt.reason || attempt.outcome], ["工具", [attempt.provider, attempt.tool].filter(Boolean).join(" / ")]]) + sources(attempt.sourceIds || [], evidence)).join("")}</details>` : ""}
-${sources(search.sourceIds, evidence)}</div>`).join("") : `<p class="muted">旧记录没有逐位基金检索过程，本项需要补查。</p>`}`;
 }
 
 function doctoralList(people, evidence, empty) {
@@ -317,14 +269,14 @@ ${site.pages.map((page) => `<p>${link(page.url, page.title)}${page.status === "f
     const papers = eligible.map((paper) => ({...paper, year: paper.date || paper.year,
       verifiedRole: paper.firstAuthorRole, relationToMainline: `导师署名：${text(paper.advisorRole)}`}));
     const works = workList(papers, evidence, "尚无符合范围且作者角色已核实的共同论文。");
-    return `<div class="person-entry first-author"><header class="person-heading"><h6>${html(person.name || "姓名待核实")}</h6><span class="person-role">${html(firstAuthorIdentity(person, evidence))}</span></header>
+    return `<div class="person-entry first-author"><header class="person-heading"><h6>${html(person.name || "姓名待核实")}</h6>${firstAuthorIdentity(person, evidence) ? `<span class="person-role">${html(firstAuthorIdentity(person, evidence))}</span>` : ""}</header>
 ${person.identitySourceIds.length ? `<p class="person-meta">${sources(person.identitySourceIds, evidence)}</p>` : ""}
 <p><span class="field-label">基于这些共同论文的总结</span>${html(firstAuthorSummary(person, window, evidence))}${person.summarySourceIds.length ? ` ${sources(person.summarySourceIds, evidence)}` : ""}</p>
 ${papers.length > 3 ? `<details><summary>共同论文（${papers.length} 篇）</summary>${works}</details>` : works}
 ${pending.length ? `<details><summary>未纳入画像的论文线索（${pending.length} 条）</summary><ul>${pending.map((paper) => `<li>${html(paper.title || "标题待核实")}：${html(firstAuthorPaperState(paper, window, evidence))}${sources(paper.sourceIds, evidence)}</li>`).join("")}</ul></details>` : ""}</div>`;
   }).join("");
   return `<h5>实验室官网与查阅情况</h5>${doctoralSearchDetails(doctoral, "lab_website", evidence)}${labs || "<p>尚未登记已核验的实验室网站；不代表没有。</p>"}
-<h5>近五年通讯作者论文中的第一作者</h5><p class="muted">第一作者不自动代表博士生；身份依据单独核验。${window ? `论文日期范围：${html(window.start)} 至 ${html(window.end)}。` : "未记录有效的近五年检索范围。"}</p>
+<h5>近五年通讯作者论文中的第一作者</h5><p class="muted">按导师通讯／共同通讯署名纳入，不以第一作者学历或身份是否已核实为条件。${window ? `论文日期范围：${html(window.start)} 至 ${html(window.end)}。` : "未记录有效的近五年检索范围。"}</p>
 ${doctoralSearchDetails(doctoral, "corresponding_papers", evidence)}${people || "<p>尚未登记第一作者画像；不代表没有共同论文。</p>"}`;
 }
 
@@ -338,23 +290,11 @@ function reportAdvisorRow(advisor, index, project, opportunities) {
   // current evaluation override field by field; identities never change.
   const factsRow = { ...opportunities[0], ...advisor,
     evidenceProfile: { ...evidenceProfile(advisor), ...evidenceProfile(opportunities[0] || {}), ...(currentEvaluations[0]?.evidenceProfile || {}) } };
-  // Grant follow-ups live on the advisor record. An older opportunity snapshot
-  // must not hide them in application-mode reports.
+  // Preserve advisor-level publications when an application snapshot is older.
   const stored = evidenceProfile(advisor);
-  const storedSignals = stored.latestSignals || stored.latest_signals;
-  if (storedSignals) {
-    for (const names of [["projects", "grants"], ["projectSearches", "project_searches"]]) {
-      const signals = factsRow.evidenceProfile.latestSignals || factsRow.evidenceProfile.latest_signals || {};
-      const additions = storedSignals[names[0]] || storedSignals[names[1]];
-      if (!additions?.length) continue;
-      const others = signals[names[0]] || signals[names[1]] || [];
-      const key = (item) => names[0] === "projects"
-        ? JSON.stringify([item.source || item.fundingBody || item.funding_body, item.projectId || item.project_id || item.grant_id || item.title])
-        : JSON.stringify([item.database, item.query, item.scope, item.checkedAt || item.checked_at]);
-      const seen = new Set(additions.map(key));
-      factsRow.evidenceProfile.latestSignals = { ...signals, [names[0]]: [...additions, ...others.filter((item) => !seen.has(key(item)))] };
-    }
-  }
+  const storedMainline = normalizeMedicalCandidate(advisor, project, index).evidenceProfile.researchMainline;
+  const projectedMainline = normalizeMedicalCandidate(factsRow, project, index).evidenceProfile.researchMainline;
+  factsRow.evidenceProfile.researchMainline = mergeResearchMainline(storedMainline, projectedMainline);
   const storedDoctoral = stored.doctoralTrajectory || stored.doctoral_trajectory;
   if (storedDoctoral) {
     const projected = factsRow.evidenceProfile.doctoralTrajectory || factsRow.evidenceProfile.doctoral_trajectory || {};
@@ -370,8 +310,6 @@ function medicalAdvisorSection(advisor, index, project, opportunities, evidence)
   const name = row.name || row.advisorName || advisorId;
   const identity = profile.identity;
   const mainline = profile.researchMainline;
-  const network = profile.collaborationNetwork;
-  const signals = profile.latestSignals;
   const doctoral = profile.doctoralTrajectory;
   const discovery = project.searchMode === "discovery";
   const identityCheck = identityCoverage(row, evidence);
@@ -395,20 +333,12 @@ ${moduleHeading(index, "b")}${facts([
   ["研究对象 / 方法", [mainline.researchObjects, mainline.methods], mainline.sourceIds],
   ["是否持续研究这一方向", [label("continuity", profile.researchRouteContinuity.status), ...profile.researchRouteContinuity.reasons], profile.researchRouteContinuity.sourceIds],
 ], evidence)}${facts([["论文检索时间范围", mainline.backSearchWindow || row.back_search?.window || "未记录实际检索范围"]])}
-<h5>代表性论文及作者角色</h5>${workList(mainline.representativeWorks, evidence, "尚未登记已核实作者角色的代表性论文。")}
+<h5>代表性与近期论文、预印本</h5>${workList(researchPublications(mainline), evidence, "尚未登记已核实的论文。")}
 ${mainline.participationOnlyWorks.length ? `<h5>仅参与型工作（不计入主线）</h5>${workList(mainline.participationOnlyWorks, evidence, "")}` : ""}</div>
-${moduleHeading(index, "c")}${collaboratorProfiles(network, evidence)}
-</div>
-${moduleHeading(index, "d")}
-<h5>逐位基金库检索</h5>${projectSearchList(signals.projectSearches, evidence, advisorId)}
-<h5>公开项目 / 基金记录</h5>${projectTable(signals.projects, evidence)}
-<h5>近期论文</h5>${workList(signals.latestPapers.filter((work) => !mainline.representativeWorks.some((prior) => prior.title === work.title)), evidence, signals.latestPapers.length ? "近期论文已列入上方代表性论文。" : "未登记近期论文；不代表没有产出。")}
-${signals.preprints.length ? `<h5>预印本</h5>${workList(signals.preprints, evidence, "")}` : ""}
-${signals.registries.length || signals.trials.length ? facts([["注册 / 试验记录", [signals.registries, signals.trials], signals.sourceIds]], evidence) : ""}</div>
 ${moduleHeading(index, "e")}
 ${doctoralSupplement(doctoral, evidence)}
-<h5>当前博士生（公开可见）</h5>${doctoralList(doctoral.currentDoctoral, evidence, "尚未登记可核验的当前博士生；不代表没有。")}
-<h5>已毕业博士（公开可见）</h5>${doctoralList(doctoral.formerDoctoral, evidence, "尚未登记可核验的已毕业博士；新兴 PI 可能尚无毕业博士，不作负面推断。")}
+${doctoral.currentDoctoral.length ? `<h5>已核实的当前博士生（补充信息）</h5>${doctoralList(doctoral.currentDoctoral, evidence, "")}` : ""}
+${doctoral.formerDoctoral.length ? `<h5>已核实的毕业博士（补充信息）</h5>${doctoralList(doctoral.formerDoctoral, evidence, "")}` : ""}
 ${doctoral.emergingPiNote ? `<p class="muted">${html(doctoral.emergingPiNote)}</p>` : ""}
 <p class="muted">${html(doctoral.sampleLimitation)}</p></div>
 ${applicationEntry}
@@ -418,14 +348,13 @@ ${facts([["仍需确认的信息", profile.keyUnknowns], ["建议下一步核实
 
 function medicalOverviewTable(rows, evidence, discovery, advisors) {
   if (!rows.length) return `<p>尚无导师记录。</p>`;
-  return `<div class="table-wrap"><table class="overview"><thead><tr><th>导师与机构</th><th>与需求的关系</th><th>基金检索结果</th><th>需要进一步确认</th></tr></thead><tbody>${rows.map((row) => {
+  return `<div class="table-wrap"><table class="overview"><thead><tr><th>导师与机构</th><th>与需求的关系</th><th>研究主线与近期活动</th><th>需要进一步确认</th></tr></thead><tbody>${rows.map((row) => {
     const detailIndex = advisors.findIndex((advisor) => (advisor.advisor_id || advisor.advisorId) === (row.advisor_id || row.advisorId));
-    const profile = { ...row.evidenceProfile, latestSignals: advisors[detailIndex]?.evidenceProfile.latestSignals || row.evidenceProfile.latestSignals };
+    const profile = advisors[detailIndex]?.evidenceProfile || row.evidenceProfile;
     const anchor = detailIndex >= 0 ? `advisor-${detailIndex + 1}` : "advisors";
-    const coverage = projectSearchCoverage(profile.latestSignals.projectSearches, evidence, row.advisor_id || row.advisorId);
     return `<tr><td><a href="#${anchor}"><strong>${html(row.name || row.advisorName || row.advisor_id)}</strong></a><br>${html(text(profile.identity.currentInstitution || row.school || row.schoolName))}${discovery ? "" : `<br>${html(text([row.program, row.degree, row.intake]))}`}</td>
 <td>${html(label("fit", profile.researchQuestionFit.status))}<br>${html(text(profile.researchMainline.longTermQuestion || profile.researchQuestionFit.reasons[0]))}${sources(profile.researchQuestionFit.sourceIds, evidence)}</td>
-<td><a href="#${anchor === "advisors" ? anchor : `${anchor}-d`}">${html(coverage.summary)}</a><br>${profile.latestSignals.projects.length} 条已登记项目</td>
+<td><a href="#${anchor === "advisors" ? anchor : `${anchor}-b`}">${html(label("continuity", profile.researchRouteContinuity.status))}</a><br>${html(label("activity", profile.currentActivity))}</td>
 <td>${html(text([profile.fitBoundary, profile.keyUnknowns[0]].filter(Boolean)))}</td></tr>`;
   }).join("")}</tbody></table></div>`;
 }
@@ -481,7 +410,7 @@ article{padding:8px 0 4px;margin:28px 0 0;border:0}
 .module{margin:18px 0;padding:20px 22px 18px;border:1px solid var(--line);border-radius:14px;background:var(--card);box-shadow:0 8px 20px rgba(35,31,60,.04)}
 .module>h4{display:flex;gap:12px;align-items:center;margin:0 0 16px;padding:0 0 14px;border-bottom:1px solid var(--line);background:none;color:var(--ink)}
 .module-number{display:inline-grid;place-items:center;min-width:32px;height:32px;border-radius:10px;background:var(--module-chip,var(--accent-soft));color:var(--module-ink,var(--accent-dark));font:700 12px/1 ui-sans-serif,system-ui,sans-serif;font-variant-numeric:tabular-nums}
-.module-a{--module-chip:var(--accent-soft);--module-ink:var(--accent-dark)}.module-b{--module-chip:var(--green-soft);--module-ink:var(--green)}.module-c{--module-chip:#ede4d5;--module-ink:#6a5136}.module-d{--module-chip:var(--amber-soft);--module-ink:var(--amber)}.module-e{--module-chip:#ece9df;--module-ink:#5c564c}
+.module-a{--module-chip:var(--accent-soft);--module-ink:var(--accent-dark)}.module-b{--module-chip:var(--green-soft);--module-ink:var(--green)}.module-e{--module-chip:#ece9df;--module-ink:#5c564c}
 dl{margin:12px 0}dl>div{display:grid;grid-template-columns:190px minmax(0,1fr);gap:20px;margin:14px 0}dt{font-weight:650}dd{margin:0;min-width:0}
 .table-wrap{max-width:100%;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#faf6ef}
 table{border-collapse:collapse;width:100%;font-size:14px;table-layout:fixed}th,td{text-align:left;vertical-align:top;border-bottom:1px solid var(--line);padding:12px 14px}th{color:#5c564c;background:#efe8db;font-weight:650}tr:last-child td{border-bottom:0}
@@ -605,9 +534,9 @@ export function buildAdvisorReport({ project = {}, advisors = [], programs = [],
     ["实际覆盖范围", audit.searchCoverage || audit.coverage || "未保存独立覆盖摘要；目标地区不等于已查遍该地区"],
     ["访问限制与待核验来源", limitations.length ? limitations : "已保存证据未列出此类限制；不代表所有来源可访问"],
     ...(medical ? capabilityFacts : []),
-    ...(medical ? [["Seeds / 网络 / 饱和", [audit.seedSummary, audit.networkRounds !== undefined ? `网络轮次：${audit.networkRounds}` : null, audit.saturation ? `饱和：${text(audit.saturation)}` : null].filter(Boolean).length
-      ? [audit.seedSummary, audit.networkRounds !== undefined ? `网络轮次：${audit.networkRounds}` : null, audit.saturation ? `饱和：${text(audit.saturation)}` : null].filter(Boolean)
-      : "未保存 seed / 网络扩展 / 饱和记录"]] : []),
+    ...(medical ? [["Seeds / 饱和", [audit.seedSummary, audit.saturation ? `饱和：${text(audit.saturation)}` : null].filter(Boolean).length
+      ? [audit.seedSummary, audit.saturation ? `饱和：${text(audit.saturation)}` : null].filter(Boolean)
+      : "未保存 seed / 饱和记录"]] : []),
     [medical ? "本轮导师与候选选择" : "本轮项目候选选择", { 保留: audit.selectedCount ?? candidates.length,
       [medical ? "明确不适用" : "未保留"]: audit.excludedCount ?? "未记录", 因调研预算暂缓: audit.deferredCount ?? "未记录",
       ...(medical ? { 导师记录: advisorRows.length } : {}) }],
@@ -634,24 +563,21 @@ export function buildAdvisorReport({ project = {}, advisors = [], programs = [],
     <td>资格：${html(text(row.feasibility || "needs_confirmation"))}<br><span class="sources">${evidenceReferences(profileReferences([row.eligibilityEvidence, row.hardConstraintEvidence]), evidence)}</span><br>机会：${html(text(row.opportunityStatus || "unknown"))}<br><span class="sources">${evidenceReferences(profileReferences(row.opportunityEvidence), evidence)}</span><br>${html(row.comparisonGroup || "")}</td>
     <td>${sourcedValue(row.recommendedAction, evidence)}</td>
   </tr>`).join("")}</tbody></table></div>` : "<p>尚未映射真实博士项目。</p>";
-  // Discovery lists advisors; application lists advisor–programme opportunities. Both use the same five-module overview.
+  // Discovery lists advisors; application lists advisor–programme opportunities. Both use the same three-module overview.
   const overviewRows = discovery ? advisorRows : programRows;
-  const missingGrantChecks = medical ? advisorRows.filter((row) => !projectSearchCoverage(row.evidenceProfile.latestSignals.projectSearches, evidence, row.advisor_id || row.advisorId).complete) : [];
   const missingDoctoralChecks = medical ? advisorRows.filter((row) => !doctoralCoverage(row.evidenceProfile.doctoralTrajectory, evidence)) : [];
   const identityChecks = medical ? advisorRows.map((row) => ({ row, ...identityCoverage(row, evidence) })) : [];
   const missingIdentityChecks = identityChecks.filter((check) => !check.complete);
-  const completion = medical && missingGrantChecks.length ? "部分完成：基金检索尚有缺口" : medical && missingDoctoralChecks.length ? "部分完成：第一作者或实验室补查尚有缺口" : missingIdentityChecks.length ? "部分完成：身份信息尚有缺口" : audit.completionTier === "complete" ? "已完成本轮设定范围的检索" : audit.completionTier === "blocked" ? "检索受阻" : "部分完成或完成情况未记录";
+  const completion = medical && missingDoctoralChecks.length ? "部分完成：第一作者或实验室补查尚有缺口" : missingIdentityChecks.length ? "部分完成：身份信息尚有缺口" : audit.completionTier === "complete" ? "已完成本轮设定范围的检索" : audit.completionTier === "blocked" ? "检索受阻" : "部分完成或完成情况未记录";
   const prose = (value, fallback) => typeof value === "string" && !/^[a-z0-9_]+$/i.test(value) ? value : fallback;
   const pageCount = new Set(evidence.map((row) => urlKey(sourceUrl(row))).filter(Boolean)).size;
   const pendingCount = evidence.filter((row) => ["partial", "inaccessible", "not_checked", "conflict", "stale"].includes(row.status)).length;
   const evidenceSection = `<section id="coverage"><h2>本次查了什么，还缺什么</h2>
 ${facts([["实际检索范围", prose(audit.searchCoverage || audit.coverage, `已保存 ${pageCount} 个来源网页的 ${evidence.length} 条主张；其中 ${pendingCount} 条仍有核验或访问限制。未记录完整地域覆盖范围。`)],
 ["候选发现方式", prose(audit.seedSummary, "候选发现方式尚未提供文字说明，已保存的查询过程见下方详情")],
-["合作线索扩展", audit.networkRounds !== undefined ? `已记录 ${audit.networkRounds} 轮；轮次数不代表查全了所有导师` : "未记录扩展过程"],
 ["检索是否充分", prose(audit.saturation, "尚无充分的文字说明支持已查全；停止检索的记录见下方详情")],
 ["仍需补查", audit.limitations?.length ? audit.limitations : "请结合各导师的待核实事项阅读"]])}
-${medical ? `<p>基金检索尚未完成或受限：${missingGrantChecks.length ? html(missingGrantChecks.map((row) => row.name || row.advisorName).join("、")) : "无；仅指已记录的数据库和查询范围"}。</p>` : ""}
-${medical && missingDoctoralChecks.length ? `<p>第一作者或实验室补查尚未完成：${html(missingDoctoralChecks.map((row) => row.name || row.advisorName).join("、"))}。详见逐位博士指导情况。</p>` : ""}
+${medical && missingDoctoralChecks.length ? `<p>第一作者或实验室补查尚未完成：${html(missingDoctoralChecks.map((row) => row.name || row.advisorName).join("、"))}。详见指导相关论文与作者情况。</p>` : ""}
 ${missingIdentityChecks.length ? `<h3>身份信息待补查</h3><ul>${missingIdentityChecks.map(({row, gaps}) => `<li><strong>${html(row.name || row.advisorName)}</strong><ul>${gaps.map((gap) => `<li>${html(gap.label)}：${html(gap.reason)}</li>`).join("")}</ul></li>`).join("")}</ul>` : ""}
 <details class="technical"><summary>查询与工具记录（复核用）</summary>${coverage}</details>
 ${sourceAppendix(evidence, advisorRows)}
@@ -689,7 +615,7 @@ ${evidenceSection}
 <section id="overview"><h2>导师简短对照</h2>${medicalOverviewTable(overviewRows, evidence, discovery, advisorRows)}${programDetails}</section>
 <section id="advisors"><h2>逐位导师详情</h2>${advisorRows.length ? advisorRows.map((row, index) => medicalAdvisorSection(advisorFacts.get(row.advisor_id || row.advisorId) || row, index, project, programRows.filter((candidate) => (candidate.advisor_id || candidate.advisorId) === (row.advisor_id || row.advisorId)), evidence)).join("") : "<p>尚无导师事实记录。</p>"}</section>
 ${evidenceSection}
-<p class="muted">本报告由本地共享记录生成，不会访问网页、发送邮件或启动申请材料。项目记录说明科研支撑，不说明博士生个人资助；公开培养样本没有分母时不计算成功率；未在公开库中找到不等于没有。</p></main><script id="report-navigation">${REPORT_NAV_SCRIPT}</script></body></html>`);
+<p class="muted">本报告由本地共享记录生成，不会访问网页、发送邮件或启动申请材料。通讯作者论文按已核实署名与日期纳入，第一作者学历不影响纳入；共同署名本身不证明指导关系。</p></main><script id="report-navigation">${REPORT_NAV_SCRIPT}</script></body></html>`);
 }
 
 async function readJson(path, fallback) {

@@ -34,7 +34,7 @@ Cross-stage invariants:
   keep their defaults.
 - Medical comparisons use the five-dimension evidence profile (research-question
   fit, route continuity, PI role confidence, evidence sufficiency, current
-  activity) with five public-evidence modules A–E, not weighted scores, reach
+  activity) with three public-evidence modules A–C, not weighted scores, reach
   quotas, training fit, resources, doctoral funding or training environment.
   Unmapped advisors remain advisor-level discovery records, never fake programs.
 - Medical subagents write only `runs/<run-id>/subagents/*.json`; the Main Agent

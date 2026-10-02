@@ -22,7 +22,6 @@
         "currentActivity": "active",
         "identity": {"currentInstitution": "Fixture School (fictional)", "currentPosition": "Fictional professor", "sourceIds": ["fixture-study"]},
         "researchMainline": {"longTermQuestion": "Fictional inflammation question", "representativeWorks": [{"title": "Fictional study", "year": 2025, "url": "https://example.org/fictional-study", "verifiedRole": "corresponding_author", "sourceIds": ["fixture-study"]}]},
-        "latestSignals": {"projects": [{"title": "Fictional project", "projectId": "FIX-EVAL-01", "fundingBody": "Fictional funder", "piRole": "PI", "period": "2025-2028", "status": "active", "amount": null, "sourceIds": ["fixture-study"]}]},
         "doctoralTrajectory": {"currentDoctoral": [], "formerDoctoral": [], "graduateProgram": {"doctoralProgram": "Fictional Biomedical PhD"}},
         "keyUnknowns": ["Doctoral supervision listing for this programme needs confirmation"],
         "nextVerification": ["Verify the supervisor listing for this programme and intake"]

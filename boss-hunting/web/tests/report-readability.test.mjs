@@ -2,33 +2,10 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { buildAdvisorReport } from "../../skills/advisor-pipeline/scripts/build_advisor_report.mjs";
-import { projectSearchCoverage } from "../../skills/advisor-pipeline/scripts/medical-evidence.mjs";
+import { buildMedicalWorkbookSheets } from "../../skills/advisor-pipeline/scripts/medical-workbook.mjs";
 const fixture = async () => JSON.parse(await readFile(new URL("./fixtures/medical-discovery.json", import.meta.url), "utf8"));
 const search = (status = "found") => ({ database: "NIH RePORTER", query: "Fixture PI OR Name Variant; Fixture Institute", checkedAt: "2026-09-23", scope: "active + 2021-09-23 to 2026-09-23", status, sourceKind: "official_database", limitations: "所列机构范围", sourceIds: ["grant-search"] });
 const source = (entity, status = "verified") => ({ evidence_id: "grant-search", entity_id: entity, status, url: "https://example.org/grant-search", citation_label: "NIH 姓名与机构查询", claim: "合成检索结果", accessed_at: "2026-09-23", source_updated_at: "2026-09-21" });
-
-test("grant completeness requires official per-advisor process and matching evidence, not empty projects", async () => {
-  const input = await fixture();
-  const advisor = input.advisors[0];
-  advisor.evidence_profile.latest_signals.projects = [];
-  assert.match(buildAdvisorReport(input), /未记录检索过程/);
-  for (const status of ["found", "not_found", "inaccessible", "partial", "not_checked"]) {
-    const entry = search(status);
-    const evidence = source(advisor.advisor_id, status === "not_found" ? "not_found" : "verified");
-    input.evidence.push(evidence);
-    advisor.evidence_profile.latest_signals.projectSearches = [entry];
-    assert.equal(projectSearchCoverage([entry], [evidence], advisor.advisor_id).complete, ["found", "not_found"].includes(status));
-    const report = buildAdvisorReport(input);
-    assert.match(report, /NIH 姓名与机构查询/);
-    assert.match(report, /未找到公开记录不等于没有基金/);
-    input.evidence.pop();
-  }
-  for (const change of [{sourceKind:"supplementary"},{sourceKind:"unknown"},{sourceIds:[]},{query:null},{checkedAt:null}]) {
-    assert.equal(projectSearchCoverage([{...search(), ...change}], [source(advisor.advisor_id)], advisor.advisor_id).complete, false);
-  }
-  assert.equal(projectSearchCoverage([search()], [source("another-pi")], advisor.advisor_id).complete, false);
-  assert.equal(projectSearchCoverage([search()], [source(advisor.advisor_id,"not_found")], advisor.advisor_id).complete, false);
-});
 
 test("semantic citations deduplicate each block and source pages without losing claim states or dates", async () => {
   const input = await fixture();
@@ -58,41 +35,68 @@ test("semantic citations deduplicate each block and source pages without losing 
   assert.match(missing, /任职信息核对日期[\s\S]*未核验：字段尚未记录/);
 });
 
-test("grant process and citation labels cannot inject HTML or unsafe links", async () => {
+test("omitted grant records and unsafe source labels cannot inject HTML", async () => {
   const input = await fixture();
   input.advisors[0].evidence_profile.latest_signals.projectSearches = [{...search(), database:'<img src=x onerror=alert(1)>', query:'</dd><script>bad()</script>'}];
   input.evidence.push({...source(input.advisors[0].advisor_id), citation_label:'<svg onload=alert(1)>', url:'javascript:alert(1)'});
   const report = buildAdvisorReport(input);
-  assert.match(report, /&lt;img/);
+  assert.doesNotMatch(report, /&lt;img/);
   assert.doesNotMatch(report, /<img|<script(?! id="report-navigation")|<svg onload|href="javascript:/);
-  assert.match(report, /部分完成：基金检索尚有缺口/);
+  assert.doesNotMatch(report, /部分完成：基金检索尚有缺口/);
 });
 
-test("application reports retain advisor grant follow-ups despite an older opportunity snapshot", async () => {
+test("application reports and Excel retain recent papers despite an older opportunity snapshot", async () => {
   const input = JSON.parse(await readFile(new URL("./fixtures/medical-application.json", import.meta.url), "utf8"));
-  const advisor = input.advisors[0];
-  advisor.evidence_profile = {latest_signals:{project_searches:[search()], projects:[{project_id:"NEW-GRANT",title:"New advisor grant",source:"NIH"}]}};
-  input.evidence.push(source(advisor.advisor_id));
+  input.advisors[0].evidence_profile = {researchMainline:{latestPapers:[{title:"New advisor paper",journal:"Fixture Journal",doi:"10.0000/new",year:2026,sourceIds:[]}]}};
   const report = buildAdvisorReport(input);
-  const table = report.match(/<table class="overview">[\s\S]*?<\/table>/)[0];
-  assert.match(table,/已完成所列基金库检索/);
-  assert.match(report,/NEW-GRANT/);
-  assert.match(report,/FIX-APP-01/);
+  const section = report.split('id="advisor-1-b"')[1].split('id="advisor-1-e"')[0];
+  assert.match(section,/New advisor paper/);
+  assert.match(section,/Fixture Journal/);
+  assert.match(report,/真实申请入口（申请筛选模式）/);
+  const sheets=buildMedicalWorkbookSheets({project:input.project,advisorRecords:input.advisors,candidates:input.candidates,evidence:input.evidence});
+  assert.match(JSON.stringify(sheets[0]),/New advisor paper/);
 });
 
-test("selected collaborator profiles show only identity, appointment, direction and linked joint work", async () => {
+test("historical collaborator and grant records are preserved but absent from report sections", async () => {
   const input=await fixture();
-  input.advisors[0].evidence_profile.collaboration_network.core_collaborators=[{
-    name:"Selected Scholar",current_institution:"Fixture University",current_position:"Professor",research_direction:"Mechanisms",
-    recent_route:"DO NOT DISPLAY ROUTE",relation_to_mainline:"DO NOT DISPLAY ASSESSMENT",
-    collaboration_evidence:[{type:"shared_project",title:"Shared grant",year:2025,sourceIds:["joint"]},
-      {type:"coauthorship",title:"Joint paper",url:"https://example.org/joint",year:2026,sourceIds:["joint"]}],source_ids:["joint"]}];
-  input.evidence.push({evidence_id:"joint",url:"https://example.org/joint",citation_label:"共同研究原文",status:"verified"});
+  input.advisors[0].evidence_profile.collaboration_network.core_collaborators=[{name:"Omitted collaborator"}];
+  input.advisors[0].evidence_profile.latest_signals.projects=[{title:"Omitted grant",projectId:"HIDDEN-GRANT"}];
+  const before=structuredClone(input);
   const report=buildAdvisorReport(input);
-  const section=report.split('id="advisor-1-c"')[1].split('id="advisor-1-d"')[0];
-  for(const value of ["Selected Scholar","Fixture University","Professor","Mechanisms","Shared grant","Joint paper"]) assert.ok(section.includes(value));
-  assert.doesNotMatch(section,/<table|DO NOT DISPLAY|近期路线|核心合作者|研究方向相近/);
-  assert.match(section,/href="https:\/\/example.org\/joint"/);
-  const paper=section.match(/<li><a[^>]+>Joint paper[\s\S]*?<\/li>/)[0];
-  assert.equal((paper.match(/href=/g)||[]).length,1);
+  assert.doesNotMatch(report,/Omitted collaborator|Omitted grant|HIDDEN-GRANT|id="advisor-1-[cd]"/);
+  assert.deepEqual(input,before);
+});
+
+test("module 02 and Excel collect old and new publications and deduplicate explicit journal versions", async () => {
+  const input=await fixture();
+  const profile=input.advisors[0].evidence_profile;
+  profile.research_mainline={representative_works:[{title:"Journal version",doi:"10.0000/final",venue:"Verified Journal",year:2026}],
+    latest_papers:[{title:"Journal version",doi:"https://doi.org/10.0000/final",year:2026}],
+    preprints:[{title:"Earlier preprint",doi:"10.0000/preprint",published_version_doi:"10.0000/final"},
+      {title:"Unpublished preprint",doi:"10.0000/open",venue:"bioRxiv",publication_status:"所查范围未发现期刊正式版"}]};
+  profile.latest_signals={latest_papers:[{title:"Legacy recent paper",doi:"10.0000/old",year:2025}],
+    preprints:[{title:"Legacy preprint",doi:"10.0000/legacy",venue:"medRxiv"}]};
+  const report=buildAdvisorReport(input);
+  const section=report.split('id="advisor-1-b"')[1].split('id="advisor-1-e"')[0];
+  for(const text of ["Journal version","Verified Journal","Unpublished preprint","Legacy recent paper","Legacy preprint","所查范围未发现期刊正式版","期刊发表状态待核实"]) assert.ok(section.includes(text),text);
+  assert.equal((section.match(/>Journal version<\/a>/g)||[]).length,1);
+  assert.doesNotMatch(section,/Earlier preprint/);
+  const sheet=buildMedicalWorkbookSheets({project:input.project,advisorRecords:input.advisors,evidence:input.evidence})[0];
+  const cell=sheet.rows[0][sheet.headers.indexOf("B 代表性与近期论文 / 预印本（含期刊信息）")];
+  for(const text of ["Journal version","Unpublished preprint","Legacy recent paper","Legacy preprint"]) assert.ok(cell.includes(text),text);
+  assert.equal((cell.match(/Journal version/g)||[]).length,1);
+  assert.doesNotMatch(cell,/Earlier preprint/);
+});
+
+test('retired modules no longer appear in normalized profiles while legacy publications remain in module 02', async () => {
+  const {normalizeMedicalEvidenceProfile}=await import('../../skills/advisor-pipeline/scripts/medical-evidence.mjs');
+  const input=await fixture();
+  const advisor=input.advisors[0];
+  advisor.evidence_profile.latest_signals.latest_papers=[{title:'Retained legacy paper'}];
+  const before=structuredClone(advisor);
+  const profile=normalizeMedicalEvidenceProfile(advisor);
+  assert.equal(profile.collaborationNetwork,undefined);
+  assert.equal(profile.latestSignals,undefined);
+  assert.ok(profile.researchMainline.latestPapers.some(row=>row.title==='Retained legacy paper'));
+  assert.deepEqual(advisor,before);
 });

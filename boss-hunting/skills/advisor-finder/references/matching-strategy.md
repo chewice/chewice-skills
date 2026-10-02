@@ -20,7 +20,7 @@ Use `evidenceProfile` (`evidence_profile` in advisor records is also accepted):
 - `researchRouteContinuity`: status `sustained_core|active_emerging|new_expansion|occasional_participation|unclear`.
 - `piRoleConfidence`: status `verified|probable|emerging|identity_unresolved`, `level A–D`.
 - `evidenceSufficiency`, `currentActivity`, module blocks `identity`,
-  `researchMainline`, `collaborationNetwork`, `latestSignals`,
+  `researchMainline`,
   `doctoralTrajectory`, plus `formalRecords`, `fitBoundary`, `keyUnknowns`,
   `nextVerification`.
 - Removed and dropped on normalization: `trainingFit`, `resources`,

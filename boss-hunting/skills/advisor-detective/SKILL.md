@@ -27,7 +27,7 @@ If the full skill set is present, read
 `../advisor-pipeline/references/core-data-contract.md` before shared-record
 writes and `../advisor-pipeline/references/investigation-contract.md` for the
 confirmation/result contract. The menu script already owns the mode-specific
-catalog: 11 generic sections, or the five medical modules A–E. During a
+catalog: 11 generic sections, or the three medical modules A–C. During a
 confirmed run, look up only the selected section IDs in
 `references/investigation-sections.md`; do not load unselected section detail.
 In medical mode read `../advisor-pipeline/references/medical-profile.md`, the
@@ -35,7 +35,7 @@ Global Core and selected-region entries in `medical-sources.md`, and
 `browser-research-policy.md` (credential status words and provider fallback).
 Public browser interaction does not authorize additional candidates or
 sections. Medical projects never load or download community sources: none of
-the five modules is community-relevant. Read `references/community-sources.md`
+the three modules is community-relevant. Read `references/community-sources.md`
 only for generic projects whose source policy permits it and where a
 reputation-related section is selected with independent consent.
 
@@ -62,7 +62,7 @@ internal IDs or section names.
    `node .agents/skills/advisor-pipeline/scripts/render_investigation_menu.mjs --root "$PWD"`
    and show its output verbatim — it already contains the numbered
    advisor-program rows with stable IDs, the ordered section catalog for the
-   project's mode (11 generic sections or the five medical modules) with its
+   project's mode (11 generic sections or the three medical modules) with its
    defaults, and the Web-equivalent cost level. Then ask separately for
    community-source consent only when the source policy permits it, show a final summary, and wait for
    explicit confirmation.
@@ -101,18 +101,15 @@ consent is false, continue other selected research without downloading them.
 
 ## Research workflow
 
-For medical mode follow the five-module menu in
+For medical mode follow the three-module menu in
 `references/investigation-sections.md`: A identity and research positioning →
-B five-year mainline → C collaboration network → D latest signals and projects
-→ E doctoral trajectory. Use a five-year original-research window and 1–2 years
-of frontier evidence as adjustable windows. Read actual contribution statements
-before attributing leadership; a last author without contribution evidence is
-at most `probable`. Collaborators are described at depth 1 only and are never
-recursively investigated; citation neighbours are not collaborators. Project
-records keep the published amount, unit and basis and are never converted into
-doctoral personal funding. Distinguish doctoral trainees from postdocs, count
-only people with supervision evidence, and never derive graduation, placement
-or success rates. Training fit, lab resources, doctoral funding, training
+B five-year mainline, recent papers, preprints and journal checks → C corresponding-author
+papers and author profiles. Use a five-year research window. Verify the advisor's
+corresponding/co-corresponding role from the publication; last author is not equivalent.
+Include papers regardless of first-author degree or unknown identity. Record first/co-first
+names and summarize only the qualifying joint papers. Known identities or independently
+verified supervision are optional context. Do not investigate collaborators or grants.
+Training fit, lab resources, doctoral funding, training
 environment, mentoring style and personality are out of scope; retain unknowns
 rather than inferring from group size, title or authorship. Work may be split
 across subagents that write `runs/<run-id>/subagents/*.json`; only the Main
@@ -203,10 +200,17 @@ Complete only when every selected advisor has:
 - No conclusion derived from a failed or skipped source.
 - A regenerated main HTML report reflecting only confirmed/selected research.
 
-## Minimal medical report and grant-search evidence
+## Medical report scope
 
-Per-advisor official grant-database searching and its recorded process are mandatory baseline work for every medical report, even when the user never mentions grants. Do not require an extra prompt, a selected Detective section, or a deep-investigation request to include this baseline. Silence is not an exclusion; only an explicit user restriction can narrow it, and each excluded, blocked or unfinished search must still appear with its reason in a partial report.
-
-Follow [the shared medical report contract](../advisor-pipeline/references/medical-profile.md#证据与续跑): record per-advisor official grant searches in `latestSignals.projectSearches`, separate supplementary sources, and mark missing/blocked searches as partial. Respect confirmed investigation scope. Use the shared minimalist HTML generator, descriptive citations and separate verification/access/update dates.
-
-Medical minimum reports also include the [doctoral first-author and lab-website checks](../advisor-pipeline/references/medical-profile.md#博士指导第一作者画像与实验室网站默认最低内容), without an extra user request. Verify the advisor's corresponding/co-corresponding role and first/co-first authors on papers from the past five years; summarize only those joint papers. Seek an attributable lab website and check members/alumni/publications. First authors are not automatically doctoral students; preserve independent identity evidence, dates, sources and search gaps in `doctoralTrajectory`.
+Follow [the shared medical report contract](../advisor-pipeline/references/medical-profile.md).
+Use three modules: identity; research mainline including recent papers, preprints
+and journal-publication checks;
+corresponding-author papers and their authors.
+Do not investigate or render collaborator profiles or research grants, and do
+not treat missing grant searches as incomplete work. Preserve historical records.
+Include past-five-year papers when the advisor's corresponding/co-corresponding
+role is verified, regardless of the first author's degree or unknown identity.
+Record first/co-first names from the paper; known public roles are optional
+context, never an inclusion requirement. Coauthorship alone does not establish
+supervision. Check the attributable lab website and record sources and dates.
+Generate the shared HTML and supplementary Excel from the same records.

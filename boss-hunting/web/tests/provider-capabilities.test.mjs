@@ -61,7 +61,7 @@ test("T34 T36 run mode and run metadata never contain secrets and mark credentia
   assert.equal(publicOnly.providers.cinii.selected_route, "alternative_sources");
   assert.equal(runMode({ cinii: { selected_route: "browser" }, wos: { selected_route: "browser" }, openalex: { selected_route: "anonymous_api" } }), "browser_fallback");
   assert.ok(publicOnly.principles.some((line) => /optional accelerators/.test(line)));
-  assert.ok(publicOnly.principles.some((line) => /not_found in a public database != the PI has no funding/.test(line)));
+  assert.ok(publicOnly.principles.some((line) => /not_found in a public database != the PI has no relevant record/.test(line)));
 
   const root = await mkdtemp(resolve(tmpdir(), "boss-capabilities-"));
   try {

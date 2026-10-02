@@ -19,7 +19,7 @@ For medical/biomedical work set `domainProfile: medical` and read
 steps: medical field → disease / mechanism / scientific question → target
 regions. Research objects, scales, paradigm (`researchModes`) and method
 preferences are optional and never block. Discovery then runs scientific
-question → Seeds → PI validation → collaboration network → five-module deep
+question → Seeds → PI validation → five-year back-search → three-module deep
 dive (see "Medical discovery orchestration" below).
 Ask only missing questions; development of this Skill is not an intake request.
 Choose `searchMode: discovery|application`; medical discovery needs no CV,
@@ -72,7 +72,7 @@ with `node scripts/build_advisor_report.mjs --project-root "$PWD"` using this
 skill's script path. It writes `outputs/{topic}-导师调研.html`; do not use a generic
 date-only title. Existing Excel exports remain supplemental compatibility
 artifacts. A workbook alone does not satisfy the report requirement.
-Place specific external source links beside the corresponding studies, funding,
+Place specific external source links beside the corresponding studies,
 doctoral outcomes, qualifications, deadlines and comparison reasons. Resolve
 item-level source IDs through shared evidence; a footer-only bibliography is
 insufficient. Missing concrete sources stay explicitly pending verification.
@@ -188,7 +188,7 @@ official application facts for the shortlist.
 Medical discovery instead completes after a real advisor-level exploration
 view with a five-dimension evidence profile per PI (research-question fit,
 route continuity, PI role confidence, evidence sufficiency, current activity),
-the five public-evidence modules, and an explicit seed / network / saturation /
+the three public-evidence modules, and an explicit seed / saturation /
 coverage report. Keep unmapped advisors in `advisor_records.json`; do not
 invent programs, intakes or candidate IDs to satisfy the application route.
 Derive an exploration workbook and the field-named HTML report, then mark
@@ -211,16 +211,14 @@ Scientific question
   -> PI extraction from Research Seeds (no "last author = PI" rule)
   -> Identity Resolver: OpenAlex / ORCID / official page, pi_evidence_level A–D
   -> Trajectory Mappers: 5-year back-search per PI -> route continuity
-  -> Network Expander (max 2 rounds): collaboration edges vs research-neighbor edges
   -> saturation check -> shortlist (display order, not quality ranking)
-  -> five-module deep dive A–E -> merge -> {topic}-导师调研.html
+  -> three-module research A–C -> merge -> {topic}-导师调研.html
 ```
 
-Subagent roles: Seed Scouts, Identity Resolver, Trajectory Mappers, Network
-Expander, Regional Project Investigator, Doctoral Trajectory Investigator,
+Subagent roles: Seed Scouts, Identity Resolver, Trajectory Mappers, Doctoral Trajectory Investigator,
 Evidence Auditor. Schedule them mixed: independent sub-directions and
 independent PIs run in parallel; identity resolution precedes back-search and
-network expansion for the same PI; the Evidence Auditor runs last.
+publication checks for the same PI; the Evidence Auditor runs last.
 
 Write rules:
 
@@ -261,9 +259,9 @@ Credentials and providers:
   authoritative sources. `runs/<run-id>/provider-capabilities.json` records the
   chosen routes and the run mode (`api_enriched | hybrid | public_only |
   browser_fallback`). A missing NCBI key means anonymous E-utilities, not PubMed
-  scraping; a missing CiNii App ID means the CiNii / KAKEN websites; a WoS key
+  scraping; a missing CiNii App ID means the CiNii Research website; a WoS key
   never implies the Expanded tier; Google Scholar is discovery / backcheck
-  only. `not_found` in a public database never becomes "the PI has no funding".
+  only. `not_found` in a public database never becomes "the PI has no relevant record".
 
 Removed from the medical workflow (do not investigate, render or rank on
 them; old stored fields stay untouched): training fit / desired training /
@@ -273,7 +271,7 @@ success or placement rates, composite quality scores, citation or h-index
 ranking, and any resource or student-funding source entries.
 
 Completion tiers for a medical discovery run: `complete` (every shortlisted PI
-has all five modules with a result or explicit gap, provider metadata and merge
+has all three modules with a result or explicit gap, provider metadata and merge
 report saved), `partial` (some modules or PIs unfinished but reported as such),
 `blocked` (identity unresolved or every route inaccessible for the required
 evidence). Never report a higher tier than the artifacts support.
@@ -307,7 +305,7 @@ For direct CLI users, perform the following steps in order:
 
    It prints the candidate table (including the stable `advisorProgramId`
    column), the ordered section catalog for the project's mode (11 generic
-   sections, or the five medical modules A–E, all selected by default) and the
+   sections, or the three medical modules A–C, all selected by default) and the
    current work unit / cost level. Show its output verbatim. You may explain it, but you must
    not reorder, rename, drop, or summarize away any column or row — a
    free-form menu has already shipped without `advisorProgramId`.
@@ -325,7 +323,7 @@ For direct CLI users, perform the following steps in order:
    selected advisor-program rows multiplied by selected sections: `<= 8` is
    low, `9-24` is medium, and `> 24` is high.
 6. Medical `investigation.draft.sourcePolicy: public_only` uses public evidence
-   only; none of the five medical modules is community-relevant, so no community
+   only; none of the three medical modules is community-relevant, so no community
    snapshot question or download is triggered for medical projects.
    For generic or explicitly community-enabled investigations, if a community-relevant section listed in the canonical section reference
    is selected, ask separately whether the user consents to downloading and
@@ -381,11 +379,10 @@ Completion requires:
   exploration workbook for medical discovery, without fabricated total scores.
 - The field/direction-named HTML research report from shared records. Medical
   reports start with the search requirements, then a compact comparison,
-  five readable modules per advisor, and “本次查了什么，还缺什么”.
-  Keep grant-search records expanded; put source and technical details in
-  native disclosure sections. Collaborator profiles contain only identity, current
-  appointment, research direction, joint projects and outputs; see the shared
-  medical contract for the relaxed single-documented-collaboration rule.
+  three readable modules per advisor, and “本次查了什么，还缺什么”.
+  Recent papers, preprints and journal checks belong in the research module;
+  corresponding-author papers do not require first-author degree verification.
+  Source and technical details use native disclosure sections.
 - Source, freshness, missing-field, and risk checks.
 
 ## Post-evaluation application materials
@@ -461,12 +458,19 @@ regenerate the workbook from structured state.
 - Do not bundle or commit third-party community snapshot contents.
 - Stop and state the missing input instead of inventing application facts.
 
-## Minimal medical report and grant-search evidence
+## Medical report scope
 
-Per-advisor official grant-database searching and its recorded process are mandatory baseline work for every medical report, even when the user never mentions grants. Do not require an extra prompt, a selected Detective section, or a deep-investigation request to include this baseline. Silence is not an exclusion; only an explicit user restriction can narrow it, and each excluded, blocked or unfinished search must still appear with its reason in a partial report.
-
-For a medical report, follow [the shared report contract](../advisor-pipeline/references/medical-profile.md#证据与续跑). Each advisor needs regional official grant-database searches using name variants and institution, covering active and past-five-year projects. Store the actual query, dates, scope, status, limitations and sources in `latestSignals.projectSearches[]`; store found grants in `projects[]`. Supplementary institutional/search-engine pages do not complete a database search. Respect user-selected investigation scope; report missing or blocked searches as partial, never infer “no grants” from empty data. Use descriptive `citation_label` links and separate appointment verification, page access and page update dates. Generate the shared minimalist HTML with five readable modules; do not replace it with custom decorated HTML.
-
-Medical minimum reports also include the [doctoral first-author and lab-website checks](../advisor-pipeline/references/medical-profile.md#博士指导第一作者画像与实验室网站默认最低内容), without an extra user request. Verify the advisor's corresponding/co-corresponding role and first/co-first authors on papers from the past five years; summarize only those joint papers. Seek an attributable lab website and check members/alumni/publications. First authors are not automatically doctoral students; preserve independent identity evidence, dates, sources and search gaps in `doctoralTrajectory`.
+Follow [the shared medical report contract](../advisor-pipeline/references/medical-profile.md).
+Use three modules: identity; research mainline including recent papers, preprints
+and journal-publication checks;
+corresponding-author papers and their authors.
+Do not investigate or render collaborator profiles or research grants, and do
+not treat missing grant searches as incomplete work. Preserve historical records.
+Include past-five-year papers when the advisor's corresponding/co-corresponding
+role is verified, regardless of the first author's degree or unknown identity.
+Record first/co-first names from the paper; known public roles are optional
+context, never an inclusion requirement. Coauthorship alone does not establish
+supervision. Check the attributable lab website and record sources and dates.
+Generate the shared HTML and supplementary Excel from the same records.
 
 医学身份采集和交付前检查：遵循 [身份字段落表与报告前检查](references/medical-profile.md#身份字段落表与报告前检查)。已读正文中的任职等事实须写入 identity 并关联字段级 evidence；链接标题不能代替字段。生成前运行 build_advisor_report.mjs 的 --check-identity，处理缺口或记录无法核实的原因，再交付部分或完整报告。

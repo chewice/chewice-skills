@@ -17,8 +17,8 @@ import { REMOVED_MEDICAL_PROFILE_KEYS } from "./medical-evidence.mjs";
 import { withProjectFileLock } from "./project-file-lock.mjs";
 
 export const SUBAGENT_ROLES = [
-  "seed_scout", "identity_resolver", "research_trajectory_mapper", "network_expander",
-  "regional_project_investigator", "doctoral_trajectory_investigator", "evidence_auditor",
+  "seed_scout", "identity_resolver", "research_trajectory_mapper",
+  "doctoral_trajectory_investigator", "evidence_auditor",
 ];
 
 export const SUBAGENT_OUTPUT_KEYS = ["task_id", "agent_role", "scope", "findings", "new_entities", "conflicts", "gaps", "queries_executed", "sources_checked"];
@@ -64,7 +64,13 @@ function stripRemovedFields(record, dropped) {
   const cleaned = {};
   for (const [key, value] of Object.entries(record || {})) {
     if (REMOVED_RECORD_KEYS.has(key)) { dropped.push(key); continue; }
-    cleaned[key] = value;
+    if (["evidenceProfile", "evidence_profile"].includes(key)) {
+      cleaned[key] = stripRemovedFields(value, dropped);
+    } else if (["latestSignals", "latest_signals"].includes(key)) {
+      const papers = Object.fromEntries(Object.entries(value || {}).filter(([field]) => ["latestPapers", "latest_papers", "preprints"].includes(field)));
+      for (const field of Object.keys(value || {})) if (!(field in papers)) dropped.push(`${key}.${field}`);
+      if (Object.keys(papers).length) cleaned[key] = papers;
+    } else cleaned[key] = value;
   }
   return cleaned;
 }
@@ -133,54 +139,6 @@ function conflictToEvidence(conflict, output, index) {
   };
 }
 
-// Only grant additions are merged here; other profile interpretation remains
-// Main Agent-owned. Never replace a whole existing evidence profile.
-function mergeProjectFindings(existing, record, output, report, evidence) {
-  const current = existing.evidenceProfile || existing.evidence_profile;
-  const incoming = record.evidenceProfile || record.evidence_profile;
-  if (!current || !incoming) return;
-  const addition = incoming.latestSignals || incoming.latest_signals;
-  if (!addition) return;
-  const key = current.latestSignals ? "latestSignals" : current.latest_signals ? "latest_signals" : "latestSignals";
-  const target = current[key] ||= {};
-  for (const aliases of [["projects", "grants"], ["projectSearches", "project_searches"]]) {
-    const updates = addition[aliases[0]] || addition[aliases[1]];
-    if (!Array.isArray(updates)) continue;
-    const storageKey = target[aliases[0]] ? aliases[0] : target[aliases[1]] ? aliases[1] : aliases[0];
-    const rows = target[storageKey] ||= [];
-    const identity = (item) => aliases[0] === "projects"
-      ? JSON.stringify([item.source || item.sourceName || item.fundingBody || item.funding_body, item.projectId || item.project_id || item.grant_id || item.title || item.project_title])
-      : JSON.stringify([item.database || item.sourceName, item.query || item.query_or_filter_summary, item.scope, item.checkedAt || item.checked_at]);
-    for (const update of updates) {
-      if (!update || typeof update !== "object") continue;
-      const found = rows.find((row) => identity(row) === identity(update));
-      if (!found) { rows.push(structuredClone(update)); continue; }
-      for (const [inputField, value] of Object.entries(update)) {
-        const groups = [["projectId", "project_id", "grant_id"], ["title", "project_title"],
-          ["fundingBody", "funding_body"], ["piRole", "pi_role", "role"], ["period", "project_period"],
-          ["amount", "published_amount"], ["amountUnit", "amount_unit", "currency"], ["amountBasis", "amount_basis"],
-          ["requiresInteraction", "requires_interaction"], ["interactionAttempts", "interaction_attempts"],
-          ["source", "sourceName"], ["checkedAt", "checked_at"], ["sourceKind", "source_kind"], ["query", "query_or_filter_summary"]];
-        const aliasesForField = groups.find((names) => names.includes(inputField)) || [inputField];
-        const field = aliasesForField.find((name) => Object.hasOwn(found, name)) || inputField;
-        if (value === null || value === undefined || value === "") continue;
-        if (["interactionAttempts", "interaction_attempts"].includes(field)) {
-          found[field] = [...new Map([...list(found[field]), ...list(value)].map(row => [JSON.stringify(row), row])).values()];
-        } else if (field === "sourceIds" || field === "source_ids") {
-          const refKey = found.sourceIds ? "sourceIds" : found.source_ids ? "source_ids" : field;
-          found[refKey] = [...new Set([...list(found[refKey]), ...list(value)])];
-        } else if (found[field] === undefined || found[field] === null || found[field] === "") found[field] = structuredClone(value);
-        else if (JSON.stringify(found[field]) !== JSON.stringify(value)) {
-          const conflict = { entity_id: existing.advisor_id || existing.advisorId,
-            field: `latestSignals.${aliases[0]}.${field}`, claims: [String(found[field]), String(value)] };
-          report.conflicts.push({ task_id: output.task_id, ...conflict });
-          evidence.push(conflictToEvidence(conflict, output, evidence.length));
-        }
-      }
-    }
-  }
-}
-
 export function mergeSubagentOutputs(outputs, { advisorRecords = [], evidenceRecords = [], credentials = null } = {}) {
   const report = { files: [], errors: [], droppedRemovedFields: [], duplicateAdvisors: [], duplicateEvidence: [], conflicts: [], gaps: [], queries: [], secretsBlocked: [] };
   const advisors = structuredClone(list(advisorRecords));
@@ -214,7 +172,6 @@ export function mergeSubagentOutputs(outputs, { advisorRecords = [], evidenceRec
         if (!keys.length) { report.errors.push(`${fileName}: 新导师实体缺少 advisor_id / ORCID / OpenAlex 标识`); continue; }
         const existing = keys.map((key) => advisorIndex.get(key)).find(Boolean);
         if (existing) {
-          mergeProjectFindings(existing, record, output, report, evidence);
           const currentProfile = existing.evidenceProfile || existing.evidence_profile;
           const incomingProfile = record.evidenceProfile || record.evidence_profile;
           const addition = incomingProfile?.doctoralTrajectory || incomingProfile?.doctoral_trajectory;

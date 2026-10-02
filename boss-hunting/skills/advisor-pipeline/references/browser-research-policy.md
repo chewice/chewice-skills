@@ -92,7 +92,7 @@ schema 调用，并映射到本策略已有的动作：
 - NCBI：key 缺失用匿名 E-utilities（低速率），**不改为抓取 PubMed 网页**。
 - CiNii/KAKEN：无 `CINII_APP_ID` 时用 CiNii Research / KAKEN 官方网站 Browser Use，如实记 `retrieval_method: browser`，不声称 API 等价。
 - Web of Science：`WOS_API_KEY` ≠ 完整 API 权限，web 订阅 ≠ API 权限；分层 `starter | researcher | expanded | limited | unavailable`，未探测前记 `unknown_until_probed`，不假定 expanded。API 不可用时不得用 Browser 假装拥有付费 API 数据；只有用户自有且已明确授权的合法网页访问才使用 WoS Web。
-- Google Scholar：只做 discovery / backcheck，不是权威来源；线索回到 PubMed、DOI/出版商、ORCID、当前机构或官方基金记录核实。遇 CAPTCHA/登录立即停止。
+- Google Scholar：只做 discovery / backcheck，不是权威来源；线索回到 PubMed、DOI/出版商、ORCID或当前机构记录核实。遇 CAPTCHA/登录立即停止。
 - API（OpenAlex 等）暂时不可用属合法降级，`probe.authenticatedApi=false` 只记录真实观测；失败不解释为记录不存在。API 与官方网页的 affiliation 不一致时保留两条带时点的主张与 `conflict`，由 Main Agent 用当前官方机构页裁决。
 
 ## 操作边界
@@ -183,15 +183,15 @@ Last update: September 1, 2026）。这只证明该宿主的打开与文本读�
 个人会话、调用云端付费服务。本地 fixture、内置网页读取和真实交互浏览器测试
 分别记录，不能互相替代。
 
-## 动态基金库查询必须执行
+## 动态检索交互
 
-NSFC 等门户返回空框架、加载页或动态检索表单时，立即切换交互路线，不以再次静态读取代替交互。逐位填入姓名变体、机构消歧及实际五年范围，提交查询，等待结果加载，检查筛选条件、结果数量及分页，打开项目详情。无机构筛选字段时用结果中的机构逐项消歧并记录限制。只有完整查询返回零条才可写“本次条件下未找到记录”。官方公告补查仍属 supplementary。
+论文、导师名册或会议检索返回空框架、加载页或动态表单时，切换交互路线。按实际查询填写条件，提交并等待结果，核验筛选、结果数和分页。只有完整查询返回零条才可写“本次条件下未找到记录”。
 
 GPT 宿主优先用实际暴露的内置交互浏览器或 computer 工具；`web.run` 的搜索、打开、点击链接和 PDF 截图不等于填写表单。Wisp Science 使用已连接的 Browser Use 工具组：`browser_setup` → `web_open_tab` → `web_scan` → `web_execute_js`（按当前 DOM 填写、触发输入事件、提交）→ 等待并再次 `web_scan` → 翻页/详情核验。不能假定 selector 或工具参数；先读真实 schema 与页面。
 
 先检查当前工具及可发现的延迟加载工具。有完整交互能力就必须实际调用，不得仅建议用户下次使用；GPT 原生交互不可用时可用现有 MCP/Playwright 等价能力，记录实际 provider。若均不可用，明确列出“宿主未提供表单交互工具”，不能声称站点访问受阻。公开只读填写、提交、筛选、翻页已在调查范围内，无需逐次确认。不得自动安装、付费或绕过验证码；需要人工验证时暂停该来源并说明。
 
-每条路线最多两次有区别的实际交互尝试；静态读取不计入。记录 `latestSignals.projectSearches[].requiresInteraction=true`，以及 `interactionAttempts[]` 中真实执行的 `provider/tool/checkedAt/url/outcome/reason/sourceIds`。未调用时 outcome 写 unavailable，不能伪造已执行。最终结果 sourceIds 关联结果证据，失败尝试的来源放各自 attempt.sourceIds。
+每条路线最多两次有区别的实际交互尝试；静态读取不计入。实际查询、工具、时间与结果写入运行记录，结果证据通过 sourceIds 关联。未调用工具时不得伪造已执行。
 
 动态查询的结果证据增加 `interaction_required: true`、`query_submitted`、`filters_confirmed`、`results_loaded`、`pagination_complete`（布尔）、`result_count`（非负整数）；只有亲眼观察或工具返回确认后填写。保留实际查询条件、URL、时间及检索范围；`not_found` 还需 `complete_results: true` 和 `searched_sources`。缺失任一完成条件就保留 partial/not_checked；得到部分项目可以保存，但不声称完整检索。
 

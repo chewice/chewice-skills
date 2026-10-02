@@ -1,11 +1,10 @@
 // Shared projections only; advisor/program/evidence records remain the fact source.
 //
 // Medical / biomedical discovery describes each PI with an evidence profile
-// built from five public-evidence modules (identity, five-year mainline,
-// collaboration network, latest signals/projects, doctoral trajectory).
+// built from three modules: identity, research papers and mainline, and
+// corresponding-author papers with author profiles. Legacy records remain readable.
 // Training fit, lab resources, doctoral personal funding, training environment,
 // applicant ability and overall quality scores are intentionally absent.
-import { interactiveQueryComplete } from "./browser-research.mjs";
 import { doctoralAdditions } from "./doctoral-evidence.mjs";
 import { hasStructuredApplicantBackground } from "./project-contract.mjs";
 import { open, realpath } from "node:fs/promises";
@@ -17,13 +16,12 @@ export const PI_ROLE_CONFIDENCE = ["verified", "probable", "emerging", "identity
 export const PI_EVIDENCE_LEVELS = ["A", "B", "C", "D"];
 export const EVIDENCE_SUFFICIENCY = ["strong", "adequate", "sparse", "conflicted"];
 export const CURRENT_ACTIVITY = ["active", "recent_signal", "unclear", "apparently_inactive_in_checked_scope"];
-export const COLLABORATION_EDGE_TYPES = ["coauthorship", "shared_project", "shared_grant", "shared_trial"];
-export const RESEARCH_NEIGHBOR_EDGE_TYPES = ["citation", "co_citation", "bibliographic_coupling", "semantic_similarity", "related_papers"];
 export const DISCOVERY_ROUTES = ["research_seed", "map_seed", "collaboration", "research_neighbor", "official_roster", "unknown"];
 
 // Fields the medical workflow no longer investigates. They are never copied
 // into the current projection even when an older record still stores them.
 export const REMOVED_MEDICAL_PROFILE_KEYS = [
+  "collaborationNetwork", "collaboration_network",
   "trainingFit", "training_fit", "resources", "doctoralFunding", "doctoral_funding",
   "trainingEnvironment", "training_environment", "doctoralOutcomes", "doctoral_outcomes",
   "researchFunding", "research_funding", "supportedRisks", "supported_risks",
@@ -116,12 +114,15 @@ function representativeWork(item) {
     verifiedRole: pick(item, "verifiedRole", "verified_role", "role") ?? "unknown",
     relationToMainline: pick(item, "relationToMainline", "relation_to_mainline", "relation") ?? null,
     isPreprint: pick(item, "isPreprint", "is_preprint") === true,
+    publishedVersionDoi: pick(item, "publishedVersionDoi", "published_version_doi") ?? null,
+    publicationStatus: pick(item, "publicationStatus", "publication_status") ?? null,
     sourceIds: sourceIds(item),
   };
 }
 
 function researchMainline(profile) {
   const source = pick(profile, "researchMainline", "research_mainline") || {};
+  const legacy = pick(profile, "latestSignals", "latest_signals") || {};
   return {
     longTermQuestion: pick(source, "longTermQuestion", "long_term_question") ?? null,
     continuingThemes: list(pick(source, "continuingThemes", "continuing_themes")),
@@ -131,127 +132,38 @@ function researchMainline(profile) {
     recentShift: pick(source, "recentShift", "recent_shift") ?? null,
     participationOnlyWorks: list(pick(source, "participationOnlyWorks", "participation_only_works")).map(representativeWork),
     representativeWorks: list(pick(source, "representativeWorks", "representative_works")).map(representativeWork),
+    latestPapers: [...list(pick(source, "latestPapers", "latest_papers")), ...list(pick(legacy, "latestPapers", "latest_papers"))].map(representativeWork),
+    preprints: [...list(source.preprints), ...list(legacy.preprints)].map(item => ({ ...representativeWork(item), isPreprint: true })),
     backSearchWindow: pick(source, "backSearchWindow", "back_search_window") ?? null,
     sourceIds: sourceIds(source),
   };
 }
 
-function collaborator(item) {
-  const source = item && typeof item === "object" ? item : { name: String(item ?? "") };
-  return {
-    name: String(pick(source, "name") ?? ""),
-    collaboratorId: pick(source, "collaboratorId", "collaborator_id", "advisor_id") ?? null,
-    currentInstitution: pick(source, "currentInstitution", "current_institution") ?? null,
-    currentPosition: pick(source, "currentPosition", "current_position") ?? null,
-    collaborationEvidence: list(pick(source, "collaborationEvidence", "collaboration_evidence")),
-    firstYear: pick(source, "firstYear", "first_year") ?? null,
-    lastYear: pick(source, "lastYear", "last_year") ?? null,
-    sharedTopics: list(pick(source, "sharedTopics", "shared_topics")),
-    ownCoreDirection: pick(source, "researchDirection", "research_direction", "ownCoreDirection", "own_core_direction") ?? null,
-    recentRoute: pick(source, "recentRoute", "recent_route") ?? null,
-    relationToMainline: pick(source, "relationToMainline", "relation_to_mainline") ?? null,
-    jointRecordCount: Math.max(0, Number(pick(source, "jointRecordCount", "joint_record_count")) || 0),
-    sourceIds: sourceIds(source),
-  };
+// Prefer a verified journal version when a preprint explicitly points to it.
+// Similar titles alone do not establish a preprint-to-journal relationship.
+export function researchPublications(mainline) {
+  const doiKey = value => String(value || "").replace(/^https?:\/\/(?:dx\.)?doi\.org\//i, "").toLowerCase();
+  const entries = [...mainline.representativeWorks, ...mainline.latestPapers, ...mainline.preprints];
+  const published = new Set(entries.filter(work => !work.isPreprint).map(work => doiKey(work.doi)).filter(Boolean));
+  const seen = new Map();
+  for (const work of entries) {
+    if (work.isPreprint && work.publishedVersionDoi && published.has(doiKey(work.publishedVersionDoi))) continue;
+    const key = doiKey(work.doi) || work.url || JSON.stringify([work.title, work.year, work.isPreprint]);
+    if (seen.has(key)) {
+      const prior = seen.get(key);
+      prior.sourceIds = [...new Set([...prior.sourceIds, ...work.sourceIds])];
+    } else seen.set(key, { ...work, sourceIds: [...work.sourceIds] });
+  }
+  return [...seen.values()];
 }
 
-function edge(item) {
-  const source = item && typeof item === "object" ? item : {};
-  const type = String(pick(source, "type", "edge_type") ?? "");
+export function mergeResearchMainline(current, prior) {
   return {
-    type: COLLABORATION_EDGE_TYPES.includes(type) ? type : "coauthorship",
-    target: pick(source, "target", "collaboratorId", "collaborator_id", "name") ?? null,
-    count: Math.max(0, Number(pick(source, "count")) || 0),
-    years: list(pick(source, "years")),
-    sourceIds: sourceIds(source),
-  };
-}
-
-function neighbor(item) {
-  const source = item && typeof item === "object" ? item : { name: String(item ?? "") };
-  const type = String(pick(source, "type", "edge_type") ?? "");
-  return {
-    name: String(pick(source, "name") ?? ""),
-    type: RESEARCH_NEIGHBOR_EDGE_TYPES.includes(type) ? type : "related_papers",
-    note: pick(source, "note", "reason") ?? null,
-    sourceIds: sourceIds(source),
-  };
-}
-
-function collaborationNetwork(profile) {
-  const source = pick(profile, "collaborationNetwork", "collaboration_network") || {};
-  return {
-    depth: 1,
-    coreCollaborators: list(pick(source, "coreCollaborators", "core_collaborators")).map(collaborator),
-    edges: list(pick(source, "edges")).map(edge),
-    researchNeighbors: list(pick(source, "researchNeighbors", "research_neighbors")).map(neighbor),
-    heuristics: pick(source, "heuristics") ?? null,
-    sourceIds: sourceIds(source),
-  };
-}
-
-function project(item) {
-  const source = item && typeof item === "object" ? item : { title: String(item ?? "") };
-  return {
-    title: pick(source, "title", "project_title") ?? null,
-    projectId: pick(source, "projectId", "project_id", "grant_id") ?? null,
-    fundingBody: pick(source, "fundingBody", "funding_body", "funder") ?? null,
-    piRole: pick(source, "piRole", "pi_role", "role") ?? null,
-    period: pick(source, "period", "project_period") ?? null,
-    status: pick(source, "status") ?? "not_checked",
-    amount: pick(source, "amount", "published_amount") ?? null,
-    amountUnit: pick(source, "amountUnit", "amount_unit", "currency") ?? null,
-    amountBasis: pick(source, "amountBasis", "amount_basis") ?? null,
-    source: pick(source, "source", "sourceName") ?? null,
-    sourceIds: sourceIds(source),
-  };
-}
-
-export const PROJECT_SEARCH_STATUSES = ["found", "not_found", "inaccessible", "partial", "not_checked"];
-
-function projectSearch(item) {
-  const source = item && typeof item === "object" ? item : {};
-  return {
-    database: pick(source, "database", "sourceName") ?? null,
-    query: pick(source, "query", "query_or_filter_summary") ?? null,
-    checkedAt: pick(source, "checkedAt", "checked_at") ?? null,
-    scope: source.scope ?? null,
-    status: PROJECT_SEARCH_STATUSES.includes(source.status) ? source.status : "not_checked",
-    sourceKind: pick(source, "sourceKind", "source_kind") ?? "unknown",
-    limitations: source.limitations ?? null,
-    requiresInteraction: pick(source, "requiresInteraction", "requires_interaction") === true,
-    interactionAttempts: list(pick(source, "interactionAttempts", "interaction_attempts")),
-    sourceIds: sourceIds(source),
-  };
-}
-
-// A configured provider or an empty projects list is not evidence of a search.
-export function projectSearchCoverage(searches = [], evidence = [], advisorId) {
-  if (!searches.length) return { complete: false, summary: "未记录检索过程" };
-  const complete = searches.every((search) => search.sourceKind === "supplementary" || (
-    search.sourceKind === "official_database" && ["found", "not_found"].includes(search.status)
-    && search.database && search.query && search.scope && /^\d{4}-\d{2}-\d{2}$/.test(search.checkedAt || "") && Number.isFinite(Date.parse(search.checkedAt))
-    && search.sourceIds.length && search.sourceIds.every((id) => evidence.some((row) =>
-      (row.evidence_id || row.evidenceId) === id && (row.entity_id || row.entity) === advisorId
-      && (search.status === "found" ? row.status === "verified" : row.status === "not_found")
-      && (!["empty_shell", "dynamic_form", "loading"].includes(row.page_state))
-      && (!(search.requiresInteraction || row.interaction_required) || (interactiveQueryComplete(row)
-        && (search.status !== "found" || row.result_count > 0)))
-      && /^https?:\/\//i.test(row.final_url || row.source_url || row.url || "")))))
-    && searches.some((search) => search.sourceKind === "official_database");
-  return { complete: Boolean(complete), summary: complete ? "已完成所列基金库检索" : "基金检索尚未完成或受限" };
-}
-
-function latestSignals(profile) {
-  const source = pick(profile, "latestSignals", "latest_signals") || {};
-  return {
-    latestPapers: list(pick(source, "latestPapers", "latest_papers")).map(representativeWork),
-    preprints: list(pick(source, "preprints")).map(representativeWork),
-    projects: list(pick(source, "projects", "grants")).map(project),
-    projectSearches: list(pick(source, "projectSearches", "project_searches")).map(projectSearch),
-    registries: list(pick(source, "registries")),
-    trials: list(pick(source, "trials", "clinical_trials")),
-    sourceIds: sourceIds(source),
+    ...prior,
+    ...Object.fromEntries(Object.entries(current).filter(([, value]) => Array.isArray(value) ? value.length : value)),
+    representativeWorks: [...current.representativeWorks, ...prior.representativeWorks],
+    latestPapers: [...current.latestPapers, ...prior.latestPapers],
+    preprints: [...current.preprints, ...prior.preprints],
   };
 }
 
@@ -365,8 +277,6 @@ export function normalizeMedicalEvidenceProfile(candidate = {}) {
     currentActivity: scalar(pick(profile, "currentActivity", "current_activity"), CURRENT_ACTIVITY, "unclear"),
     identity: identity(profile, candidate),
     researchMainline: researchMainline(profile),
-    collaborationNetwork: collaborationNetwork(profile),
-    latestSignals: latestSignals(profile),
     doctoralTrajectory: doctoralTrajectory(profile),
     formalRecords: list(pick(profile, "formalRecords", "formal_records")),
     fitBoundary: pick(profile, "fitBoundary", "fit_boundary") ?? null,
@@ -511,4 +421,24 @@ export function buildMedicalDiscoveryView(records, options = {}) {
     for (const key of ["advisorProgramId", "advisor_program_id", "programId", "program_id", "program", "intake"]) delete row[key];
     return { ...row, advisor_id: ids[index], view: "research_discovery" };
   }).sort(compareMedicalCandidates).map((row, index) => ({ ...row, rank: index + 1 }));
+}
+
+// Discovery stops when a round adds few validated PIs and no new scientific
+// structure. The 10% ratio is a configurable engineering default.
+export function saturationReached({ existingValidated = 0, newValidated = 0, newSubdirections = 0, newClusters = 0, round = 1, maxRounds = 2, ratio = 0.10 } = {}) {
+  const base = Math.max(1, Number(existingValidated) || 0);
+  const growth = (Number(newValidated) || 0) / base;
+  const structural = (Number(newSubdirections) || 0) > 0 || (Number(newClusters) || 0) > 0;
+  const piSaturated = (Number(newValidated) || 0) === 0;
+  const engineering = growth < ratio && !structural;
+  const roundLimit = Number(round) >= Number(maxRounds);
+  const stop = piSaturated || engineering || roundLimit;
+  return {
+    stop,
+    reason: piSaturated ? "pi_saturation" : engineering ? "engineering_heuristic" : roundLimit ? "max_rounds" : "continue",
+    growthRatio: Number(growth.toFixed(3)),
+    ratioThreshold: ratio,
+    structuralNovelty: structural,
+    note: "10% is a configurable engineering default, not a scientific standard",
+  };
 }
