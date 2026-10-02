@@ -124,6 +124,8 @@ These dimensions illustrate saving syntax, not a standard. Use appropriate devic
 
 Intermediate saves support expensive-result review, later plotting, human-edited handoff, or another analysis fragment. Follow current project formats: `saveRDS()`/`readRDS()`, `qs::qsave()`/`qs::qread()`, or `save()`/`load()`. Name the object and stage, such as `sample_A.annotated.rds` or `comparison_A.markers.tsv`; avoid generic `result` or `final_final` defaults.
 
+Allow reruns to overwrite the analysis's existing generated files. Write directly with `saveRDS()`, `write.table()`, `ggsave()`, or the appropriate writer; use a documented overwrite argument only when that writer requires it. Do not prepend `stopifnot(!file.exists(fn))`, stop when an output already exists, or wrap saving in `if (!file.exists(fn))` so a rerun silently retains stale results. Do not add timestamped filenames, backup copies, or overwrite confirmation by default. Keep scientific validity assertions, such as sample-order checks; the existence of an old generated output is not a scientific validity failure. Protect raw inputs, human-edited source tables, unrelated files, and explicitly protected records as specified in the core rules.
+
 ```r
 ## Save the annotated object for review ====
 out_path <- "../output"

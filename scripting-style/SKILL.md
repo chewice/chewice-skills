@@ -88,6 +88,8 @@ Use understandable names, including ordinary short names and scientific abbrevia
 
 Save only outputs useful for the current science, review, handoff, or reproduction. Do not require a table/figure/object bundle, operational completion summary, `run_summary`, `validation_pass`, or status files.
 
+Reruns replace the current analysis's generated outputs at their intended paths by default, including intermediate files, result tables, and figures. Do not add output-nonexistence guards, skip writes merely because a file exists, or generate timestamped copies, backups, or overwrite prompts by default. Use the writer's normal replacement behavior or its documented overwrite option when needed; do not add blanket directory deletion. This permission covers generated outputs, not raw inputs, human-edited source tables, unrelated files, or explicitly protected research records. Preserving meaningful evidence does not require preserving every superseded output file; honor an explicit no-overwrite requirement when present.
+
 ## Project and API boundaries
 
 Treat provided APIs as opaque capabilities: prepare known inputs, call the documented interface, inspect returns, and save needed results. Do not inspect excluded internals, copy implementations, guess behavior, or rewrite an API without authorization. Do not automatically build environments, editor settings, public libraries, or packages. Never copy source-example package installation, session clearing, path guessing, or scientific pipelines into a new script. Source examples remain read-only.
