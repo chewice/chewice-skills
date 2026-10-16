@@ -177,7 +177,7 @@ test("medical real program validation rejects invented IDs and mismatched intake
   assert.equal(result.selected[0].overallMatch, null, "stale mode cannot enable old numeric fallback");
 });
 
-test("T04 T10 medical workbook keeps three-module columns without public grant records and no training/resource/funding columns", () => {
+test("T04 T10 medical workbook has eight readable overview columns and optional author records", () => {
   const input = { project, applicationRows: [candidate("funding", {
     evidenceProfile: { researchQuestionFit: { status: "direct" },
       researchRouteContinuity: { status: "sustained_core" },
@@ -191,13 +191,15 @@ test("T04 T10 medical workbook keeps three-module columns without public grant r
       trainingFit: { status: "supported" },
     },
   })] };
-  const sheet = buildMedicalWorkbookSheets(input)[0];
+  const sheets = buildMedicalWorkbookSheets(input);
+  const sheet = sheets[0];
   const byHeader = Object.fromEntries(sheet.headers.map((header, index) => [header, sheet.rows[0][index]]));
   assert.doesNotMatch(JSON.stringify(sheet), /FIX-1|Fixture Funder|1000000 USD|核心合作者|研究邻居|公开项目记录/);
-  assert.match(byHeader["PI 角色置信 / Level"], /verified[\s\S]*A/);
-  assert.match(byHeader["C 已毕业博士（已有补充信息）"], /Fixture graduate/);
-  assert.match(byHeader["C 通讯作者论文、作者与实验室"], /First cohort still in progress/);
-  assert.match(byHeader["主线连续性"], /sustained_core/);
+  assert.deepEqual(sheet.headers, ["姓名", "机构与职务", "地区", "研究主线", "相关性", "已核实论文数", "关键待核实", "主页"]);
+  assert.match(JSON.stringify(sheets.find(sheet => sheet.name === "作者附录")), /Fixture graduate/);
+  assert.equal(byHeader["已核实论文数"], 0);
+  assert.match(byHeader["相关性"], /直接相关/);
+  assert.ok(sheets.some(sheet => sheet.name === "申请项目"));
   assert.ok(!sheet.headers.some((header) => /综合匹配分|申请定位|QS|训练|研究资源|博士生资助|培养制度|研究项目经费|培养成功/.test(header)), sheet.headers.join("|"));
   assert.doesNotMatch(JSON.stringify(sheet.rows[0]), /annual_parent_award|institution_owned|supported/);
 });
@@ -238,10 +240,11 @@ test("all existing builders export medical discovery without CV or application-r
       const entries = await readStoredZipEntries(output);
       const workbook = entries.get("xl/workbook.xml").toString();
       const xml = [...entries].filter(([key]) => /^xl\/worksheets\//.test(key)).map(([, data]) => data.toString()).join("\n");
-      assert.match(workbook, /医学方向探索/);
+      assert.match(workbook, /导师概览/);
       assert.doesNotMatch(workbook, /申请就绪/);
-      assert.match(xml, /本次未核验/);
-      assert.match(xml, /inaccessible/);
+      assert.match(xml, /未纳入调查/);
+      assert.match(xml, /访问受阻/);
+      assert.doesNotMatch(xml, /inaccessible|advisorProgramId/);
       assert.match(xml, /&apos;=malicious/);
       assert.match(xml, /<f>HYPERLINK/);
       assert.doesNotMatch(xml, /综合匹配分|相对稳妥/);
@@ -277,11 +280,10 @@ test("shipped fictional medical application example exports categorical comparis
       "--output", target,
     ], { env: { ...process.env, ADVISOR_ATLAS_FORCE_PORTABLE_XLSX: "1" } });
     const entries = await readStoredZipEntries(target);
-    assert.match(entries.get("xl/workbook.xml").toString(), /医学申请比较/);
-    const sheet = entries.get("xl/worksheets/sheet1.xml").toString();
-    assert.match(sheet, /eligible/);
-    assert.match(sheet, /actionable/);
-    assert.match(sheet, /fixture-pi--fixture-school-phd-2027/);
+    assert.match(entries.get("xl/workbook.xml").toString(), /申请项目/);
+    const sheet = [...entries].filter(([key]) => /^xl\/worksheets\//.test(key)).map(([, data]) => data.toString()).join("\n");
+    assert.match(sheet, /符合已核实条件/);
+    assert.doesNotMatch(sheet, /eligible|actionable|fixture-pi--fixture-school-phd-2027/);
     assert.doesNotMatch(sheet, /综合匹配分|申请定位|保底/);
   } finally { await rm(scratch, { recursive: true, force: true }); }
 });

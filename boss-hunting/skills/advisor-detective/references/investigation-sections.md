@@ -90,28 +90,29 @@ A user must explicitly expand the source policy before the independent
 community consent mechanism applies. Browser permission does not bypass either
 the candidate/section confirmation or source-policy gate.
 
-## Medical three-module menu
+## Medical core sections and optional appendix
 
 Medical / biomedical projects do not use the generic catalog above. The
 renderer (`getDetectiveSectionCatalog`) returns exactly these three public-
-evidence modules, all selected by default. Training fit, lab resources,
+evidence sections; identity and publications are selected by default, author
+profiles are optional. Training fit, lab resources,
 doctoral personal funding, training environment / atmosphere, applicant
 ability and overall quality scores are not selectable and are not investigated.
 
 | No. | ID | Label | Initial state |
 | ---: | --- | --- | --- |
 | 1 | `identity_research_positioning` | A. 导师身份与当前科研定位 | selected by default |
-| 2 | `research_mainline_5y` | B. 近五年科研主线与研究路线 | selected by default |
-| 3 | `doctoral_trajectory` | C. 指导相关论文与作者情况 | selected by default |
+| 2 | `research_mainline_5y` | B. 近五年研究主线与一作／通讯论文 | selected by default |
+| 3 | `doctoral_trajectory` | C. 第一作者与指导关系补充（可选） | not selected by default |
 
 Module scope (details in
 [medical-profile.md](../../advisor-pipeline/references/medical-profile.md)):
 
 | ID | Public-evidence scope |
 | --- | --- |
-| `identity_research_positioning` | Current institution / department / position, official profile, identifiers and name variants, current research positioning, the minimum doctoral-supervision link (graduate school / doctoral programme / supervisor listing); earlier institutions are preserved as history |
-| `research_mainline_5y` | Long-term scientific question, continuing themes, new directions, research objects and methods, recent shift, representative works with verified roles; participation-only works listed separately and not counted as the mainline; five-year back-search window; recent papers, preprints and journal-publication checks; past-two-year conferences/talks with exact titles and scheduled-versus-delivered evidence; upcoming events separate |
-| `doctoral_trajectory` | Lab website checks and past-five-year papers with verified advisor corresponding/co-corresponding roles; first/co-first author names and research summaries from these papers. Include papers regardless of first-author degree or unknown identity; known public roles and independently documented supervision are optional context. |
+| `identity_research_positioning` | Current institution / department / position, official and lab profiles, identifiers and name variants, research positioning; programme/supervision mapping only within application scope |
+| `research_mainline_5y` | Full paginated five-year back-search across directions; first/co-first/corresponding/co-corresponding role and date verification, preprint/journal reconciliation, source-backed mainline and actual search gaps. Representative works are a display selection only. Existing talks may supplement the mainline. |
+| `doctoral_trajectory` | Optional first-author profiles and independently documented supervision from qualifying corresponding-author papers. No degree filtering, no automatic supervision inference, no effect on core publication inclusion or completion. |
 
 Mentoring style, feedback speed, working hours, atmosphere, resources,
 personal funding and applicant fit remain out of scope; do not infer them from

@@ -26,13 +26,13 @@ export const GENERIC_DETECTIVE_SECTIONS = [
   "collaboration_industry_network",
 ];
 
-// Medical / biomedical discovery investigates exactly three public-evidence
-// modules. Training environment, lab resources, doctoral personal funding,
+// Medical discovery defaults to identity and full five-year publication research.
+// Author profiles are optional. Training environment, lab resources, doctoral personal funding,
 // applicant ability and overall quality scores are not selectable here.
 export const MEDICAL_DETECTIVE_SECTION_CATALOG = [
   { id: "identity_research_positioning", label: "A. 导师身份与当前科研定位", defaultSelected: true },
-  { id: "research_mainline_5y", label: "B. 近五年科研主线与研究路线", defaultSelected: true },
-  { id: "doctoral_trajectory", label: "C. 指导相关论文与作者情况", defaultSelected: true },
+  { id: "research_mainline_5y", label: "B. 近五年研究主线与一作／通讯论文", defaultSelected: true },
+  { id: "doctoral_trajectory", label: "C. 第一作者与指导关系补充（可选）", defaultSelected: false },
 ];
 
 export const MEDICAL_DETECTIVE_SECTIONS = MEDICAL_DETECTIVE_SECTION_CATALOG.map((section) => section.id);
@@ -77,7 +77,7 @@ export const DETECTIVE_SECTION_CATALOG = [
   },
 ];
 
-export const MEDICAL_DEFAULT_DETECTIVE_SECTIONS = [...MEDICAL_DETECTIVE_SECTIONS];
+export const MEDICAL_DEFAULT_DETECTIVE_SECTIONS = MEDICAL_DETECTIVE_SECTION_CATALOG.filter(section => section.defaultSelected).map(section => section.id);
 
 export const EVIDENCE_STATUSES = [
   "verified", "not_found", "not_found_in_checked_scope", "not_checked", "inaccessible", "partial",

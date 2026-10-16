@@ -40,26 +40,24 @@ reach/match/safer quotas. `rank` is only `display_order`; `rankingMode` is
 
 - Discovery accepts `advisorRecords` / `advisor_records` projected from
   `outputs/advisor_records.json`, with unique real `advisor_id`; the
-  `1_医学方向探索` sheet is an advisor view. It never invents program, intake,
+  `导师概览` sheet is an advisor view. It never invents program, intake,
   or `advisorProgramId`. The selector also derives `outputs/discovery-view.json`
   from these records; this view is not an application-material target list.
 - Real mapped `candidates` / `applicationRows` / `advisors` use the separate
   program comparison sheet. Application rows require `advisorProgramId`.
   One advisor with two real programs/intakes remains two rows.
-- Columns (in order): 展示序号（非质量排名）, `advisor_id`, `advisorProgramId`,
-  导师姓名, 当前机构 / 院系 / 职位, 官方主页, 真实项目, 学位, 入学批次, 发现路径,
-  PI 角色置信 / Level, 证据充分度, 当前活跃度, 研究问题契合, 契合理由与证据,
-  主线连续性, 连续性理由, A 当前科研定位, A 博士指导关联, B 长期科学问题,
-  B 持续主题 / 新方向 / 近期转向, B 代表性工作（已核实角色）, C 核心合作者,
-  C 研究邻居, D 最新论文 / 预印本, D 公开项目记录 (title | id | funder | PI role
-  | period | status | amount unit), E 当前博士生, E 已毕业博士, E Graduate
-  Program (incl. emerging-PI note), 正式记录, 方向契合边界, 关键未知, 下一步核验,
-  项目/岗位路径, 申请资格, 招生机会, 硬条件状态与依据, 比较分组, 最后核验日期,
-  来源. There are no training-fit, resource, research-funding,
-  doctoral-funding, training-environment or success-rate columns; legacy
-  values in those removed keys are dropped by `normalizeMedicalCandidate`.
-- Exploration application fields say `本次未核验`. Missing numeric values are
-  blank, never zero. Missing section results remain `not_checked`; selecting
+- `导师概览`: 姓名、机构与职务、地区、研究主线、相关性、已核实论文数、关键待核实、主页。
+- `近五年论文`: one row per verified qualifying paper, with advisor, date,
+  linked title, venue, Chinese author role, relation to the requested direction
+  and verification status. Pending records go to `待核验论文`, outside verified counts.
+- `来源说明`: human advisor names, supported claims, source links, dates, status
+  and limitations. No raw IDs, machine field names, enum codes or JSON dumps.
+- `作者附录`: optional, only when actual author/verified supervision information exists.
+  Medical application facts may use a separate `申请项目` sheet, preserving
+  one row per real advisor-programme-intake combination. No empty application
+  columns in discovery, and no training, funding or success-rate columns.
+- Discovery explains unperformed admissions checks once. Missing numeric values
+  are blank, never zero. Missing section results remain `not_checked` in data; selecting
   a section does not prove it was researched.
 - `evidenceProfile.researchQuestionFit.status` is `direct`, `partial`,
   `adjacent`, `weak`, or `insufficient_information` (legacy `scientificFit`
@@ -100,7 +98,7 @@ fake IDs to this material-selection artifact.
 The HTML exporter merges a current confirmed evaluation into the matching
 candidate by ID, preserving real advisor/program/degree/intake identity. Its
 updated fit / continuity reasons, boundary, unknowns and next actions appear in
-both the overview table and the advisor's three-module section. Unknown or repeated evaluation IDs
+both the overview table and the advisor's four-section report. Unknown or repeated evaluation IDs
 and identity changes are rejected. The comparison shows readable reasons and
 evidence links rather than raw source-ID objects.
 

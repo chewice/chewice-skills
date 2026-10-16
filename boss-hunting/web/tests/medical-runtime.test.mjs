@@ -186,8 +186,10 @@ test("CV-only medical application survives selection, export, confirmation and r
     advisorRecords: bundle.advisors, candidates: selected, evidence }));
   await execute(process.execPath, [resolve(repository, "skills/advisor-finder/scripts/build_advisor_excel.mjs"),
     "--input", exportInput, "--output", workbookPath], { env: { ...process.env, ADVISOR_ATLAS_FORCE_PORTABLE_XLSX: "1" } });
-  const worksheet = (await readStoredZipEntries(workbookPath)).get("xl/worksheets/sheet1.xml").toString();
-  assert.match(worksheet, /<t xml:space="preserve">eligible<\/t>/);
+  const workbookEntries = await readStoredZipEntries(workbookPath);
+  const worksheets = [...workbookEntries].filter(([name]) => /^xl\/worksheets\/sheet\d+\.xml$/.test(name)).map(([,bytes]) => bytes.toString()).join("\n");
+  assert.match(worksheets, /符合已核实条件/);
+  assert.doesNotMatch(worksheets, /<t xml:space="preserve">eligible<\/t>/);
   let report = await exportAdvisorReport(project.path);
   assert.match(await readFile(report.output, "utf8"), /<div class="fact-item">符合已核实条件<\/div>/);
   const complete = await verifyRunArtifacts({ projectPath: project.path, mode: "finder" });

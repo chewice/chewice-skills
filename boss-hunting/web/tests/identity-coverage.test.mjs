@@ -23,9 +23,10 @@ test('field evidence survives merge and renders recorded facts, not citation lab
   assert.equal(identityCoverage(merged.advisors[0], merged.evidence).complete, true);
   const html = buildAdvisorReport({ project, advisors: merged.advisors, evidence: merged.evidence, candidates: [], programs: [] });
   const identity = html.split('id="advisor-1-a"')[1].split('id="advisor-1-b"')[0];
-  for (const value of values) assert.ok(identity.includes(value));
-  assert.match(identity, /<dt>院系<\/dt>/);
-  assert.match(identity, /<dt>职位<\/dt>/);
+  for (const index of [0, 1, 2, 5]) assert.ok(identity.includes(values[index]));
+  assert.match(identity.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' '), /Example University Neuroscience Professor/);
+  assert.match(html.split('id="advisor-1-b"')[1].split('id="advisor-1-p"')[0], /Mood disorders/);
+  assert.match(html, /Official doctoral faculty listing/);
   assert.match(identity, /href="https:\/\/example.org\/profile"/);
   assert.doesNotMatch(identity, /字段尚未记录|对应字段来源待核验/);
 });
@@ -57,8 +58,9 @@ test('snake case is supported and missing or conflicting facts retain their reas
     assert.match(result.gaps.find(gap => gap.field === 'currentPosition').reason, new RegExp(label));
     const html = buildAdvisorReport({ project, advisors: [row], evidence: sources, candidates: [], programs: [], audit: { completionTier: 'complete' } });
     assert.ok(html.includes('Specific search limitation'));
-    assert.match(html, /身份信息待补查/);
-    assert.doesNotMatch(html, /已完成本轮设定范围的检索/);
+    assert.match(html.split('id="advisor-1-u"')[1].split("</article>")[0], /职位：[\s\S]*Specific search limitation/);
+    assert.match(html, /部分完成：身份信息/);
+    assert.doesNotMatch(html, /已完成所列来源范围的身份与论文核查/);
   }
 });
 
@@ -76,15 +78,17 @@ test('identity preflight is read only and returns actionable gaps for old record
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
-test('identity gaps alone override a complete audit; missing grants do not block completion', () => {
+test('identity and publication gaps override complete audits; optional supplements do not block completion', () => {
   const row = advisor(); const sources = evidence();
   row.evidence_profile.doctoral_trajectory = { searches: ['corresponding_papers', 'lab_website'].map(kind => ({ kind, database: 'Official fixture pages', query: 'Fictional PI', checkedAt: '2026-09-23', status: 'not_found', sourceIds: ['search'] })) };
   sources.push({ evidence_id: 'search', entity_id: row.advisor_id, status: 'not_found', url: 'https://example.org/search', claim: 'No results in the fictional checked scope' });
   const input = { project, advisors: [row], evidence: sources, programs: [], candidates: [], audit: { completionTier: 'complete' } };
-  assert.match(buildAdvisorReport(input), /部分完成：会议与演讲检索尚有缺口/);
-  row.evidence_profile.researchMainline = {talkSearches:[{database:'Fictional official events',query:'Fictional PI + conference',checkedAt:'2026-09-23',windowStart:'2024-09-23',windowEnd:'2026-09-23',status:'not_found',sourceIds:['search']}]};
-  assert.match(buildAdvisorReport(input), /已完成本轮设定范围的检索/);
+  assert.match(buildAdvisorReport(input), /部分完成：近五年论文检索或署名核验尚有缺口/);
+  row.evidence_profile.researchMainline = {publicationSearches:[{database:'Fictional official publications',query:'Fictional PI publication corpus',checkedAt:'2026-09-23',windowStart:'2021-09-23',windowEnd:'2026-09-23',resultsExhausted:true,status:'not_found',sourceIds:['search']}]};
+  sources.at(-1).fields_supported = ['publicationSearches'];
+  delete row.evidence_profile.doctoral_trajectory;
+  assert.match(buildAdvisorReport(input), /已完成所列来源范围的身份与论文核查/);
   delete row.evidence_profile.identity.currentPosition;
   assert.match(buildAdvisorReport(input), /部分完成：身份信息尚有缺口/);
-  assert.doesNotMatch(buildAdvisorReport(input), /已完成本轮设定范围的检索/);
+  assert.doesNotMatch(buildAdvisorReport(input), /已完成所列来源范围的身份与论文核查/);
 });

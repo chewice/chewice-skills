@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import {
-  MEDICAL_DETECTIVE_SECTIONS, PROJECT_SCHEMA_VERSION, medicalIntakeStatus, normalizeProjectMetadata, readinessForProject,
+  MEDICAL_DETECTIVE_SECTIONS, MEDICAL_DEFAULT_DETECTIVE_SECTIONS, PROJECT_SCHEMA_VERSION, medicalIntakeStatus, normalizeProjectMetadata, readinessForProject,
 } from "../../skills/advisor-pipeline/scripts/project-contract.mjs";
 import {
   PI_ROLE_CONFIDENCE, REMOVED_MEDICAL_PROFILE_KEYS, buildMedicalDiscoveryView, compareMedicalCandidates, normalizeMedicalCandidate, normalizeMedicalEvidenceProfile,
@@ -56,7 +56,7 @@ test("T03 advisor id only: advisor-level report without invented programme or in
   const rows = buildMedicalDiscoveryView(bundle.advisors, bundle.project);
   assert.ok(rows.every((row) => !("advisorProgramId" in row) && !("intake" in row) && !("program" in row)));
   const report = buildAdvisorReport(bundle);
-  assert.match(report, /研究方向与近年论文/);
+  assert.match(report, /研究主线与相关性/);
   assert.doesNotMatch(report, /advisorProgramId/);
 });
 
@@ -70,7 +70,7 @@ test("T04 legacy funding/resource/environment/training fields are kept in storag
   assert.equal(view.evidenceProfile.researchQuestionFit.status, "direct", "direction fit is retained content");
   assert.ok(legacy.evidence_profile.trainingFit, "the stored record is not mutated");
   const project = normalizeProjectMetadata({ ...minimal, investigation: { draft: { selectedSections: ["recent_research", "resources_career_support"] } } }, { now });
-  assert.deepEqual(project.investigation.draft.selectedSections, MEDICAL_DETECTIVE_SECTIONS);
+  assert.deepEqual(project.investigation.draft.selectedSections, MEDICAL_DEFAULT_DETECTIVE_SECTIONS);
   const report = buildAdvisorReport({ project, advisors: [legacy], evidence: [] });
   assert.doesNotMatch(report, /legacy training|institution_owned|placementRate|培养制度与环境|博士生资助/);
   const sheets = buildMedicalWorkbookSheets({ project, advisorRecords: [legacy] });
@@ -173,9 +173,7 @@ test("T18 unchecked, not-found and blocked evidence remain distinguishable", asy
   bundle.evidence.push({ evidence_id: "blocked", entity_id: bundle.advisors[0].advisor_id, status: "inaccessible", url: "https://example.org/blocked", failure_reason: "HTTP 403" },
     { evidence_id: "none", entity_id: bundle.advisors[0].advisor_id, status: "not_found", url: "https://example.org/none" });
   const report = buildAdvisorReport(bundle);
-  assert.match(report, /inaccessible/);
-  assert.match(report, /not_found/);
-  assert.match(report, /not_checked/);
+  assert.doesNotMatch(report, /inaccessible|not_found|not_checked/);
   assert.match(report, /访问受阻/);
   assert.match(report, /在所查范围内未找到/);
   assert.match(report, /未检索或未核验/);

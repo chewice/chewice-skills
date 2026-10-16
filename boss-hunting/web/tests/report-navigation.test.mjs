@@ -14,7 +14,7 @@ test('navigation links resolve uniquely; same names and hostile labels cannot in
  for(const match of nav.matchAll(/href="#([^"]+)"/g)) assert.ok(ids.includes(match[1]),match[1]);
  assert.doesNotMatch(nav,/<script>/);
  assert.match(nav,/&lt;script&gt;/);
- for(const key of 'abe') assert.match(report,new RegExp('class="module module-'+key+'"'));
+ for(const key of 'abpu') assert.match(report,new RegExp('class="module module-'+key+'"'));
  const scripts=[...report.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)];
  assert.equal(scripts.length,1);
  const hash=createHash('sha256').update(scripts[0][1]).digest('base64');
@@ -36,14 +36,14 @@ test('general advisor reports only link actual chapters and advisor entries', ()
  assert.doesNotMatch(nav,/href="#advisor-1-[a-e]"|toc-advisor/);
 });
 
-test('report chrome uses the warm archive palette without external assets', () => {
+test('report chrome uses the white, blue and green palette without external assets', () => {
  const report=buildAdvisorReport({project:{domainProfile:'general',interests:[{name:'Ecology'}]},advisors:[{advisor_id:'general-pi',name:'General fixture'}],candidates:[],programs:[],evidence:[]});
  assert.match(report,/class="eyebrow"/);
  assert.match(report,/class="toc-brand"/);
- assert.match(report,/--canvas:#f7f4ee/);
- assert.match(report,/--accent:#8b503b/);
- assert.match(report,/--sidebar:#eee7dc/);
- assert.match(report,/Georgia,"Songti SC",serif/);
+ assert.match(report,/--canvas:#fff;/);
+ assert.match(report,/--accent-dark:#1e3a5f/);
+ assert.match(report,/--green:#166354/);
+ assert.match(report,/--sidebar:#f1f5f9/);
  assert.doesNotMatch(report,/fonts\.googleapis|cdn\.|@import|href="https:\/\/fonts/);
  assert.match(report,/min-width:1200px[\s\S]*left:16px/);
 });

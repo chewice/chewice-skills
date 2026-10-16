@@ -53,10 +53,11 @@ must use that shared catalog:
 
 - Generic projects: the 11-item catalog (`GENERIC_DETECTIVE_SECTIONS`) with the
   three legacy defaults; `COMMUNITY_SECTION_IDS` apply only here.
-- Medical projects (schema 10): the three-module catalog
-  (`MEDICAL_DETECTIVE_SECTIONS`), all selected by default —
+- Medical projects (schema 10): the catalog
+  (`MEDICAL_DETECTIVE_SECTIONS`), A and B selected by default —
   `identity_research_positioning` (A), `research_mainline_5y` (B),
-  `doctoral_trajectory` (C). `confirm_investigation.mjs` rejects generic
+  `doctoral_trajectory` (C, optional author appendix). Existing explicit selections
+  remain selections. `confirm_investigation.mjs` rejects generic
   section IDs for medical projects.
 
 Medical scope migration: removed collaboration/grant section IDs are filtered from drafts; changed scope fingerprints invalidate earlier confirmations without deleting their history. Schema 10 migration: a medical `investigation.confirmed` snapshot that still
@@ -161,7 +162,13 @@ writes `outputs/advisor_records.json`, `outputs/evidence.json` and
 
 ## 医学研究论文
 
-`researchMainline.representativeWorks/latestPapers/preprints` 保存研究模块论文：title、year/date、venue/journal、doi、url、verifiedRole、relationToMainline、isPreprint、publicationStatus、publishedVersionDoi、sourceIds。预印本须查期刊发表状态；正式版关联有来源才去重。旧 latestSignals 中论文仍读入研究模块；合作和基金字段不再归一化或接收新增结果；已有原始记录不改写。
+`researchMainline.representativeWorks/latestPapers/preprints` 保存研究模块论文：title、year/date、venue/journal、doi、url、advisorRoles、roleStatus、roleSourceIds、relationToMainline、isPreprint、publicationStatus、publishedVersionDoi、versionStatus、versionSourceIds、sourceIds。预印本须查期刊发表状态；版本关联及其来源已核实、正式版署名符合条件时才合并展示，并保留两版来源。旧 latestSignals 中论文仍读入研究模块；合作和基金字段不再归一化或接收新增结果；已有原始记录不改写。
+
+完整五年论文保存在 `latestPapers`，不以代表作数量限制检索。每篇新增 `advisorRoles[]`（`first_author|co_first_author|corresponding_author|co_corresponding_author`）、`roleStatus`、`roleSourceIds[]`。`roleStatus: verified` 须逐篇核验，`roleSourceIds` 指向同一导师的署名 evidence，`fields_supported` 包含 `researchMainline.publications.advisorRoles`。旧 `verifiedRole` 自由文本不能自动升级；`not corresponding`、末位或共同资深均不证明通讯。精确 `date` 与 `year` 分开保存；边界年缺日期保留待核验。重复论文补入更明确的核验记录，不能让旧的 unknown 覆盖新证据；相冲突的已核实角色或日期保留冲突。
+
+`researchMainline.publicationSearches[]` 独立记录 `{database, query, checkedAt, windowStart, windowEnd, status, resultsExhausted, sourceIds, limitations}`；兼容 snake_case。窗口截至 checkedAt 向前五年；每次实际查询留存分页与命中/筛选数量，`resultsExhausted: true` 仅表示查完这条查询的实际结果。检索证据字段为 `researchMainline.publicationSearches`。`found|not_found` 须有对应来源支持，受阻、部分或未查分别记录。报告读取最近检索日的记录判定本次范围；旧记录保留。无有效范围、未查完或仍有待核实论文时不能声明完成。作者画像或实验室补查缺失不阻止论文收录。
+
+`continuingThemes/newDirections/researchObjects/methods` 接受字符串或 `{text, sourceIds}`；共享投影提取可读文字并保留证据引用。原始 JSON 留存结构，不以对象直接转换成正文。
 
 ## 近期会议与演讲字段
 

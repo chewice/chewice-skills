@@ -26,12 +26,12 @@ test('report navigation: desktop, mobile, print, keyboard and offline without Ja
   assert.equal(await nav.evaluate(el=>getComputedStyle(el).position),'fixed');
   assert.equal((await nav.boundingBox()).width,216);
   assert.ok((await nav.boundingBox()).x+(await nav.boundingBox()).width < (await page.locator('main').boundingBox()).x);
-  await page.locator('[data-advisor="advisor-1"]>summary').click({position:{x:3,y:16}});
+  if (!await page.locator('[data-advisor="advisor-1"]').evaluate(el=>el.open)) await page.locator('[data-advisor="advisor-1"]>summary').click({position:{x:3,y:16}});
   await page.locator('nav a[href="#advisor-1-b"]').click();
   await page.waitForFunction(()=>document.querySelector('a[aria-current]')?.hash==='#advisor-1-b');
   const top=await page.locator('#advisor-1-b').evaluate(el=>el.getBoundingClientRect().top);
   assert.ok(top>=0 && top<100);
-  assert.equal(await page.locator('#advisor-1-b h5').first().isVisible(),true);
+  assert.equal(await page.locator('#advisor-1-b h4').first().isVisible(),true);
   await page.screenshot({path:resolve(directory,'desktop.png')});
   // Focus inside the directory must keep manually opened groups available.
   await page.locator('[data-advisor="advisor-2"]>summary').focus();
@@ -50,12 +50,13 @@ test('report navigation: desktop, mobile, print, keyboard and offline without Ja
    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),`overflow at ${width}`);
   }
   assert.equal(await nav.evaluate(el=>getComputedStyle(el).position),'sticky');
-  await page.locator('.toc-shell>summary').click();
-  await page.locator('[data-advisor="advisor-1"]>summary').click({position:{x:3,y:16}});
+  if (!await page.locator('.toc-shell').evaluate(el=>el.open)) await page.locator('.toc-shell>summary').click();
+  if (!await page.locator('[data-advisor="advisor-1"]').evaluate(el=>el.open)) await page.locator('[data-advisor="advisor-1"]>summary').click({position:{x:3,y:16}});
   await page.locator('nav a[href="#advisor-1-b"]').click();
   await page.waitForFunction(()=>!document.querySelector('.toc-shell').open);
   const mobileTop=await page.locator('#advisor-1-b').evaluate(el=>el.getBoundingClientRect().top);
-  assert.ok(mobileTop>=50 && mobileTop<130,`mobile target at ${mobileTop}`);
+  const navBottom=await nav.evaluate(el=>el.getBoundingClientRect().bottom);
+  assert.ok(mobileTop>=navBottom && mobileTop<navBottom+48,`mobile target at ${mobileTop}, navigation ends at ${navBottom}`);
   await page.screenshot({path:resolve(directory,'mobile.png')});
   await page.emulateMedia({media:'print'});
   assert.equal(await nav.isVisible(),false);
@@ -64,8 +65,8 @@ test('report navigation: desktop, mobile, print, keyboard and offline without Ja
   const nojs=await browser.newPage({javaScriptEnabled:false,viewport:{width:1440,height:1000}});
   await nojs.goto(pathToFileURL(file).href);
   await nojs.locator('[data-advisor="advisor-1"]>summary').click({position:{x:3,y:16}});
-  await nojs.locator('nav a[href="#advisor-1-e"]').click();
-  assert.equal(new URL(nojs.url()).hash,'#advisor-1-e');
-  assert.ok(await nojs.locator('#advisor-1-e').evaluate(el=>el.getBoundingClientRect().top<100));
+  await nojs.locator('nav a[href="#advisor-1-p"]').click();
+  assert.equal(new URL(nojs.url()).hash,'#advisor-1-p');
+  assert.ok(await nojs.locator('#advisor-1-p').evaluate(el=>el.getBoundingClientRect().top<100));
  } finally {await browser.close();if(temporary)await rm(directory,{recursive:true,force:true});}
 });

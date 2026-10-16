@@ -1,134 +1,147 @@
-import { doctoralWorkbookSummary, overlayDoctoralProfile } from "./doctoral-evidence.mjs";
-import { academicTalkSummary } from "./academic-events.mjs";
+import { firstAuthorIdentity, firstAuthorSummary, doctoralWindow, overlayDoctoralProfile } from "./doctoral-evidence.mjs";
+import { academicTalkRows } from "./academic-events.mjs";
 import { dateCell, formulaCell } from "./workbook-runtime.mjs";
-import { buildMedicalDiscoveryView, evidenceProfile, medicalProject, normalizeMedicalCandidate, researchPublications, mergeResearchMainline } from "./medical-evidence.mjs";
+import { buildMedicalDiscoveryView, evidenceProfile, identityCoverage, medicalProject, normalizeMedicalCandidate, mergeResearchMainline } from "./medical-evidence.mjs";
+import { publicationReview, publicationRoleLabel, readableText } from "./publication-evidence.mjs";
 
-function rows(value) { return Array.isArray(value) ? value : []; }
-
-function text(value) {
-  if (value === null || value === undefined || value === "") return "";
-  if (Array.isArray(value)) return value.map(text).filter(Boolean).join("\n");
-  if (typeof value === "object") return Object.entries(value).map(([key, item]) => `${key}: ${text(item)}`).join("; ");
-  return String(value);
+const rows = value => Array.isArray(value) ? value : [];
+const words = {
+  verified: "已核实", partial: "部分核实", inaccessible: "访问受阻", not_checked: "待核实", not_found: "所查范围未找到",
+  conflict: "来源存在冲突", stale: "信息可能过期", unknown: "尚不清楚", not_applicable: "不适用",
+  direct: "直接相关", adjacent: "相邻方向", weak: "弱相关", insufficient_information: "信息不足",
+  eligible: "符合已核实条件", ineligible: "不符合已核实条件", needs_confirmation: "需要进一步确认",
+  committee_led: "由项目委员会招生", rotation_led: "轮转后选导师", pi_led: "由导师招生", position_led: "公开岗位申请",
+  verified_open: "已核实开放申请", verified_closed: "已核实关闭申请", advertised: "已有公开招募", pass: "已通过核验", fail: "不符合条件",
+};
+function text(value) { const prose = readableText(value); return words[prose] || prose; }
+function compact(values, separator = "；") {
+  const items = [...new Set(values.flatMap(value => Array.isArray(value) ? value : [value]).map(text).filter(Boolean))];
+  return items.filter(item => !items.some(other => other.length > item.length && other.includes(item))).join(separator);
 }
-
-function sourceLink(value) {
+function sourceUrl(row) { return row.final_url || row.source_url || row.url || ""; }
+function sourceLink(value, label = "查看来源") {
   const url = String(value || "");
-  if (!/^https?:\/\/[^\s]+$/i.test(url)) return url;
+  if (!/^https?:\/\/[^\s]+$/i.test(url)) return "";
   const escaped = url.replaceAll('"', '""');
-  // Only the exporter constructs formulas; source text is never a formula cell.
-  return formulaCell(`HYPERLINK("${escaped}","${escaped}")`, url);
+  return formulaCell(`HYPERLINK("${escaped}","${label}")`, label);
+}
+function table(name, headers, data, widths) {
+  return { name, headers, rows: data, widths: widths || headers.map((_, index) => index === 0 ? 24 : 38), freezeRows: 1, freezeColumns: 1 };
+}
+function publicationUrl(paper) {
+  return paper.url || (paper.doi ? `https://doi.org/${String(paper.doi).replace(/^https?:\/\/doi\.org\//i, "")}` : "");
+}
+function combinedRow(original, project, index) {
+  const row = normalizeMedicalCandidate(original, project, index);
+  const stored = project.advisorRecords.find(advisor => (advisor.advisor_id || advisor.advisorId) === (row.advisor_id || row.advisorId));
+  if (!stored) return row;
+  const storedProfile = evidenceProfile(stored);
+  const profile = { ...storedProfile, ...row.evidenceProfile };
+  profile.researchMainline = mergeResearchMainline(normalizeMedicalCandidate(stored, project).evidenceProfile.researchMainline, row.evidenceProfile.researchMainline);
+  const doctoral = storedProfile.doctoralTrajectory || storedProfile.doctoral_trajectory;
+  if (doctoral) profile.doctoralTrajectory = overlayDoctoralProfile(doctoral, profile.doctoralTrajectory);
+  return normalizeMedicalCandidate({ ...stored, ...row, evidenceProfile: profile }, project, index);
+}
+function unresolved(row, review, project) {
+  const profile = row.evidenceProfile;
+  const personal = rows(profile.keyUnknowns).map(text).flatMap(item => item
+    .replace(/Finder阶段未深查三模块|用户选定后补充三模块背景调研|用户选择后再查完整近五年通讯论文与作者信息/g, "")
+    .split(/[；;]/).map(part => part.replace(/^[\s，,。]+|[\s，,。]+$/g, "")).filter(Boolean))
+    .filter(item => project.searchMode !== "discovery" || !/招生|招生名额|申请批次|博士项目映射|doctoral.*(?:supervision|program)|programme.*(?:intake|terms)|program.*(?:intake|terms)/i.test(item));
+  const identity = identityCoverage(row, project.evidenceRecords).gaps
+    .filter(gap => !["doctoralSupervisionLink", "researchPositioning"].includes(gap.field))
+    .map(gap => `${gap.label}：${gap.reason}`);
+  return compact([...personal, ...identity, ...(!review.searchComplete && !review.limitations.length ? [review.searches.length ? "近五年论文的检索或署名核验尚未完成，详见论文清单。" : "近五年论文检索记录尚未补齐。"] : []), ...review.limitations], "\n");
+}
+function mainlineSummary(profile) {
+  const mainline = profile.researchMainline;
+  return compact([mainline.longTermQuestion || profile.identity.researchPositioning, mainline.continuingThemes,
+    mainline.newDirections.length ? `近期拓展：${text(mainline.newDirections)}` : "", mainline.recentShift ? `研究转向：${text(mainline.recentShift)}` : ""]);
 }
 
-function table(name, headers, data) {
-  return { name, headers, rows: data, widths: headers.map((header, index) => index < 3 ? 24 : 38), freezeRows: 1, freezeColumns: 3 };
-}
-
-function works(items) {
-  return text(items.map((work) => [work.title, work.year, work.venue, work.verifiedRole !== "unknown" ? work.verifiedRole : null, work.isPreprint ? "预印本" : null, work.publicationStatus || (work.isPreprint ? "期刊发表状态待核实" : null), work.doi || work.url]
-    .filter(Boolean).join(" | ")));
-}
-
-function people(items) {
-  return text(items.map((person) => [person.name, person.degreeOrYear, person.topic, person.firstDestination, person.latestPublicRole].filter(Boolean).join(" | ")));
-}
-
-// HTML and Excel share the same three public-evidence modules.
-function profileTable(name, candidates, project, advisorOnly = false) {
-  const discovery = project.searchMode === "discovery" || advisorOnly;
-  const headers = [
-    "展示序号（非质量排名）", "advisor_id", "advisorProgramId", "导师姓名", "当前机构 / 院系 / 职位", "官方主页",
-    "真实项目", "学位", "入学批次", "发现路径", "PI 角色置信 / Level", "证据充分度", "当前活跃度",
-    "研究问题契合", "契合理由与证据", "主线连续性", "连续性理由",
-    "A 当前科研定位", "A 博士指导关联", "B 长期科学问题", "B 持续主题 / 新方向 / 近期转向", "B 代表性与近期论文 / 预印本（含期刊信息）",
-    "B 近期学术会议与演讲", "C 当前博士生（已有补充信息）", "C 已毕业博士（已有补充信息）", "C 通讯作者论文、作者与实验室",
-    "正式记录", "方向契合边界", "关键未知", "下一步核验",
-    "项目/岗位路径", "申请资格", "招生机会", "硬条件状态与依据", "比较分组", "最后核验日期", "来源",
-  ];
-  const data = candidates.map((original, index) => {
-    const row = normalizeMedicalCandidate(original, project, index);
-    const profile = evidenceProfile(row);
-    const stored = project.advisorRecords?.find((advisor) => (advisor.advisor_id || advisor.advisorId) === (row.advisor_id || row.advisorId));
-    const base = evidenceProfile(stored || {});
-    const doctoral = base.doctoralTrajectory || base.doctoral_trajectory;
-    if (doctoral) profile.doctoralTrajectory = overlayDoctoralProfile(doctoral, profile.doctoralTrajectory);
-    const mainline = mergeResearchMainline(normalizeMedicalCandidate(stored || {}, project).evidenceProfile.researchMainline, profile.researchMainline);
-    const doctoralView = normalizeMedicalCandidate({ ...row, evidenceProfile: profile }, project, index).evidenceProfile.doctoralTrajectory;
-    return [
-      index + 1, row.advisor_id || row.advisorId || "", advisorOnly ? "" : row.advisorProgramId || "",
-      row.name || row.advisorName || "",
-      text([profile.identity.currentInstitution || row.current_institution || row.school || row.schoolName, profile.identity.department, profile.identity.currentPosition].filter(Boolean)),
-      sourceLink(profile.identity.officialProfileUrl || row.homepage || row.advisorHomepage),
-      advisorOnly ? "" : row.program || row.programNameZh || row.programNameEn || "",
-      advisorOnly ? "" : row.degree || "", advisorOnly ? "" : row.intake || "",
-      row.discoveredVia, text([profile.piRoleConfidence.status, profile.piRoleConfidence.level].filter(Boolean)),
-      profile.evidenceSufficiency, profile.currentActivity,
-      profile.researchQuestionFit.status, text(profile.researchQuestionFit.reasons),
-      profile.researchRouteContinuity.status, text(profile.researchRouteContinuity.reasons),
-      text(profile.identity.researchPositioning), text(profile.identity.doctoralSupervisionLink),
-      text(mainline.longTermQuestion),
-      text([mainline.continuingThemes.length ? `持续：${mainline.continuingThemes.join("；")}` : "", mainline.newDirections.length ? `新方向：${mainline.newDirections.join("；")}` : "", mainline.recentShift ? `近期转向：${mainline.recentShift}` : ""].filter(Boolean)),
-      works(researchPublications(mainline)),
-      academicTalkSummary(mainline, project.evidenceRecords, row.advisor_id || row.advisorId),
-      people(doctoralView.currentDoctoral), people(doctoralView.formerDoctoral),
-      text([doctoralView.graduateProgram.graduateSchool, doctoralView.graduateProgram.doctoralProgram, doctoralView.graduateProgram.supervisorListing,
-        doctoralView.emergingPiNote ? `新兴 PI：${doctoralView.emergingPiNote}` : null, doctoralWorkbookSummary(doctoralView, project.evidenceRecords)].filter(Boolean)),
-      text(profile.formalRecords), text(profile.fitBoundary), text(profile.keyUnknowns), text(profile.nextVerification),
-      discovery && row.applicationPathway === "unknown" ? "本次未核验" : row.applicationPathway,
-      discovery ? "本次未核验" : row.feasibility,
-      discovery && row.opportunityStatus === "unknown" ? "本次未核验" : row.opportunityStatus,
-      text([row.hardConstraintStatus, ...(row.hardConstraintReasons || [])]),
-      row.comparisonGroup,
-      row.lastVerifiedAt || row.last_verified_at ? dateCell(row.lastVerifiedAt || row.last_verified_at) : "",
-      text(row.officialSources || row.source_ids || row.sourceIds),
-    ];
-  });
-  return table(name, headers, data);
-}
-
+// Workbook views consume the same review as HTML; pending leads never inflate counts.
 export function buildMedicalWorkbookSheets(input, overrides = {}) {
-  const project = { ...medicalProject(input),
-    cvValid: input.cvValid === true,
-    evidenceRecords: rows(input.evidenceRows || input.evidence || input.sources || input.sourceRows) };
-  const advisors = rows(input.advisorRecords || input.advisor_records);
-  project.advisorRecords = advisors;
-  const candidates = rows(overrides.candidates || input.applicationRows || input.candidates || input.advisors);
-  const sheets = [];
-  if (project.searchMode === "discovery") {
-    const unmapped = advisors.length ? advisors : candidates.filter((row) => !row.advisorProgramId);
-    const view = buildMedicalDiscoveryView(unmapped, project);
-    sheets.push(profileTable("1_医学方向探索", view, project, true));
-    const mapped = candidates.filter((row) => row.advisorProgramId);
-    if (mapped.length) sheets.push(profileTable("2_真实项目比较", mapped, project));
-  } else {
-    if (candidates.some((row) => !row.advisorProgramId)) {
-      throw new Error("医学申请比较必须使用真实 advisorProgramId；导师级记录请使用方向探索输出");
-    }
-    sheets.push(profileTable("1_医学申请比较", candidates, project));
-    if (advisors.length) sheets.push(profileTable("2_导师探索视图", buildMedicalDiscoveryView(advisors, project), project, true));
-  }
   const evidence = rows(input.evidenceRows || input.evidence || input.sources || input.sourceRows);
-  sheets.push(table("3_证据来源与缺口", [
-    "证据ID", "实体", "支持字段", "主张类型", "主张内容", "事实状态", "来源 URL", "页面标题",
-    "来源更新时间", "访问时间", "适用批次", "支持片段/定位", "读取深度", "检索方式", "提取状态", "同源组", "限制",
-  ], evidence.map((row) => [
-    row.evidence_id || row.evidenceId || "", row.entity_id || row.entity || row.advisorName || "",
-    text(row.fields_supported || row.field || row.sectionId), row.claim_type || row.claimType || "",
-    text(row.claim || row.finding || row.value), row.status || "not_checked", sourceLink(row.final_url || row.source_url || row.url), row.page_title || row.title || "",
-    row.source_updated_at || row.sourceUpdatedAt || "", row.accessed_at || row.accessedAt ? dateCell(row.accessed_at || row.accessedAt) : "",
-    row.intake || row.applicable_intake || "", text([row.excerpt || row.note, row.page_locator || row.locator].filter(Boolean)), row.reading_depth || row.read_depth || row.readDepth || "",
-    row.retrieval_method || row.retrievalMethod || "", row.extraction_status || row.extractionStatus || "",
-    row.same_source_group || row.source_group_id || row.sourceGroupId || "", text(row.limitations || row.failure_reason || row.gap),
-  ])));
-  sheets.push(table("4_配置与解释", ["项目", "内容"], [
-    ["比较模式", "evidence_profile；展示序号按研究问题契合与主线连续性排列，不是导师质量排名；不生成综合分、引用量排名、录取概率或申请竞争分组"],
-    ["检索模式", project.searchMode || "discovery"], ["目标范围", text(project.target)],
-    ["研究画像", text(project.medicalProfile)],
-    ["三模块", "A 身份与任职；B 研究方向与近年论文（含近期论文、预印本与期刊核验）；C 指导相关论文与作者情况"],
-    ["已删除范围", "不评估训练匹配、实验室资源、博士生个人资助、培养环境/氛围、申请者能力或综合质量分"],
-    ["论文纳入", "导师为已核实通讯或共同通讯作者即可纳入五年范围内文献，不以第一作者学历或身份核验为条件；共同署名不自动证明指导关系"],
-    ["未知与培养样本", "未查、未找到、访问受阻、部分、冲突和过期分别保留；没有分母不计算毕业率或培养成功率；新兴 PI 无毕业博士不作负面推断"],
-    ["材料边界", "导师级探索记录无项目ID，不进入RP/套磁材料选择；材料模块仍需真实背景及确切导师—项目确认"],
-  ]));
+  const advisors = rows(input.advisorRecords || input.advisor_records);
+  const project = { ...medicalProject(input), cvValid: input.cvValid === true, evidenceRecords: evidence, advisorRecords: advisors };
+  const candidates = rows(overrides.candidates || input.applicationRows || input.candidates || input.advisors);
+  if (project.searchMode !== "discovery" && candidates.some(row => !row.advisorProgramId)) {
+    throw new Error("医学申请比较必须使用真实 advisorProgramId；导师级记录请使用方向探索输出");
+  }
+  const records = advisors.length ? advisors : [...new Map(candidates.map(row => [row.advisor_id || row.advisorId, row])).values()];
+  const discovery = buildMedicalDiscoveryView(records, project);
+  const views = discovery.map((advisor, index) => {
+    const candidate = candidates.find(row => (row.advisor_id || row.advisorId) === (advisor.advisor_id || advisor.advisorId));
+    return combinedRow(candidate ? { ...advisor, ...candidate, evidenceProfile: { ...evidenceProfile(advisor), ...evidenceProfile(candidate) } } : advisor, project, index);
+  });
+  const reviews = views.map(row => publicationReview(row.evidenceProfile.researchMainline, evidence, row.advisor_id || row.advisorId));
+  const names = new Map(views.map(row => [row.advisor_id || row.advisorId, row.name || row.advisorName || "姓名待核实"]));
+  const overview = views.map((row, index) => {
+    const profile = row.evidenceProfile;
+    const identity = profile.identity;
+    return [row.name || row.advisorName || "姓名待核实",
+      compact([identity.currentInstitution || row.school || row.schoolName, identity.department, identity.currentPosition], " · "),
+      text(row.region || row.country || row.countryName), mainlineSummary(profile),
+      compact([words[profile.researchQuestionFit.status] || "相关性待核实", profile.researchQuestionFit.reasons, profile.fitBoundary]),
+      reviews[index].papers.length, unresolved(row, reviews[index], project), sourceLink(identity.officialProfileUrl || row.homepage || row.advisorHomepage, "导师主页")];
+  });
+  const papers = [], pending = [], authors = [], talks = [];
+  views.forEach((row, index) => {
+    const name = names.get(row.advisor_id || row.advisorId);
+    const review = reviews[index];
+    const paperRow = (paper, status) => [name, paper.date ? dateCell(paper.date) : text(paper.year), text(paper.title), text(paper.venue || paper.journal),
+      publicationRoleLabel(paper), compact([paper.relationToMainline, paper.isPreprint ? "预印本（未经同行评审）" : "", paper.publicationStatus]), status, sourceLink(publicationUrl(paper), "论文原文")];
+    papers.push(...review.papers.map(paper => paperRow(paper, "署名与日期已核实")));
+    pending.push(...review.pending.map(({paper, reason}) => paperRow(paper, `未纳入：${text(reason)}`)));
+    const doctoral = row.evidenceProfile.doctoralTrajectory;
+    for (const person of doctoral.firstAuthorProfiles) {
+      if (!person.papers.length && !firstAuthorIdentity(person, evidence) && !person.researchSummary) continue;
+      const summary = person.researchSummary ? firstAuthorSummary(person, doctoralWindow(doctoral), evidence) : "";
+      authors.push([name, text(person.name), "论文第一作者", firstAuthorIdentity(person, evidence), summary,
+        compact(person.papers.map(paper => paper.title), "\n"), compact(person.papers.map(publicationUrl), "\n")]);
+    }
+    for (const [kind, people] of [["已有当前博士生信息", doctoral.currentDoctoral], ["已有毕业博士信息", doctoral.formerDoctoral]]) {
+      for (const person of people) authors.push([name, text(person.name), kind, text(person.degreeOrYear), compact([person.topic, person.relationToMainline, person.supervisionEvidence, person.firstDestination, person.latestPublicRole]), "", compact(evidence.filter(item => person.sourceIds.includes(item.evidence_id || item.evidenceId)).map(sourceUrl), "\n")]);
+    }
+    talks.push(...academicTalkRows(row.evidenceProfile.researchMainline, evidence, row.advisor_id || row.advisorId).map(talk => [name, talk.date || "日期待核实", text(talk.eventName), text(talk.title), text(talk.roleLabel), text(talk.status), text(talk.limitations), sourceLink(talk.url)]));
+  });
+  const sourceGroups = new Map();
+  evidence.forEach((row, index) => {
+    const key = sourceUrl(row) || `missing-${index}`;
+    const group = sourceGroups.get(key) || [];
+    group.push(row);
+    sourceGroups.set(key, group);
+  });
+  const sourceRows = [...sourceGroups.values()].map(group => {
+    const nameFor = row => names.get(row.entity_id || row.entity) || row.advisorName || "相关记录";
+    const people = [...new Set(group.map(nameFor))];
+    const date = group.map(row => row.accessed_at || row.accessedAt).filter(Boolean).sort().at(-1);
+    const claim = row => `${people.length > 1 ? `${nameFor(row)}：` : ""}${text(row.claim || row.finding || row.value || row.excerpt)}${new Set(group.map(item => item.status)).size > 1 ? `（${words[row.status] || "待核实"}）` : ""}`;
+    return [people.join("、"), compact(group.map(claim), "\n"), sourceLink(sourceUrl(group[0])), date ? dateCell(date) : "",
+      compact(group.map(row => words[row.status] || "待核实")), compact(group.flatMap(row => [row.limitations, row.failure_reason, row.gap]), "\n"),
+      compact(group.map(row => row.citation_label || row.page_title || row.title))];
+  });
+  views.forEach((row, index) => {
+    const review = reviews[index];
+    const scope = review.window ? `${review.window.start} 至 ${review.window.end}` : "未记录有效的五年时间范围";
+    const checked = compact(review.searches.map(search => search.database || search.sourceName || search.source), "、");
+    sourceRows.push([names.get(row.advisor_id || row.advisorId), `论文核查范围：${scope}${checked ? `；已查来源：${checked}` : ""}`, "", review.window?.end ? dateCell(review.window.end) : "",
+      review.searchComplete ? "所列来源检索完成" : "检索或署名核验仍有缺口", compact(review.limitations, "\n"), "论文核查说明"]);
+  });
+  sourceRows.push(["本轮说明", project.searchMode === "discovery" ? "本轮聚焦研究方向与论文；招生资格、名额与申请批次未纳入调查。" : "申请信息按真实项目与批次列示，行动前需核对当期规则。", "", "", "", "论文按已核实的第一、共同第一、通讯或共同通讯署名与日期纳入；作者画像为可选补充。", ""]);
+  const sheets = [
+    table("导师概览", ["姓名", "机构与职务", "地区", "研究主线", "相关性", "已核实论文数", "关键待核实", "主页"], overview, [24, 46, 14, 65, 65, 16, 65, 45]),
+    table("近五年论文", ["导师", "发表日期", "论文标题", "期刊／平台", "导师署名", "相关性与文献说明", "核验状态", "原文链接"], papers, [24, 18, 76, 32, 24, 55, 25, 45]),
+    table("来源说明", ["相关导师", "支持内容", "来源链接", "查阅日期", "核验情况", "限制与待核实", "来源名称"], sourceRows, [24, 76, 45, 18, 28, 65, 42]),
+  ];
+  if (pending.length) sheets.push(table("待核验论文", ["导师", "发表日期", "论文标题", "期刊／平台", "记录中的署名（待核验）", "相关性与文献说明", "未纳入原因", "原文链接"], pending, [24, 18, 76, 32, 26, 55, 65, 45]));
+  if (authors.length) sheets.push(table("作者附录", ["相关导师", "作者／学生姓名", "记录类别", "公开身份", "已有研究或去向信息", "关联论文", "来源链接"], authors, [24, 24, 24, 32, 65, 65, 45]));
+  if (talks.length) sheets.push(table("学术活动", ["导师", "日期", "会议／活动", "演讲标题", "参与角色", "核验情况", "限制", "活动链接"], talks));
+  const applications = candidates.filter(row => row.advisorProgramId);
+  if (applications.length) sheets.push(table("申请项目", ["导师", "项目", "学位", "批次", "申请路径", "资格与条件", "招生机会", "待核实", "项目入口"], applications.map(original => {
+    const row = normalizeMedicalCandidate(original, project);
+    return [row.name || row.advisorName || names.get(row.advisor_id || row.advisorId), text(row.program || row.programNameZh || row.programNameEn), text(row.degree), text(row.intake), text(row.applicationPathway),
+      compact([row.feasibility, row.feasibilityReasons, row.hardConstraintReasons]), text(row.opportunityStatus), compact([row.evidenceProfile.keyUnknowns, row.evidenceProfile.nextVerification]), sourceLink(row.programUrl)];
+  })));
   return sheets;
 }

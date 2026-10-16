@@ -122,13 +122,13 @@ test("target is authoritative and medical fields survive repeated normalization"
   assert.deepEqual(cleared.medicalProfile.regions, []);
 });
 
-test("T04 medical default sections are the three modules and remain public-only even with community resources requested", () => {
+test("T04 medical defaults cover identity and papers with an optional author appendix and remain public-only", () => {
   const project = medical();
   assert.deepEqual(project.investigation.draft.selectedSections, MEDICAL_DEFAULT_DETECTIVE_SECTIONS);
   assert.deepEqual(MEDICAL_DEFAULT_DETECTIVE_SECTIONS, [
-    "identity_research_positioning", "research_mainline_5y", "doctoral_trajectory",
+    "identity_research_positioning", "research_mainline_5y",
   ]);
-  assert.deepEqual(getDetectiveSectionCatalog(project).map((s) => s.id), MEDICAL_DEFAULT_DETECTIVE_SECTIONS);
+  assert.deepEqual(getDetectiveSectionCatalog(project).map((s) => s.id), [...MEDICAL_DEFAULT_DETECTIVE_SECTIONS, "doctoral_trajectory"]);
   assert.deepEqual(getDetectiveSectionCatalog(project).filter((s) => s.defaultSelected).map((s) => s.id), MEDICAL_DEFAULT_DETECTIVE_SECTIONS);
   assert.equal(getDetectiveSectionCatalog(project).some((s) => /resources|environment|community|training/.test(s.id)), false);
   let investigation = updateInvestigationDraft(project.investigation, {
@@ -141,7 +141,7 @@ test("T04 medical default sections are the three modules and remain public-only 
   assert.equal(investigation.confirmed.communitySources.consented, false);
   const extension = updateInvestigationDraft(investigation, { sourcePolicy: "community_allowed", communitySources: { requested: true } }, now);
   assert.equal(isInvestigationConfirmationCurrent(extension), false);
-  // None of the five medical modules is community-relevant, so even an
+  // None of the medical sections is community-relevant, so even an
   // expanded source policy never downloads community caches for them.
   const expanded = communityRefreshEligibility(confirmInvestigationDraft(extension, { expectedRevision: extension.draft.revision, now }));
   assert.equal(expanded.allowed, false);
@@ -251,7 +251,7 @@ test("retired medical modules leave defaults while old confirmations retain thei
   const project = normalizeProjectMetadata({domainProfile:"medical", searchMode:"discovery", investigation:{
     draft:{...selection, revision:1}, confirmed:{...selection, revision:1, fingerprint:investigationFingerprint(selection)},
   }});
-  assert.deepEqual(project.investigation.draft.selectedSections, MEDICAL_DEFAULT_DETECTIVE_SECTIONS);
+  assert.deepEqual(project.investigation.draft.selectedSections, [...MEDICAL_DEFAULT_DETECTIVE_SECTIONS, "doctoral_trajectory"]);
   assert.deepEqual(project.investigation.confirmed.selectedSections, sections);
   assert.equal(isInvestigationConfirmationCurrent(project.investigation), false);
 });

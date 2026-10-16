@@ -36,11 +36,22 @@ test('report browser: floating long directory, anchors, keyboard, mobile and pri
     const citationIds = ['ui-source-1','ui-source-2','ui-source-3'];
     input.advisors[0].evidence_profile.research_question_fit.source_ids = citationIds;
     input.evidence.push(...citationIds.map((id,index)=>({evidence_id:id,url:`https://example.org/${id}`,source_type:'official_profile',page_title:'完整机构来源标题',status:index===2?'partial':'verified',accessed_at:'2026-10-02'})));
+    const mainline = input.advisors[0].evidence_profile.research_mainline;
+    mainline.publicationSearches = [{database:'Fictional publication catalogue',query:'Synthetic browser fixture',checkedAt:'2026-10-15',windowStart:'2021-10-15',windowEnd:'2026-10-15',resultsExhausted:true,status:'found',sourceIds:['ui-publications']}];
+    mainline.latestPapers = Array.from({length:6},(_,index)=>({title:index===0 ? `Long publication title ${'单细胞跨疾病机制比较'.repeat(20)}` : `Browser verified paper ${index+1}`,
+      date:`202${6-index%5}-06-01`,venue:'Fictional Journal',advisorRoles:['corresponding_author'],roleStatus:'verified',roleSourceIds:['ui-publications'],sourceIds:['ui-publications'],url:`https://example.org/verified-paper-${index}`}));
+    input.evidence.push({evidence_id:'ui-publications',entity_id:'fictional-0',fields_supported:['publicationSearches','advisorRoles'],status:'verified',url:'https://example.org/publications',claim:'Synthetic publication scope and authorship fixture'});
     const file = join(root, 'report.html'); await writeFile(file, buildAdvisorReport(input));
     await page('Emulation.setDeviceMetricsOverride', {width: 1440, height: 900, deviceScaleFactor: 1, mobile: false});
     await page('Page.navigate', {url: pathToFileURL(file).href});
     for (let i = 0; i < 100; i++) { if (await evaluate('document.readyState === "complete" && !!document.querySelector(".report-toc")')) break; await new Promise(resolve => setTimeout(resolve, 30)); }
     await settle();
+    assert.equal(await evaluate(`document.querySelector('#advisor-1 .publication-list').open`), false);
+    assert.equal(await evaluate(`document.querySelectorAll('#advisor-1-p > .works > li').length`), 3);
+    assert.equal(await evaluate(`document.querySelectorAll('#advisor-1 .publication-list .works > li').length`), 3);
+    await evaluate(`document.querySelector('#advisor-1 .publication-list > summary').click()`);
+    assert.equal(await evaluate(`document.querySelector('#advisor-1 .publication-list').open`), true);
+    await evaluate(`document.querySelector('#advisor-1 .publication-list > summary').click()`);
     assert.equal(await evaluate(`document.querySelector('#advisor-1 .citation-more').getAttribute('aria-expanded')`), 'false');
     assert.equal(await evaluate(`document.querySelector('#advisor-1 .citation-extra').hidden`), true);
     await evaluate(`document.querySelector('#advisor-1 .citation-more').focus()`);
@@ -71,6 +82,7 @@ test('report browser: floating long directory, anchors, keyboard, mobile and pri
     await page('Emulation.setEmulatedMedia', {media: 'print'});
     assert.equal(await evaluate(`getComputedStyle(document.querySelector('.report-toc')).display`), 'none');
     assert.equal(await evaluate(`getComputedStyle(document.querySelector('#advisor-1 .citation-extra')).display`), 'inline');
+    assert.equal(await evaluate(`getComputedStyle(document.querySelector('#advisor-1 .publication-list .works')).display`), 'block');
     if (process.env.BOSS_REPORT_SCREENSHOT) {
       await page('Emulation.setEmulatedMedia', {media: 'screen'});
       await page('Emulation.setDeviceMetricsOverride', {width: 1440, height: 900, deviceScaleFactor: 1, mobile: false});

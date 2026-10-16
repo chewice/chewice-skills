@@ -49,7 +49,8 @@ Medical `evaluationMode: evidence_profile` uses this branch in place of the
 numeric model below. Display the five evidence dimensions per PI with reasons
 and item-level sources — `researchQuestionFit`, `researchRouteContinuity`,
 `piRoleConfidence` (Level A–D), `evidenceSufficiency`, `currentActivity` — plus
-the module content (identity, five-year mainline, recent papers/preprints and journal checks, corresponding-author papers and author profiles), `formalRecords`,
+identity, five-year mainline and verified first/co-first/corresponding/co-corresponding
+papers, optional author profiles, `formalRecords`,
 `fitBoundary`, `keyUnknowns` and `nextVerification`. Application mode adds
 eligibility and opportunity for the exact programme and intake. Never produce
 a total score, training-fit, resource, doctoral personal funding, training
@@ -125,16 +126,12 @@ portable OOXML otherwise. Do not install packages or create and patch an ad-hoc
 workbook builder. The primary sheet must be usable without manually joining
 other sheets.
 
-Medical tables follow `references/workbook-contract.md`: display order, real
-IDs, identity, discovery route, PI role confidence / Level, evidence
-sufficiency, current activity, research-question fit and route continuity with
-reasons, the module columns A–C (positioning and supervision link, long-term
-question and representative works with verified roles, recent papers/preprints and journal checks, corresponding-author papers and
-author profiles without degree filtering, and graduate programme), formal records, fit boundary,
-unknowns, next verification, application route / eligibility / opportunity for
-application rows, dates and clickable sources. No training, resource,
-doctoral-funding, environment or success-rate columns exist. Do not fetch QS or
-H-index by default to fill generic columns.
+Medical tables follow `references/workbook-contract.md`: a compact advisor
+overview, one publication per row, human-readable sources, and an author
+appendix only when populated. Put pending papers separately and never count
+them as verified. Keep actual programme/eligibility/opportunity facts in a
+separate application sheet. Internal IDs and research logs remain in JSON.
+Do not fetch QS or H-index to fill generic columns.
 
 For generic/application tables include:
 
@@ -165,19 +162,18 @@ Use separate sheets for fit, evidence, sources/freshness, and configuration.
 ## Medical report scope
 
 Follow [the shared medical report contract](../advisor-pipeline/references/medical-profile.md).
-Use three modules: identity; research mainline including recent papers, preprints
-and journal-publication checks, plus recent academic conferences/talks;
-corresponding-author papers and their authors.
-Do not investigate or render collaborator profiles or research grants, and do
-not treat missing grant searches as incomplete work. Preserve historical records.
-Include past-five-year papers when the advisor's corresponding/co-corresponding
-role is verified, regardless of the first author's degree or unknown identity.
-Record first/co-first names from the paper; known public roles are optional
-context, never an inclusion requirement. Coauthorship alone does not establish
-supervision. Check the attributable lab website and record sources and dates.
-Generate the shared HTML and supplementary Excel from the same records.
+The core is advisor identity, research mainline and the full five-year
+first/co-first/corresponding/co-corresponding publication back-search across
+all research directions. Representative papers are a display selection, never
+a retrieval cap. Verify each role from actual bylines or author notes; last or
+co-senior authorship does not imply correspondence. Save independent publication
+search receipts and role evidence in the shared records.
+Author profiles are optional supporting material, displayed only when present;
+they never gate publication inclusion or core completion. Lab links belong in
+the advisor overview. Do not investigate collaborators or grants.
+Generate human-readable HTML and supplementary Excel from the same records,
+following the shared contract's retrieval, completion and presentation rules.
 
-In medical module 02, also search public conferences, forums and seminars from
-the past two years. Follow the shared medical contract’s “近期学术会议与演讲”
-section: preserve exact talk titles and sources, separate upcoming events, and
-distinguish a scheduled speaker from a confirmed delivered talk.
+Existing verified talks may appear as optional supporting information.
+Search talks separately when requested; preserve exact titles, dates and
+scheduled-versus-delivered status under the shared medical contract.

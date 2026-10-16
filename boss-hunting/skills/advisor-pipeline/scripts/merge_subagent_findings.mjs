@@ -8,6 +8,7 @@
 // and outputs/evidence.json for that merge.
 import { mergeDoctoralAdditions } from "./doctoral-evidence.mjs";
 import { mergeAcademicEvents } from "./academic-events.mjs";
+import { mergePublicationMainline } from "./publication-evidence.mjs";
 import { createHash } from "node:crypto";
 import { mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -146,7 +147,21 @@ export function mergeSubagentOutputs(outputs, { advisorRecords = [], evidenceRec
   const evidence = list(evidenceRecords).map((row) => ({ ...row }));
   const advisorIndex = new Map();
   for (const advisor of advisors) for (const key of advisorKey(advisor)) advisorIndex.set(key, advisor);
-  const evidenceIndex = new Set(evidence.map(evidenceKey));
+  const evidenceIndex = new Map(evidence.map(row => [evidenceKey(row), row]));
+  const evidenceAliases = new Map();
+  function appendEvidence(row, taskId) {
+    const key = evidenceKey(row);
+    const existing = evidenceIndex.get(key);
+    if (existing) {
+      const originalId = row.evidence_id || row.evidenceId;
+      const retainedId = existing.evidence_id || existing.evidenceId;
+      if (originalId && retainedId && originalId !== retainedId) evidenceAliases.set(originalId, retainedId);
+      report.duplicateEvidence.push({task_id:taskId, key, originalId, retainedId});
+      return;
+    }
+    evidenceIndex.set(key, row);
+    evidence.push(row);
+  }
 
   const ordered = [...outputs].sort((left, right) => String(left.fileName).localeCompare(String(right.fileName)));
   for (const { fileName, output } of ordered) {
@@ -179,7 +194,7 @@ export function mergeSubagentOutputs(outputs, { advisorRecords = [], evidenceRec
           if (currentProfile && eventAdditions) {
             const key = currentProfile.researchMainline ? "researchMainline" : currentProfile.research_mainline ? "research_mainline" : "researchMainline";
             const previous = currentProfile[key] || {};
-            currentProfile[key] = {...previous, ...mergeAcademicEvents(previous, eventAdditions)};
+            currentProfile[key] = {...previous, ...mergePublicationMainline(previous, eventAdditions), ...mergeAcademicEvents(previous, eventAdditions)};
           }
           const addition = incomingProfile?.doctoralTrajectory || incomingProfile?.doctoral_trajectory;
           if (currentProfile && addition) {
@@ -215,10 +230,7 @@ export function mergeSubagentOutputs(outputs, { advisorRecords = [], evidenceRec
           for (const key of keys) advisorIndex.set(key, created);
         }
       } else if (type === "evidence") {
-        const key = evidenceKey(record);
-        if (evidenceIndex.has(key)) { report.duplicateEvidence.push({ task_id: output.task_id, key }); continue; }
-        evidenceIndex.add(key);
-        evidence.push({ ...record, subagent_task_id: output.task_id, agent_role: output.agent_role });
+        appendEvidence({ ...record, subagent_task_id: output.task_id, agent_role: output.agent_role }, output.task_id);
       } else {
         report.errors.push(`${fileName}: 不支持的 new_entities 类型 ${type}`);
       }
@@ -226,16 +238,26 @@ export function mergeSubagentOutputs(outputs, { advisorRecords = [], evidenceRec
 
     list(output.findings).forEach((finding, index) => {
       const row = findingToEvidence(finding, output, sourcesById, index);
-      const key = evidenceKey(row);
-      if (evidenceIndex.has(key)) { report.duplicateEvidence.push({ task_id: output.task_id, key }); return; }
-      evidenceIndex.add(key);
-      evidence.push(row);
+      appendEvidence(row, output.task_id);
     });
     list(output.conflicts).forEach((conflict, index) => {
       report.conflicts.push({ task_id: output.task_id, ...conflict });
       evidence.push(conflictToEvidence(conflict, output, index));
     });
   }
+  // A duplicate claim can arrive under a new run-local ID. Keep its original
+  // evidence row and redirect citation references, so verified papers do not
+  // become unverifiable merely because their source was deduplicated.
+  function reconcileReferences(value) {
+    if (Array.isArray(value)) { value.forEach(reconcileReferences); return; }
+    if (!value || typeof value !== "object") return;
+    for (const [key, item] of Object.entries(value)) {
+      if (/(?:sourceIds|SourceIds|source_ids)$/.test(key) && Array.isArray(item)) {
+        value[key] = [...new Set(item.map(id => evidenceAliases.get(id) || id))];
+      } else reconcileReferences(item);
+    }
+  }
+  if (evidenceAliases.size) advisors.forEach(reconcileReferences);
   return { advisors, evidence, report };
 }
 

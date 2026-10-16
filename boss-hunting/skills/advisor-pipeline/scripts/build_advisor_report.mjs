@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
-import { overlayDoctoralProfile, labWebsiteVerified, doctoralCoverage, doctoralWindow, firstAuthorPaperState, firstAuthorSummary, firstAuthorIdentity } from "./doctoral-evidence.mjs";
-import { academicTalkRows, talkWindow, talkSearchComplete } from "./academic-events.mjs";
+import { overlayDoctoralProfile, labWebsiteVerified, doctoralWindow, firstAuthorPaperState, firstAuthorSummary, firstAuthorIdentity } from "./doctoral-evidence.mjs";
+import { academicTalkRows, talkWindow } from "./academic-events.mjs";
+import { publicationReview, publicationRoleLabel, readableText } from "./publication-evidence.mjs";
 import { createHash } from "node:crypto";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -9,7 +10,7 @@ import { isExecutedDirectly } from "./direct-execution.mjs";
 import { isMedicalRankingCurrent, normalizeProjectMetadata } from "./project-contract.mjs";
 import {
   buildMedicalDiscoveryView, compareMedicalCandidates, hasReadableProjectCv, isMedicalEvidenceProfile,
-  evidenceProfile, normalizeMedicalCandidate, validateMedicalCandidateMappings, researchPublications, mergeResearchMainline, identityCoverage,
+  evidenceProfile, normalizeMedicalCandidate, validateMedicalCandidateMappings, mergeResearchMainline, identityCoverage,
 } from "./medical-evidence.mjs";
 
 function html(value) {
@@ -30,6 +31,8 @@ const WORDS = {
   PI: "项目负责人", co_PI: "共同项目负责人", active: "在研", completed: "已结束", pending: "待确认",
   eligible: "符合已核实条件", ineligible: "不符合已核实条件", needs_confirmation: "需要进一步确认", advertised: "已有公开招募信息",
   fact: "公开事实", interpretation: "基于证据的解释", question: "待核实问题",
+  committee_led: "由项目委员会招生", rotation_led: "轮转后选导师", pi_led: "由导师招生", position_led: "公开岗位申请",
+  verified_open: "已核实开放申请", verified_closed: "已核实关闭申请", pass: "已通过核验", fail: "不符合条件",
 };
 const FIELD_LABELS = { program: "项目", degree: "学位", intake: "招生批次", pathway: "申请路径", eligibility: "申请资格", opportunity: "招生机会", url: "原文", title: "名称", name: "名称", note: "说明", status: "核验情况", reason: "理由", claim: "记录内容", year: "年份", type: "类型", orcid: "ORCID", openalex: "OpenAlex" };
 function text(value) {
@@ -91,7 +94,7 @@ function sourcedValue(value, evidence) {
     ? value.map((item) => `<div class="fact-item">${sourcedValue(item, evidence)}</div>`).join("") : html(text(value));
   if (value && typeof value === "object") {
     const references = value.sourceIds || value.source_ids;
-    const content = Object.entries(value).filter(([key]) => !["sourceIds", "source_ids"].includes(key))
+    const content = Object.hasOwn(value, "text") ? sourcedValue(value.text, evidence) : Object.entries(value).filter(([key]) => !["sourceIds", "source_ids"].includes(key))
       .map(([key, item]) => `${html(FIELD_LABELS[key] || key)}：${sourcedValue(item, evidence)}`).join("；");
     return `${content}${references?.length ? ` <span class="sources">${evidenceReferences(references, evidence, linkedUrls(content))}</span>` : ""}`;
   }
@@ -154,10 +157,10 @@ function profileReferences(profile) {
 }
 
 // ---------------------------------------------------------------------------
-// Medical three-module rendering
+// The four reading sections are independent of optional author/talk supplements.
 const REPORT_MODULES = [
-  ["a", "01", "身份与任职"], ["b", "02", "研究方向与近年论文"],
-  ["e", "03", "指导相关论文与作者情况"],
+  ["a", "01", "导师概况"], ["b", "02", "研究主线与相关性"],
+  ["p", "03", "近五年一作／通讯论文"], ["u", "04", "关键待核实事项"],
 ];
 function moduleHeading(index, key) {
   const [, number, title] = REPORT_MODULES.find(([id]) => id === key);
@@ -246,80 +249,107 @@ function label(group, value) {
 }
 
 function sources(ids, evidence, excludedUrls = []) {
+  if (!ids?.length) return "";
   const content = evidenceReferences(ids, evidence, excludedUrls);
   return content ? `<span class="sources">${content}</span>` : "";
 }
 
-function workItem(work, evidence) {
-  const meta = [work.year, work.venue, work.verifiedRole && work.verifiedRole !== "unknown" ? `作者角色：${text(work.verifiedRole)}` : null,
-    work.relationToMainline ? `与研究方向的关系：${work.relationToMainline}` : null, work.isPreprint ? "预印本（未经同行评审）" : null, work.publicationStatus,
+function human(value) {
+  const result = readableText(value);
+  return WORDS[result] || result;
+}
+
+function proseItems(values) {
+  const items = [...new Set(values.flatMap(value => Array.isArray(value) ? value : [value]).map(human).filter(Boolean))];
+  return items.filter(item => !items.some(other => other.length > item.length && other.includes(item)));
+}
+
+function coreIdentityCheck(row, evidence) {
+  const check = identityCoverage(row, evidence);
+  const fields = check.fields.filter(field => !["doctoralSupervisionLink", "researchPositioning"].includes(field.field));
+  return { complete: fields.every(field => field.complete), fields, gaps: fields.filter(field => !field.complete) };
+}
+
+function workItem(work, evidence, pendingReason = "") {
+  const role = publicationRoleLabel(work);
+  const meta = [work.date || work.publicationDate || work.year, work.venue || work.journal,
+    role && role !== "署名待核验" ? `导师署名${pendingReason ? "（待核验）" : ""}：${role}` : null,
+    work.relationToMainline ? `相关性：${human(work.relationToMainline)}` : null,
+    work.isPreprint ? "预印本（未经同行评审）" : null, human(work.publicationStatus),
     work.isPreprint && !work.publicationStatus ? "期刊发表状态待核实" : null]
     .filter(Boolean).map(html).join(" · ");
   const external = work.url || (work.doi ? `https://doi.org/${String(work.doi).replace(/^https?:\/\/doi\.org\//i, "")}` : null);
   const anchor = external ? link(external, work.title || external) : "";
-  // Unsafe or missing URLs never drop the (escaped) title itself.
   const heading = anchor.startsWith("<a ") ? anchor : `${html(work.title || "标题待核验")}${external ? "（未提供可用公开链接）" : ""}`;
-  const refs = sources(work.sourceIds, evidence, [external]);
-  return `<li>${heading}${refs ? ` ${refs}` : ""}${meta ? `<br><span class="muted">${meta}</span>` : ""}</li>`;
+  const refs = sources([...new Set([...(work.sourceIds || []), ...(work.roleSourceIds || [])])], evidence, [external]);
+  return `<li>${heading}${refs ? ` ${refs}` : ""}${meta ? `<br><span class="muted">${meta}</span>` : ""}${pendingReason ? `<br><span class="citation-state">未纳入：${html(human(pendingReason))}</span>` : ""}</li>`;
 }
 
 function workList(works, evidence, empty) {
-  return works.length ? `<ul class="works">${works.map((work) => workItem(work, evidence)).join("")}</ul>` : `<p class="muted">${html(empty)}</p>`;
+  return works.length ? `<ul class="works">${works.map(work => workItem(work, evidence)).join("")}</ul>` : `<p class="muted">${html(empty)}</p>`;
+}
+
+function publicationsSection(review, evidence) {
+  const remaining = review.papers.slice(3);
+  const years = [...new Set(remaining.map(work => String(work.date || work.publicationDate || work.year || "日期待核实").slice(0, 4)))];
+  const covered = proseItems(review.searches.map(search => search.database || search.sourceName || search.source));
+  const scope = review.window ? `${review.window.start} 至 ${review.window.end}` : "尚未记录有效的五年时间范围";
+  return `<p class="publication-summary">${html(scope)} · 已核实 ${review.papers.length} 篇。${review.searchComplete ? "已完成所列来源及分页的核查。" : "检索或署名核验仍有缺口。"}</p>
+${covered.length ? `<p class="muted">已查来源：${html(covered.join("、"))}。检索覆盖所列来源，不保证穷尽全部发表记录。</p>` : ""}
+${workList(review.papers.slice(0, 3), evidence, "目前尚无同时满足日期、导师署名与来源核验要求的论文。")}
+${remaining.length ? `<details class="publication-list"><summary>其余已核实论文（${remaining.length} 篇，按年份）</summary>${years.map(year => `<h5>${html(year)}</h5>${workList(remaining.filter(work => String(work.date || work.publicationDate || work.year || "日期待核实").slice(0, 4) === year), evidence, "")}`).join("")}</details>` : ""}
+${review.pending.length ? `<details class="pending-publications"><summary>待核验或未纳入的论文线索（${review.pending.length} 条）</summary><p class="muted">以下线索不计入已核实论文数。</p><ul class="works">${review.pending.map(({paper, reason}) => workItem(paper, evidence, reason)).join("")}</ul></details>` : ""}`;
 }
 
 function academicTalkSection(mainline, evidence, advisorId) {
-  const window = talkWindow(mainline.talkSearches);
   const rows = academicTalkRows(mainline, evidence, advisorId);
-  const searches = mainline.talkSearches.map(row => `<p>${html(row.database || "来源未记录")} · ${html(text(row.status))} · 查阅日期：${html(row.checkedAt || "未记录")}</p>
-<details><summary>会议检索范围与限制</summary>${facts([["实际查询", row.query], ["时间范围", [row.windowStart,row.windowEnd]], ["限制", row.limitations || "未记录"]])}${sources(row.sourceIds,evidence)}</details>`).join("");
-  return `<h5>近期学术会议与演讲</h5><p class="muted">${window ? `检索范围：${html(window.start)} 至 ${html(window.end)}；未来活动单列。` : "未记录有效的近两年检索范围。"}议程安排不等于实际报告；演讲信息用于补充近期研究动向。</p>
-${searches || '<p class="muted">未记录会议与演讲检索，不代表没有活动。</p>'}
+  if (!rows.length) return "";
+  const window = talkWindow(mainline.talkSearches);
+  return `<details class="supplement"><summary>学术会议与演讲（补充信息，${rows.length} 条）</summary><p class="muted">${window ? `查阅范围：${html(window.start)} 至 ${html(window.end)}。` : ""}议程安排不等于已经报告。</p>
 ${["近两年活动","即将举行","日期或检索范围待核实","范围外记录"].map(group => {
     const selected = rows.filter(row => row.timing === group);
-    return selected.length ? `<h6>${group}</h6><ul class="academic-talks">${selected.map(row => `<li><strong>${html(row.eventName || "活动名称未记录")}</strong> · ${html(row.date || "日期待核实")}<br>
-${html(row.roleLabel)} · ${html(row.status)}<br><span class="field-label">演讲标题</span>${row.title === row.talkTitle && urlKey(row.url) ? link(row.url,row.title) : html(row.title)} ${sources(row.sourceIds,evidence,row.title === row.talkTitle && urlKey(row.url) ? [row.url] : [])}
+    return selected.length ? `<h5>${group}</h5><ul class="academic-talks">${selected.map(row => `<li><strong>${html(row.eventName || "活动名称未记录")}</strong> · ${html(row.date || "日期待核实")}<br>
+${html(row.roleLabel)} · ${html(row.status)}<br>${row.title === row.talkTitle && urlKey(row.url) ? link(row.url,row.title) : html(row.title)} ${sources(row.sourceIds,evidence,row.title === row.talkTitle && urlKey(row.url) ? [row.url] : [])}
 ${row.titleZh ? `<br>中文译名：${html(row.titleZh)}` : ""}
-${row.limitations ? `<br>${html(row.limitations)}` : ""}
+${row.limitations ? `<br>${html(human(row.limitations))}` : ""}
 ${row.url && row.title !== row.talkTitle ? ` ${link(row.url,"活动页面")}` : ""}</li>`).join("")}</ul>` : "";
-  }).join("")}`;
+  }).join("")}</details>`;
 }
 
-function doctoralList(people, evidence, empty) {
-  if (!people.length) return `<p class="muted">${html(empty)}</p>`;
-  return `<ul>${people.map((person) => `<li><strong>${html(person.name || "姓名未公开")}</strong>${person.degreeOrYear ? ` · ${html(person.degreeOrYear)}` : ""}
-    <br>${html(text([person.topic ? `课题：${person.topic}` : null, person.relationToMainline ? `与主线关系：${person.relationToMainline}` : null].filter(Boolean)))}
-    <br>${html(text([person.supervisionEvidence.length ? `指导证据：${person.supervisionEvidence.join("；")}` : "指导证据待核验",
-      person.firstDestination ? `首个公开去向：${person.firstDestination}` : null, person.latestPublicRole ? `最新公开角色：${person.latestPublicRole}` : null,
-      person.informationDate ? `信息日期：${person.informationDate}` : null].filter(Boolean)))}
-    <br>${sources(person.sourceIds, evidence)}</li>`).join("")}</ul>`;
+function doctoralList(people, evidence) {
+  return `<ul>${people.map(person => `<li><strong>${html(person.name || "姓名未公开")}</strong>${person.degreeOrYear ? ` · ${html(person.degreeOrYear)}` : ""}
+${proseItems([person.topic, person.relationToMainline, person.supervisionEvidence, person.firstDestination, person.latestPublicRole, person.informationDate]).map(item => `<br>${html(item)}`).join("")}
+${person.sourceIds.length ? `<br>${sources(person.sourceIds, evidence)}` : ""}</li>`).join("")}</ul>`;
 }
 
-function doctoralSearchDetails(doctoral, kind, evidence) {
-  const records = doctoral.searches.filter((row) => row.kind === kind);
-  if (!records.length) return `<p class="muted">未记录此项检索。</p>`;
-  return records.map((row) => `<p>${html(text(row.status))} · ${html(row.database || "来源未记录")} · 查阅日期：${html(row.checkedAt || "未记录")}</p>
-<details><summary>检索范围与限制</summary>${facts([["实际查询", row.query], ["时间范围", [row.windowStart, row.windowEnd]], ["限制", row.limitations || "未记录"]])}${sources(row.sourceIds, evidence)}</details>`).join("");
-}
-
-function doctoralSupplement(doctoral, evidence) {
+function authorAppendix(doctoral, evidence) {
   const window = doctoralWindow(doctoral);
-  const labs = doctoral.labWebsites.map((site) => `<div><p>${link(site.url, site.title)} · ${labWebsiteVerified(site, evidence) ? "与导师的归属关系已核实" : "与导师的归属关系待核实"}${site.status === "found" ? "" : ` · ${html(text(site.status))}`} ${sources(site.sourceIds, evidence, [site.url])}</p>
-${site.pages.map((page) => `<p>${link(page.url, page.title)}${page.status === "found" ? "" : ` · ${html(text(page.status))}`}<br>网页查阅日期：${html(page.accessedAt || "未记录")} · 页面更新时间：${html(page.updatedAt || "页面未注明")}${page.limitations ? `<br>${html(page.limitations)}` : ""} ${sources(page.sourceIds, evidence, [page.url])}</p>`).join("")}</div>`).join("");
-  const people = doctoral.firstAuthorProfiles.map((person) => {
-    const eligible = person.papers.filter((paper) => firstAuthorPaperState(paper, window, evidence) === "eligible");
-    const pending = person.papers.filter((paper) => firstAuthorPaperState(paper, window, evidence) !== "eligible");
-    const papers = eligible.map((paper) => ({...paper, year: paper.date || paper.year,
-      verifiedRole: paper.firstAuthorRole, relationToMainline: `导师署名：${text(paper.advisorRole)}`}));
-    const works = workList(papers, evidence, "尚无符合范围且作者角色已核实的共同论文。");
-    return `<div class="person-entry first-author"><header class="person-heading"><h6>${html(person.name || "姓名待核实")}</h6>${firstAuthorIdentity(person, evidence) ? `<span class="person-role">${html(firstAuthorIdentity(person, evidence))}</span>` : ""}</header>
+  const profiles = doctoral.firstAuthorProfiles.filter(person => person.papers.length || firstAuthorIdentity(person, evidence) || person.researchSummary);
+  if (!profiles.length && !doctoral.currentDoctoral.length && !doctoral.formerDoctoral.length) return "";
+  const people = profiles.map(person => {
+    const eligible = person.papers.filter(paper => firstAuthorPaperState(paper, window, evidence) === "eligible");
+    const pending = person.papers.filter(paper => firstAuthorPaperState(paper, window, evidence) !== "eligible");
+    const summary = firstAuthorSummary(person, window, evidence);
+    return `<div class="person-entry first-author"><header class="person-heading"><h5>${html(person.name || "姓名待核实")}</h5>${firstAuthorIdentity(person, evidence) ? `<span class="person-role">${html(firstAuthorIdentity(person, evidence))}</span>` : ""}</header>
 ${person.identitySourceIds.length ? `<p class="person-meta">${sources(person.identitySourceIds, evidence)}</p>` : ""}
-<p><span class="field-label">基于这些共同论文的总结</span>${html(firstAuthorSummary(person, window, evidence))}${person.summarySourceIds.length ? ` ${sources(person.summarySourceIds, evidence)}` : ""}</p>
-${papers.length > 3 ? `<details><summary>共同论文（${papers.length} 篇）</summary>${works}</details>` : works}
-${pending.length ? `<details><summary>未纳入画像的论文线索（${pending.length} 条）</summary><ul>${pending.map((paper) => `<li>${html(paper.title || "标题待核实")}：${html(firstAuthorPaperState(paper, window, evidence))}${sources(paper.sourceIds, evidence)}</li>`).join("")}</ul></details>` : ""}</div>`;
+${person.researchSummary ? `<p>${html(summary)}${person.summarySourceIds.length ? ` ${sources(person.summarySourceIds, evidence)}` : ""}</p>` : ""}
+${eligible.length ? workList(eligible.map(paper => ({...paper, advisorRoles:[paper.advisorRole]})), evidence, "") : ""}
+${pending.length ? `<details><summary>关联论文仍需核验（${pending.length} 条）</summary><ul class="works">${pending.map(paper => workItem({...paper, advisorRoles:[paper.advisorRole]}, evidence, firstAuthorPaperState(paper, window, evidence))).join("")}</ul></details>` : ""}</div>`;
   }).join("");
-  return `<h5>实验室官网与查阅情况</h5>${doctoralSearchDetails(doctoral, "lab_website", evidence)}${labs || "<p>尚未登记已核验的实验室网站；不代表没有。</p>"}
-<h5>近五年通讯作者论文中的第一作者</h5><p class="muted">按导师通讯／共同通讯署名纳入，不以第一作者学历或身份是否已核实为条件。${window ? `论文日期范围：${html(window.start)} 至 ${html(window.end)}。` : "未记录有效的近五年检索范围。"}</p>
-${doctoralSearchDetails(doctoral, "corresponding_papers", evidence)}${people || "<p>尚未登记第一作者画像；不代表没有共同论文。</p>"}`;
+  return `<details class="author-appendix"><summary>作者附录（可选补充）</summary><p class="muted">第一作者学历或身份信息不影响导师论文纳入；共同署名本身不证明指导关系。</p>${people}
+${doctoral.currentDoctoral.length ? `<h5>已有的当前博士生信息</h5>${doctoralList(doctoral.currentDoctoral, evidence)}` : ""}
+${doctoral.formerDoctoral.length ? `<h5>已有的毕业博士信息</h5>${doctoralList(doctoral.formerDoctoral, evidence)}` : ""}
+${doctoral.emergingPiNote ? `<p>${html(human(doctoral.emergingPiNote))}</p>` : ""}</details>`;
+}
+
+function unresolvedItems(row, evidence, review, discovery) {
+  const profile = row.evidenceProfile;
+  const selected = proseItems([profile.keyUnknowns]).flatMap(item => item
+    .replace(/Finder阶段未深查三模块|用户选定后补充三模块背景调研|用户选择后再查完整近五年通讯论文与作者信息/g, "")
+    .split(/[；;]/).map(part => part.replace(/^[\s，,。]+|[\s，,。]+$/g, "")).filter(Boolean))
+    .filter(item => !discovery || !/招生|招生名额|申请批次|博士项目映射|doctoral.*(?:supervision|program)|programme.*(?:intake|terms)|program.*(?:intake|terms)/i.test(item));
+  return proseItems([...selected, ...coreIdentityCheck(row, evidence).gaps.map(gap => `${gap.label}：${gap.reason}`),
+    ...(!review.searchComplete && !review.limitations.length ? [review.searches.length ? "近五年论文的检索或署名核验尚未完成，详见论文清单。" : "近五年论文检索记录尚未补齐。"] : []), review.limitations]);
 }
 
 function evidenceStatusRow(profile) {
@@ -349,76 +379,87 @@ function medicalAdvisorSection(advisor, index, project, opportunities, evidence)
   const advisorId = advisor.advisor_id || advisor.advisorId;
   const row = reportAdvisorRow(advisor, index, project, opportunities);
   const profile = row.evidenceProfile;
-  const name = row.name || row.advisorName || advisorId;
+  const name = row.name || row.advisorName || "姓名待核实";
   const identity = profile.identity;
   const mainline = profile.researchMainline;
   const doctoral = profile.doctoralTrajectory;
   const discovery = project.searchMode === "discovery";
-  const identityCheck = identityCoverage(row, evidence);
+  const review = publicationReview(mainline, evidence, advisorId);
   const officialUrl = identity.officialProfileUrl || row.homepage || row.advisorHomepage;
-  const applicationEntry = !discovery && opportunities.length ? `<div class="module"><h4>真实申请入口（申请筛选模式）</h4>${facts([["项目 / 学位 / 批次 / 路径", opportunities.map((candidate) => ({
+  const identityCheck = coreIdentityCheck(row, evidence);
+  const positionGap = identityCheck.gaps.find(field => field.field === "currentPosition");
+  const institution = human(identity.currentInstitution || row.school || row.schoolName);
+  const department = human(identity.department);
+  const position = human(identity.currentPosition);
+  const region = human(row.region || row.country || row.countryName);
+  const identityDetails = [
+    department && department !== institution ? `<span class="advisor-department">${html(department)}</span>` : "",
+    position ? `<span class="advisor-position">${html(position)}</span>` : "",
+    position && positionGap ? `<span class="identity-note" title="${html(positionGap.reason)}">${positionGap.reason.startsWith("来源存在冲突") ? "职称来源冲突" : "职称待核实"}</span>` : "",
+    region ? `<span class="advisor-region">地区：${html(region)}</span>` : "",
+  ].filter(Boolean);
+  const labs = doctoral.labWebsites.filter(site => site.url).map(site => `<span>${link(site.url, site.title)}${labWebsiteVerified(site, evidence) ? "" : "（导师归属待核实）"}</span>`);
+  const identityRefs = [...new Set([...identity.sourceIds, ...identityCheck.fields.flatMap(field => field.sourceIds), ...doctoral.labWebsites.flatMap(site => site.sourceIds)])];
+  const mainlineText = proseItems([mainline.longTermQuestion || identity.researchPositioning, mainline.continuingThemes,
+    mainline.newDirections.length ? `近期拓展：${human(mainline.newDirections)}` : "", mainline.recentShift ? `研究转向：${human(mainline.recentShift)}` : ""]);
+  const continuity = proseItems([profile.researchRouteContinuity.reasons]);
+  const researchIds = [...new Set([...mainline.sourceIds, ...profile.researchRouteContinuity.sourceIds])];
+  const unresolved = unresolvedItems(row, evidence, review, discovery);
+  const applicationEntry = !discovery && opportunities.length ? `<details class="application-entry"><summary>真实申请入口（申请筛选模式）</summary>${facts([["项目 / 学位 / 批次 / 路径", opportunities.map(candidate => ({
     program: candidate.program || candidate.programNameEn || candidate.programNameZh, degree: candidate.degree, intake: candidate.intake,
     pathway: candidate.applicationPathway, eligibility: candidate.feasibility, opportunity: candidate.opportunityStatus, url: candidate.programUrl,
     sourceIds: profileReferences([candidate.eligibilityEvidence, candidate.hardConstraintEvidence, candidate.opportunityEvidence]),
-  }))]], evidence)}</div>` : "";
+  }))]], evidence)}</details>` : "";
   return `<article id="advisor-${index + 1}" class="advisor"><h3>${html(name)}</h3>
+${moduleHeading(index, "a")}<div class="advisor-affiliation">${institution ? `<p class="advisor-institution">${html(institution)}</p>` : ""}
+${identityDetails.length ? `<p class="advisor-meta">${identityDetails.join(" ")}</p>` : ""}${!institution && !identityDetails.length ? '<p class="muted">任职信息待核实</p>' : ""}</div>
 ${evidenceStatusRow(profile)}
-<p>与您的研究需求：${html(label("fit", profile.researchQuestionFit.status))}。${html(profile.researchQuestionFit.reasons.join("；"))} ${sources(profile.researchQuestionFit.sourceIds, evidence)}</p>
-<p><strong>目前能确认和不能确认的事项：</strong>${html(text(profile.fitBoundary))}</p>
-${moduleHeading(index, "a")}${facts(identityCheck.fields.map((field) => [
-  field.label, field.complete ? field.value : [field.value, field.reason].filter(Boolean).join("；"), field.sourceIds,
-]), evidence)}<p>${link(officialUrl, "机构导师介绍")}</p>
-${facts([["所属博士项目", [doctoral.graduateProgram.graduateSchool, doctoral.graduateProgram.doctoralProgram, doctoral.graduateProgram.supervisorListing, doctoral.graduateProgram.institutionalRelationship].filter(Boolean), doctoral.graduateProgram.sourceIds]], evidence)}</div>
-${moduleHeading(index, "b")}${facts([
-  ["长期科学问题", mainline.longTermQuestion, mainline.sourceIds],
-  ["持续主题 / 新方向 / 近期转向", [mainline.continuingThemes.length ? `持续：${mainline.continuingThemes.join("；")}` : null, mainline.newDirections.length ? `新方向：${mainline.newDirections.join("；")}` : null, mainline.recentShift ? `近期转向：${mainline.recentShift}` : null].filter(Boolean), mainline.sourceIds],
-  ["研究对象 / 方法", [mainline.researchObjects, mainline.methods], mainline.sourceIds],
-  ["是否持续研究这一方向", [label("continuity", profile.researchRouteContinuity.status), ...profile.researchRouteContinuity.reasons], profile.researchRouteContinuity.sourceIds],
-], evidence)}${facts([["论文检索时间范围", mainline.backSearchWindow || row.back_search?.window || "未记录实际检索范围"]])}
-<h5>代表性与近期论文、预印本</h5>${workList(researchPublications(mainline), evidence, "尚未登记已核实的论文。")}
-${academicTalkSection(mainline, evidence, advisorId)}
-${mainline.participationOnlyWorks.length ? `<h5>仅参与型工作（不计入主线）</h5>${workList(mainline.participationOnlyWorks, evidence, "")}` : ""}</div>
-${moduleHeading(index, "e")}
-${doctoralSupplement(doctoral, evidence)}
-${doctoral.currentDoctoral.length ? `<h5>已核实的当前博士生（补充信息）</h5>${doctoralList(doctoral.currentDoctoral, evidence, "")}` : ""}
-${doctoral.formerDoctoral.length ? `<h5>已核实的毕业博士（补充信息）</h5>${doctoralList(doctoral.formerDoctoral, evidence, "")}` : ""}
-${doctoral.emergingPiNote ? `<p class="muted">${html(doctoral.emergingPiNote)}</p>` : ""}
-<p class="muted">${html(doctoral.sampleLimitation)}</p></div>
-${applicationEntry}
-${profile.formalRecords.length ? facts([["更正、撤稿或机构公告", profile.formalRecords]], evidence) : ""}
-${facts([["仍需确认的信息", profile.keyUnknowns], ["建议下一步核实", profile.nextVerification]])}</article>`;
+<p class="profile-links">${[officialUrl ? link(officialUrl, "机构导师介绍") : "", ...labs].filter(Boolean).join(" · ")}${identityRefs.length ? ` ${sources(identityRefs, evidence, [officialUrl, ...doctoral.labWebsites.map(site => site.url)])}` : ""}</p>
+${identity.affiliationAsOf ? `<p class="muted">任职信息核对日期：${html(identity.affiliationAsOf)}</p>` : ""}</div>
+${moduleHeading(index, "b")}<p class="research-mainline">${mainlineText.length ? mainlineText.map((item, itemIndex) => itemIndex === 0 ? `<strong class="research-question">${html(item)}</strong>` : html(item)).join("；") : "研究主线仍需核实"}${researchIds.length ? ` ${sources(researchIds, evidence)}` : ""}</p>
+<p class="research-fit">与您的研究需求：<strong class="fit-label">${html(label("fit", profile.researchQuestionFit.status))}</strong>。${html(human(profile.researchQuestionFit.reasons))} ${sources(profile.researchQuestionFit.sourceIds, evidence, researchIds.map(id => sourceUrl(evidence.find(item => (item.evidence_id || item.evidenceId) === id) || {})))}</p>
+${continuity.length ? `<p class="muted">${html(label("continuity", profile.researchRouteContinuity.status))}：${html(continuity.join("；"))}</p>` : ""}
+${human(profile.fitBoundary) ? `<p class="research-boundary"><strong>相关性边界：</strong>${html(human(profile.fitBoundary))}</p>` : ""}</div>
+${moduleHeading(index, "p")}${publicationsSection(review, evidence)}</div>
+${moduleHeading(index, "u")}${unresolved.length ? `<ul>${unresolved.map(item => `<li>${html(item)}</li>`).join("")}</ul>` : `<p>本轮所列范围内未登记未解决事项。</p>`}
+${profile.formalRecords.length ? `<p><strong>更正、撤稿或机构公告：</strong>${html(human(profile.formalRecords))}</p>` : ""}</div>
+${authorAppendix(doctoral, evidence)}${academicTalkSection(mainline, evidence, advisorId)}${applicationEntry}</article>`;
 }
 
 function medicalOverviewTable(rows, evidence, discovery, advisors) {
   if (!rows.length) return `<p>尚无导师记录。</p>`;
-  return `<div class="table-wrap"><table class="overview"><thead><tr><th>导师与机构</th><th>与需求的关系</th><th>研究主线与近期活动</th><th>需要进一步确认</th></tr></thead><tbody>${rows.map((row) => {
-    const detailIndex = advisors.findIndex((advisor) => (advisor.advisor_id || advisor.advisorId) === (row.advisor_id || row.advisorId));
-    const profile = advisors[detailIndex]?.evidenceProfile || row.evidenceProfile;
+  return `<div class="table-wrap"><table class="overview"><thead><tr><th>导师与机构</th><th>与需求的关系</th><th>近五年论文</th><th>需要进一步确认</th></tr></thead><tbody>${rows.map(row => {
+    const detailIndex = advisors.findIndex(advisor => (advisor.advisor_id || advisor.advisorId) === (row.advisor_id || row.advisorId));
+    const advisor = advisors[detailIndex] || row;
+    const profile = advisor.evidenceProfile;
+    const review = publicationReview(profile.researchMainline, evidence, advisor.advisor_id || advisor.advisorId);
     const anchor = detailIndex >= 0 ? `advisor-${detailIndex + 1}` : "advisors";
-    return `<tr><td><a href="#${anchor}"><strong>${html(row.name || row.advisorName || row.advisor_id)}</strong></a><br>${html(text(profile.identity.currentInstitution || row.school || row.schoolName))}${discovery ? "" : `<br>${html(text([row.program, row.degree, row.intake]))}`}</td>
-<td>${html(label("fit", profile.researchQuestionFit.status))}<br>${html(text(profile.researchMainline.longTermQuestion || profile.researchQuestionFit.reasons[0]))}${sources(profile.researchQuestionFit.sourceIds, evidence)}</td>
-<td><a href="#${anchor === "advisors" ? anchor : `${anchor}-b`}">${html(label("continuity", profile.researchRouteContinuity.status))}</a><br>${html(label("activity", profile.currentActivity))}</td>
-<td>${html(text([profile.fitBoundary, profile.keyUnknowns[0]].filter(Boolean)))}</td></tr>`;
+    const gaps = unresolvedItems(advisor, evidence, review, discovery);
+    return `<tr><td><a href="#${anchor}"><strong>${html(row.name || row.advisorName || "姓名待核实")}</strong></a><br>${html(human(profile.identity.currentInstitution || row.school || row.schoolName))}${discovery ? "" : `<br>${html(text([row.program, row.degree, row.intake]))}`}</td>
+<td>${html(label("fit", profile.researchQuestionFit.status))}<br>${proseItems([profile.researchQuestionFit.reasons, profile.fitBoundary]).map(html).join("<br>")}${sources(profile.researchQuestionFit.sourceIds, evidence)}</td>
+<td><a href="#${anchor === "advisors" ? anchor : `${anchor}-p`}">已核实 ${review.papers.length} 篇</a>${review.pending.length ? `<br>${review.pending.length} 条线索未纳入` : ""}<br>${review.searchComplete ? "所列来源检索完成" : "仍有检索或核验缺口"}</td>
+<td>${html(gaps.slice(0, 2).join("；") || "本轮未登记未解决事项")}${gaps.length > 2 ? `<br><a href="#${anchor}-u">另有 ${gaps.length - 2} 项</a>` : ""}</td></tr>`;
   }).join("")}</tbody></table></div>`;
 }
 
-function sourceAppendix(evidence, advisors) {
+function sourceAppendix(evidence, advisors, medical = false) {
   const groups = new Map();
-  const names = new Map(advisors.map((row) => [row.advisor_id || row.advisorId, row.name || row.advisorName]));
+  const names = new Map(advisors.map(row => [row.advisor_id || row.advisorId, row.name || row.advisorName]));
   evidence.forEach((row, index) => { const key = urlKey(sourceUrl(row)) || `missing-${index}`;
     const group = groups.get(key) || []; group.push({ row, index }); groups.set(key, group); });
   if (!evidence.length) return `<p>尚未保存可核验来源。</p>`;
-  return `<h3>来源原文与查阅记录</h3><p class="muted">同一网页集中展示；各项事实的核验情况分别保留。核实一项事实不代表该网页能支持所有结论。</p>${[...groups.values()].map((group) => {
+  const content = `<p class="muted">同一网页集中展示；各项事实的核验情况分别保留。核实一项事实不代表该网页能支持所有结论。</p>${[...groups.values()].map(group => {
     const source = group.find(({ row }) => row.citation_label)?.row || group[0].row;
     return `<details class="source-detail"><summary>${html(citationLabel(source))}</summary><p>${link(sourceUrl(source), citationLabel(source))}</p>
-${group.map(({ row, index }) => `<div id="evidence-${index + 1}" class="source-claim"><p><strong>${html(names.get(row.entity_id || row.entity) || "相关记录")} · ${html(text(row.status || "not_checked"))}</strong>（${html(text(row.claim_type || row.claimType || "fact"))}）</p>
-<p>${html(text(row.claim || row.finding || row.value || row.excerpt))}</p>
-${facts([["网页查阅日期", row.accessed_at || row.accessedAt || "未记录"], ["页面更新时间", row.source_updated_at || "页面未注明"],
+${group.map(({ row, index }) => `<div id="evidence-${index + 1}" class="source-claim"><p><strong>${html(names.get(row.entity_id || row.entity) || "相关记录")} · ${html(text(row.status || "not_checked"))}</strong></p>
+<p>${html(medical ? human(row.claim || row.finding || row.value || row.excerpt) : text(row.claim || row.finding || row.value || row.excerpt))}</p>
+${facts([...(row.accessed_at || row.accessedAt ? [["网页查阅日期", row.accessed_at || row.accessedAt]] : []), ...(row.source_updated_at ? [["页面更新时间", row.source_updated_at]] : []),
 ...(row.intake || row.applicable_intake ? [["适用招生批次", row.intake || row.applicable_intake]] : []),
-...(row.excerpt ? [["原文支持片段", row.excerpt]] : []),
-...(row.limitations || row.failure_reason ? [["仍有的限制", row.limitations || row.failure_reason]] : [])])}
-<details class="technical"><summary>技术记录（复核用）</summary><pre>${html(JSON.stringify(row, null, 2))}</pre></details></div>`).join("")}</details>`;
+...(row.excerpt && row.excerpt !== row.claim ? [["原文支持片段", row.excerpt]] : []),
+...(row.limitations || row.failure_reason ? [["仍有的限制", human(row.limitations || row.failure_reason)]] : [])])}
+${medical ? "" : `<details class="technical"><summary>技术记录（复核用）</summary><pre>${html(JSON.stringify(row, null, 2))}</pre></details>`}</div>`).join("")}</details>`;
   }).join("")}`;
+  return medical ? `<details class="source-appendix"><summary>来源原文与查阅记录（${groups.size} 个网页）</summary>${content}</details>` : `<h3>来源原文与查阅记录</h3>${content}`;
 }
 
 // Add mobile labels to our own generated tables; external text is already escaped.
@@ -432,57 +473,70 @@ function responsiveTables(report) {
 }
 
 const REPORT_STYLE = `
-:root{--ink:#352f29;--muted:#75695e;--line:#e6ddd0;--canvas:#f7f4ee;--card:#fffcf7;--accent:#8b503b;--accent-dark:#6e3c2b;--accent-soft:#f1e2d8;--green:#52633d;--green-soft:#e9eddf;--amber:#80571e;--amber-soft:#f1e6d1;--sidebar:#eee7dc;--shadow:0 14px 34px rgba(70,55,35,.055)}
+:root{--ink:#263445;--muted:#5b6778;--line:#dce5ed;--canvas:#fff;--card:#fff;--accent:#245780;--accent-dark:#1e3a5f;--accent-soft:#edf4fb;--green:#166354;--green-soft:#edf7f3;--amber:#865515;--amber-soft:#fff5e4;--sidebar:#f1f5f9;--shadow:0 10px 30px rgba(30,58,95,.045)}
 *{box-sizing:border-box}html{scroll-padding-top:24px;background:var(--canvas)}
 body{margin:0;padding:20px 18px 48px;color:var(--ink);background:var(--canvas);font:17px/1.7 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;-webkit-font-smoothing:antialiased;overflow-wrap:anywhere}
 main{max-width:1000px;margin:0 auto}
 .eyebrow{margin:0 0 8px;color:var(--accent);font-size:11px;font-weight:800;letter-spacing:.16em}
 header,main>section{padding:28px 32px;margin:0 0 14px;border:1px solid var(--line);border-radius:18px;background:var(--card);box-shadow:var(--shadow)}
-h1{margin:6px 0 14px;font:500 34px/1.25 Georgia,"Songti SC",serif;letter-spacing:-.02em}
-h2{margin:0 0 18px;padding:0;border:0;font:500 22px/1.3 Georgia,"Songti SC",serif}
-h3{margin:8px 0 12px;font:500 26px/1.3 Georgia,"Songti SC",serif}
-h4{margin:22px 0 12px;font:500 18px/1.35 Georgia,"Songti SC",serif}
+h1{margin:6px 0 14px;color:var(--accent-dark);font-size:36px;font-weight:700;line-height:1.25;letter-spacing:-.02em}
+h2{margin:0 0 18px;padding:0;border:0;color:var(--accent-dark);font-size:24px;font-weight:650;line-height:1.35}
+h3{margin:8px 0 12px;color:var(--accent-dark);font-size:26px;font-weight:650;line-height:1.3}
+h4{margin:22px 0 12px;font-size:19px;font-weight:650;line-height:1.4}
 h5{margin:20px 0 8px;font-size:16px}h6{margin:16px 0 6px;font-size:15px}p{margin:10px 0}
 a{color:var(--accent);text-underline-offset:3px}a:hover{color:var(--accent-dark)}
 a:focus-visible,button:focus-visible,summary:focus-visible,[id]:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
 .muted,.sources,.status-line,.person-meta,.person-role,.field-label{color:var(--muted);font-size:14px}
 .sources{display:inline;margin-inline-start:5px;line-height:1.9}
-.citation-chip,.citation-more{display:inline-block;vertical-align:baseline;max-width:100%;padding:1px 7px;margin:2px 2px;border:1px solid #dfd2c2;border-radius:999px;background:#f1eade;color:#72513c;font:500 12px/1.7 ui-sans-serif,system-ui,sans-serif;text-decoration:none;cursor:pointer}
-.citation-chip:hover,.citation-more:hover{background:#e8dccd;color:var(--accent-dark);border-color:#b99a83}
+.citation-chip,.citation-more{display:inline-block;vertical-align:baseline;max-width:100%;padding:1px 8px;margin:2px 2px;border:1px solid #d5e1ec;border-radius:999px;background:#f3f6fa;color:#48617b;font:500 13px/1.7 ui-sans-serif,system-ui,sans-serif;text-decoration:none;cursor:pointer}
+.citation-chip:hover,.citation-more:hover{background:#e5eef7;color:var(--accent-dark);border-color:#9cb7d0}
 .citation-more[hidden],.citation-extra[hidden]{display:none}
-.citation-state{color:var(--amber);font-size:12px;margin-inline-start:4px}
+.citation-state{color:var(--amber);font-size:13px;margin-inline-start:4px}
 @media(pointer:coarse){.citation-chip,.citation-more{padding:5px 9px;min-height:32px}}.status-line{margin:0 0 8px}
 header>p:last-of-type,.status-line{padding:8px 12px;border-radius:10px;background:var(--sidebar)}
 article{padding:8px 0 4px;margin:28px 0 0;border:0}
-.advisor>h3{margin:8px 0 10px;padding:0;border:0}
-.module{margin:18px 0;padding:20px 22px 18px;border:1px solid var(--line);border-radius:14px;background:var(--card);box-shadow:0 8px 20px rgba(70,55,35,.035)}
+.advisor>h3{margin:8px 0 18px;padding:0;border:0;color:var(--accent-dark);font-size:32px;font-weight:700;letter-spacing:-.015em}
+.module{margin:18px 0;padding:20px 22px 18px;border:1px solid var(--line);border-radius:14px;background:var(--card);box-shadow:0 6px 18px rgba(30,58,95,.025)}
 .module>h4{display:flex;gap:12px;align-items:center;margin:0 0 16px;padding:0 0 14px;border-bottom:1px solid var(--line);background:none;color:var(--ink)}
 .module-number{display:inline-grid;place-items:center;min-width:32px;height:32px;border-radius:10px;background:var(--module-chip,var(--accent-soft));color:var(--module-ink,var(--accent-dark));font:700 12px/1 ui-sans-serif,system-ui,sans-serif;font-variant-numeric:tabular-nums}
-.module-a{--module-chip:var(--accent-soft);--module-ink:var(--accent-dark)}.module-b{--module-chip:var(--green-soft);--module-ink:var(--green)}.module-e{--module-chip:#ece9df;--module-ink:#5c564c}
+.module-a{--module-chip:var(--accent-soft);--module-ink:var(--accent-dark)}.module-b{--module-chip:var(--green-soft);--module-ink:var(--green)}.module-p{--module-chip:var(--sidebar);--module-ink:var(--muted)}.module-u{--module-chip:var(--amber-soft);--module-ink:var(--amber);border-color:#e5d8bf}
+.module-a>h4{color:var(--accent-dark)}.module-b>h4{color:var(--green)}.module-u>h4,.module-u li::marker{color:var(--amber)}
+.advisor-affiliation{margin:0 0 16px}.advisor-institution{margin:0 0 8px;color:var(--accent-dark);font-size:18px;font-weight:600}
+.advisor-meta{display:flex;align-items:baseline;flex-wrap:wrap;gap:8px 12px;margin:0;font-size:16px;line-height:1.65}.advisor-department{flex-basis:100%}.advisor-region{color:var(--muted)}
+.advisor-position{min-width:0;max-width:100%;padding:3px 10px;border:1px solid #d5e4f3;border-radius:7px;background:var(--accent-soft);color:var(--accent-dark);font-weight:600}
+.identity-note{padding:3px 8px;border:1px solid #e5d8bf;border-radius:7px;background:var(--amber-soft);color:var(--amber);font-size:14px;font-weight:600}
+.profile-links{margin:12px 0;font-size:15px}.profile-links>a{font-weight:600}
+.research-mainline{margin:0 0 18px;padding:16px 18px;border-left:3px solid var(--green);border-radius:0 10px 10px 0;background:var(--green-soft);color:var(--green);font-size:20px;line-height:1.75}.research-question{font-weight:650}
+.research-fit{font-size:17px}.fit-label{color:var(--accent-dark);font-weight:700}
+.research-boundary{padding:12px 16px;border-left:3px solid var(--amber);border-radius:0 8px 8px 0;background:#fffaf1;font-size:16px}.research-boundary>strong{color:var(--amber)}
 dl{margin:12px 0}dl>div{display:grid;grid-template-columns:190px minmax(0,1fr);gap:20px;margin:14px 0}dt{font-weight:650}dd{margin:0;min-width:0}
-.table-wrap{max-width:100%;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#faf6ef}
-table{border-collapse:collapse;width:100%;font-size:14px;table-layout:fixed}th,td{text-align:left;vertical-align:top;border-bottom:1px solid var(--line);padding:12px 14px}th{color:#5c564c;background:var(--sidebar);font-weight:650}tr:last-child td{border-bottom:0}
+.table-wrap{max-width:100%;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--card)}
+table{border-collapse:collapse;width:100%;font-size:14px;table-layout:fixed}th,td{text-align:left;vertical-align:top;border-bottom:1px solid var(--line);padding:12px 14px}th{color:var(--accent-dark);background:var(--sidebar);font-weight:650}tr:last-child td{border-bottom:0}
+.overview td:first-child>a{font-size:17px;color:var(--accent-dark)}.overview td:first-child>a strong{font-weight:700}.overview tbody tr:nth-child(even){background:#f8fafc}
 li{margin:12px 0}ul,ol{padding-left:22px}details{margin:14px 0}summary{cursor:pointer;font-weight:650}details>p,details>div{margin-left:16px}
 pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;padding:12px;border-radius:10px;background:var(--sidebar)}
 .source-detail{border-bottom:1px solid var(--line);padding:10px 0}.source-claim{border-top:1px solid var(--line);padding-top:8px}.search-record{margin:18px 0}
 .person-entry{margin:22px 0;padding:0 0 18px;border-bottom:1px solid var(--line)}.person-entry:last-child{border-bottom:0;padding-bottom:0}
 .person-heading{display:flex;align-items:baseline;gap:8px 16px;flex-wrap:wrap;margin:0 0 6px}
-.person-heading h5,.person-heading h6{margin:0;font:500 18px/1.35 Georgia,"Songti SC",serif}.person-meta{margin:4px 0 12px}.field-label{display:block;margin-bottom:3px}.person-work h6{font-weight:500}.works{padding-left:20px}.works li{margin:14px 0}.person-entry details{margin:12px 0}
+.person-heading h5,.person-heading h6{margin:0;font-size:18px;font-weight:600;line-height:1.35}.person-meta{margin:4px 0 12px}.field-label{display:block;margin-bottom:3px}.person-work h6{font-weight:500}.works{padding-left:20px}.works li{margin:16px 0}.works li>a{font-size:17px;font-weight:600}.works li::marker{color:var(--muted)}.person-entry details{margin:12px 0}
 .toc-brand{display:flex;align-items:center;gap:11px;margin:0 4px 18px;color:var(--ink)}
-.toc-mark{width:35px;height:35px;border-radius:11px;display:grid;place-items:center;background:linear-gradient(145deg,#a96b50,#854830);color:#fff;font:italic 20px/1 Georgia,serif;box-shadow:0 8px 20px rgba(168,90,64,.22)}
-.toc-brand strong{display:block;font:16px/1.2 Georgia,"Songti SC",serif}.toc-brand small{display:block;margin-top:3px;color:#655c50;font-size:10px;letter-spacing:.12em}
-.report-toc{display:block;position:sticky;top:0;z-index:5;margin:0 0 16px;padding:16px 16px 10px;border:1px solid #d8cdb8;border-radius:0 0 16px 16px;background:var(--sidebar);color:var(--ink);font-size:14px;line-height:1.5;box-shadow:0 12px 28px rgba(70,55,35,.08)}
-.report-toc details{margin:0}.report-toc summary{padding:10px 8px;color:#5c564c}
-.report-toc a{display:block;padding:8px 12px;border:0;border-radius:10px;color:#5c564c;text-decoration:none;transition:background .16s ease,color .16s ease}
-.report-toc a:hover{background:#e8dccd;color:var(--ink)}
-.report-toc a[aria-current]{color:var(--accent-dark);background:#e8dccd;box-shadow:inset 3px 0 0 #a85a40;font-weight:600}
-.report-toc .toc-content{margin:0;max-height:65vh;overflow-y:auto;overscroll-behavior:contain;padding:4px 0 8px;scrollbar-width:thin;scrollbar-color:#b5a68e transparent}
+.toc-mark{width:35px;height:35px;border-radius:11px;display:grid;place-items:center;background:var(--accent-dark);color:#fff;font:italic 20px/1 Georgia,serif;box-shadow:0 6px 16px rgba(30,58,95,.15)}
+.toc-brand strong{display:block;color:var(--accent-dark);font-size:16px;font-weight:650;line-height:1.2}.toc-brand small{display:block;margin-top:3px;color:var(--muted);font-size:11px;letter-spacing:.12em}
+.report-toc{display:block;position:sticky;top:0;z-index:5;margin:0 0 16px;padding:16px 16px 10px;border:1px solid var(--line);border-radius:0 0 16px 16px;background:var(--sidebar);color:var(--ink);font-size:14px;line-height:1.5;box-shadow:0 10px 24px rgba(30,58,95,.06)}
+.report-toc details{margin:0}.report-toc summary{padding:10px 8px;color:var(--muted)}
+.report-toc a{display:block;padding:8px 12px;border:0;border-radius:10px;color:#46586e;text-decoration:none;transition:background .16s ease,color .16s ease}
+.report-toc a:hover{background:#e3edf7;color:var(--accent-dark)}
+.report-toc a[aria-current]{color:var(--accent-dark);background:#dfeaf6;box-shadow:inset 3px 0 0 var(--accent);font-weight:700}
+.report-toc .toc-content{margin:0;max-height:65vh;overflow-y:auto;overscroll-behavior:contain;padding:4px 0 8px;scrollbar-width:thin;scrollbar-color:#a9bbcf transparent}
 .report-toc .toc-advisor>div{margin:0 0 4px 8px}.report-toc .toc-advisor>summary{font-weight:600;overflow-wrap:anywhere;padding-left:8px}
 .report-toc .toc-advisor a{font-size:13px}.report-toc .toc-advisor>summary>a{display:inline;padding:2px 0;font-size:14px;box-shadow:none}
 html{scroll-padding-top:76px}
-@media(max-width:700px){body{padding:12px 12px 36px;font-size:16px}h1{font-size:26px}h2{font-size:20px}header,main>section{padding:20px 16px}dl>div{grid-template-columns:1fr;gap:3px}table,tbody,tr,td{display:block;width:100%}thead{display:none}tr{border-bottom:1px solid var(--line);padding:12px 0}td{border:0;padding:6px 14px}td:before{content:attr(data-label);display:block;color:#5c564c;font-weight:650;margin-bottom:2px}details>p,details>div{margin-left:0}.table-wrap{border:0;background:transparent}}
-@media(min-width:1200px){body{padding:34px 36px 54px 280px}main{margin:0}.report-toc{position:fixed;left:16px;top:50%;transform:translateY(-50%);width:216px;max-height:70vh;overflow:hidden;padding:16px 12px;border:1px solid var(--line);border-radius:14px;margin:0;box-shadow:0 12px 28px rgba(70,55,35,.13)}.report-toc .toc-shell>summary{display:none}.report-toc .toc-content{max-height:calc(70vh - 100px)}html{scroll-padding-top:28px}}
+@media(max-width:700px){body{padding:12px 12px 36px;font-size:16px}h1{font-size:28px}h2{font-size:21px}header,main>section{padding:20px 12px}.advisor>h3{font-size:26px}.module{padding:18px 14px}.module>h4{font-size:18px;gap:10px}.research-mainline{padding:12px 14px;font-size:20px}.research-boundary{padding:10px 12px}dl>div{grid-template-columns:1fr;gap:3px}table,tbody,tr,td{display:block;width:100%}thead{display:none}tr{border-bottom:1px solid var(--line);padding:12px 0}td{border:0;padding:6px 14px}td:before{content:attr(data-label);display:block;color:var(--muted);font-weight:650;margin-bottom:2px}details>p,details>div{margin-left:0}.table-wrap{border:0;background:transparent}}
+@media(min-width:1200px){body{padding:34px 36px 54px 280px}main{margin:0}.report-toc{position:fixed;left:16px;top:50%;transform:translateY(-50%);width:216px;max-height:70vh;overflow:hidden;padding:16px 12px;border:1px solid var(--line);border-radius:14px;margin:0;box-shadow:0 10px 24px rgba(30,58,95,.08)}.report-toc .toc-shell>summary{display:none}.report-toc .toc-content{max-height:calc(70vh - 100px)}html{scroll-padding-top:28px}}
 @media print{.citation-more{display:none!important}.citation-extra[hidden]{display:inline!important}.citation-chip{background:transparent;border-color:#ccc}html,body{background:#fff;color:var(--ink)}body{max-width:none;padding:0;font-size:11pt}nav,.technical,.report-toc{display:none!important}header,main>section,.module,.table-wrap{box-shadow:none;border-color:#ccc}h2,h3,h4,h5,h6{break-after:avoid}tr,.source-claim,.person-entry{break-inside:avoid}a{color:var(--accent-dark)}details{display:block}details>*{display:block}details::details-content{content-visibility:visible;display:block}summary{list-style:none}.source-detail{break-inside:auto}table{font-size:10pt}.advisor>h3{margin-top:20px}}
+@page{margin:12mm}
+@media print{.works>li{break-inside:avoid}.source-appendix:not([open])>:not(summary),.pending-publications:not([open])>:not(summary){display:none!important}}
+@media print{h1{font-size:23pt}h2{font-size:17pt}.advisor>h3{font-size:20pt}.module>h4{font-size:13pt}.advisor-institution{font-size:12pt}.advisor-meta{font-size:10.5pt}.advisor-position{background:transparent;border-color:#aaa}.research-mainline{font-size:12pt;border-left-color:#777;background:transparent;color:var(--ink)}.research-boundary{font-size:10.5pt;background:transparent;border-left-color:#777}.research-fit,.works li>a{font-size:11pt}.muted,.status-line,.profile-links{font-size:9.5pt}.citation-chip,.citation-state{font-size:9pt}.overview tbody tr:nth-child(even){background:transparent}}
 @media(prefers-reduced-motion:reduce){.report-toc a{transition:none}}
 `;
 
@@ -611,27 +665,25 @@ export function buildAdvisorReport({ project = {}, advisors = [], programs = [],
     <td>资格：${html(text(row.feasibility || "needs_confirmation"))}<br><span class="sources">${evidenceReferences(profileReferences([row.eligibilityEvidence, row.hardConstraintEvidence]), evidence)}</span><br>机会：${html(text(row.opportunityStatus || "unknown"))}<br><span class="sources">${evidenceReferences(profileReferences(row.opportunityEvidence), evidence)}</span><br>${html(row.comparisonGroup || "")}</td>
     <td>${sourcedValue(row.recommendedAction, evidence)}</td>
   </tr>`).join("")}</tbody></table></div>` : "<p>尚未映射真实博士项目。</p>";
-  // Discovery lists advisors; application lists advisor–programme opportunities. Both use the same three-module overview.
+  // Discovery lists advisors; application lists advisor–programme opportunities.
   const overviewRows = discovery ? advisorRows : programRows;
-  const missingDoctoralChecks = medical ? advisorRows.filter((row) => !doctoralCoverage(row.evidenceProfile.doctoralTrajectory, evidence)) : [];
-  const identityChecks = medical ? advisorRows.map((row) => ({ row, ...identityCoverage(row, evidence) })) : [];
-  const missingIdentityChecks = identityChecks.filter((check) => !check.complete);
-  const missingTalkChecks = medical ? advisorRows.filter(row => !talkSearchComplete(row.evidenceProfile.researchMainline,evidence,row.advisor_id || row.advisorId)) : [];
-  const completion = medical && missingDoctoralChecks.length ? "部分完成：第一作者或实验室补查尚有缺口" : missingIdentityChecks.length ? "部分完成：身份信息尚有缺口" : missingTalkChecks.length ? "部分完成：会议与演讲检索尚有缺口" : audit.completionTier === "complete" ? "已完成本轮设定范围的检索" : audit.completionTier === "blocked" ? "检索受阻" : "部分完成或完成情况未记录";
+  const identityChecks = medical ? advisorRows.map(row => ({ row, ...coreIdentityCheck(row, evidence) })) : [];
+  const missingIdentityChecks = identityChecks.filter(check => !check.complete);
+  const publicationChecks = medical ? advisorRows.map(row => ({ row, ...publicationReview(row.evidenceProfile.researchMainline, evidence, row.advisor_id || row.advisorId) })) : [];
+  const missingPublicationChecks = publicationChecks.filter(check => !check.searchComplete);
+  const completion = missingIdentityChecks.length || missingPublicationChecks.length
+    ? `部分完成：${[missingIdentityChecks.length ? "身份信息" : "", missingPublicationChecks.length ? "近五年论文检索或署名核验" : ""].filter(Boolean).join("、")}尚有缺口`
+    : medical && advisorRows.length ? "已完成所列来源范围的身份与论文核查" : audit.completionTier === "blocked" ? "检索受阻" : "部分完成或完成情况未记录";
   const prose = (value, fallback) => typeof value === "string" && !/^[a-z0-9_]+$/i.test(value) ? value : fallback;
-  const pageCount = new Set(evidence.map((row) => urlKey(sourceUrl(row))).filter(Boolean)).size;
-  const pendingCount = evidence.filter((row) => ["partial", "inaccessible", "not_checked", "conflict", "stale"].includes(row.status)).length;
+  const pageCount = new Set(evidence.map(row => urlKey(sourceUrl(row))).filter(Boolean)).size;
+  const pendingCount = evidence.filter(row => ["partial", "inaccessible", "not_checked", "conflict", "stale"].includes(row.status)).length;
   const evidenceSection = `<section id="coverage"><h2>本次查了什么，还缺什么</h2>
-${facts([["实际检索范围", prose(audit.searchCoverage || audit.coverage, `已保存 ${pageCount} 个来源网页的 ${evidence.length} 条主张；其中 ${pendingCount} 条仍有核验或访问限制。未记录完整地域覆盖范围。`)],
-["候选发现方式", prose(audit.seedSummary, "候选发现方式尚未提供文字说明，已保存的查询过程见下方详情")],
-["检索是否充分", prose(audit.saturation, "尚无充分的文字说明支持已查全；停止检索的记录见下方详情")],
-["仍需补查", audit.limitations?.length ? audit.limitations : "请结合各导师的待核实事项阅读"]])}
-${medical && missingDoctoralChecks.length ? `<p>第一作者或实验室补查尚未完成：${html(missingDoctoralChecks.map((row) => row.name || row.advisorName).join("、"))}。详见指导相关论文与作者情况。</p>` : ""}
-${missingTalkChecks.length ? `<p>会议与演讲检索尚未完成或受限：${html(missingTalkChecks.map(row => row.name || row.advisorName).join("、"))}。详见研究方向与近年论文。</p>` : ""}
-${missingIdentityChecks.length ? `<h3>身份信息待补查</h3><ul>${missingIdentityChecks.map(({row, gaps}) => `<li><strong>${html(row.name || row.advisorName)}</strong><ul>${gaps.map((gap) => `<li>${html(gap.label)}：${html(gap.reason)}</li>`).join("")}</ul></li>`).join("")}</ul>` : ""}
-<details class="technical"><summary>查询与工具记录（复核用）</summary>${coverage}</details>
-${sourceAppendix(evidence, advisorRows)}
-${historicalRanking ? `<details class="technical"><summary>历史比较记录（不用于当前顺序或申请判断）</summary><pre>${html(JSON.stringify(ranking, null, 2))}</pre></details>` : ""}</section>`;
+${medical ? `<p>${html(prose(audit.searchCoverage || audit.coverage, `本轮包含 ${advisorRows.length} 位导师，保存了 ${pageCount} 个来源网页；${pendingCount} 条来源主张仍有核验或访问限制。`))}</p>
+<p>论文检索范围、已核实数量和未纳入原因见各导师论文清单。检索记录仅支持所列来源的覆盖情况。</p>
+${missingPublicationChecks.length ? `<p>论文检索或核验仍有缺口：${html(missingPublicationChecks.map(({row}) => row.name || row.advisorName || "姓名待核实").join("、"))}。</p>` : ""}
+${audit.limitations?.length ? `<p>${html(human(audit.limitations))}</p>` : ""}` : `${facts([["实际检索范围", prose(audit.searchCoverage || audit.coverage, `已保存 ${pageCount} 个来源网页的 ${evidence.length} 条主张；其中 ${pendingCount} 条仍有核验或访问限制。`)],["仍需补查", audit.limitations?.length ? audit.limitations : "请结合各导师的待核实事项阅读"]])}<details class="technical"><summary>查询与工具记录（复核用）</summary>${coverage}</details>`}
+${sourceAppendix(evidence, advisorRows, medical)}
+${historicalRanking && !medical ? `<details class="technical"><summary>历史比较记录（不用于当前顺序或申请判断）</summary><pre>${html(JSON.stringify(ranking, null, 2))}</pre></details>` : ""}</section>`;
   const head = `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'sha256-${REPORT_NAV_HASH}'; base-uri 'none'; form-action 'none'">
@@ -641,7 +693,7 @@ ${historicalRanking ? `<details class="technical"><summary>历史比较记录（
 ${fixtureNotice ? `<p><strong>虚构示例 / FICTIONAL FIXTURE：</strong>${html(fixtureNotice)}</p>` : ""}
 <p>${discovery ? "生物医学导师方向探索" : medical ? "生物医学导师申请筛选" : "导师与申请项目调研"} · ${html(project.target || "地区尚未确认")} · ${advisorRows.length} 位导师记录${medical && discovery ? "" : ` / ${programRows.length} 个真实项目机会`}</p>
 ${historicalRanking ? `<p><strong>历史比较待复核：</strong>已有 ${rankings.length} 条比较记录的调查确认已失效或不适用于当前范围。保留研究和来源痕迹；当前按稳定名称展示，申请资格待重新核对。</p>` : ""}
-<p class="muted">${medical ? "按研究问题的相关性和持续研究情况展示，列表顺序不是导师质量排名。未知不代表不符合；没有综合导师分、引用量排名、录取概率或培养成功率。" : "结论依据共享记录；申请条件、名额与资金在行动前需要按项目批次重核。"}</p>${medical ? `<p><strong>本轮完成情况：</strong>${html(completion)}</p>` : ""}</header>`;
+<p class="muted">${medical ? "按研究相关性和持续研究情况展示，顺序不代表导师质量排名。" : "结论依据共享记录；申请条件、名额与资金在行动前需要按项目批次重核。"}</p>${medical ? `<p><strong>本轮完成情况：</strong>${html(completion)}</p>` : ""}${discovery ? '<p class="muted">本轮聚焦研究方向与论文；招生资格、名额与申请批次未纳入调查。</p>' : ""}</header>`;
   if (!medical) {
     return responsiveTables(`${head}
 <section id="requirements"><h2>本次找导师的要求</h2>${facts([["研究兴趣", project.interests], ["目标学位 / 批次", [project.degree, project.season]], ["硬约束", project.hardConstraints]])}</section>
@@ -653,6 +705,7 @@ ${evidenceSection}
   const optionalProfile = [
     ["研究对象 / 尺度", [profile.researchObjects, profile.researchScales]],
     ["研究范式 / 方法偏好", [profile.researchModes, profile.methodPreferences]],
+    ["可接受相邻方向 / 排除项", [profile.adjacentInterests, profile.exclusions]],
   ].filter(([, value]) => value.some((items) => Array.isArray(items) && items.length));
   return responsiveTables(`${head}
 <section id="requirements"><h2>本次找导师的要求</h2>${facts([
@@ -660,12 +713,11 @@ ${evidenceSection}
   ["疾病 / 机制与科学问题", [profile.diseaseScope, profile.diseasesOrMechanisms, profile.researchQuestions]],
   ["目标国家 / 地区", profile.regions],
   ...optionalProfile,
-  ["可接受相邻方向 / 排除项", [profile.adjacentInterests, profile.exclusions]],
 ])}</section>
 <section id="overview"><h2>导师简短对照</h2>${medicalOverviewTable(overviewRows, evidence, discovery, advisorRows)}${programDetails}</section>
 <section id="advisors"><h2>逐位导师详情</h2>${advisorRows.length ? advisorRows.map((row, index) => medicalAdvisorSection(advisorFacts.get(row.advisor_id || row.advisorId) || row, index, project, programRows.filter((candidate) => (candidate.advisor_id || candidate.advisorId) === (row.advisor_id || row.advisorId)), evidence)).join("") : "<p>尚无导师事实记录。</p>"}</section>
 ${evidenceSection}
-<p class="muted">本报告由本地共享记录生成，不会访问网页、发送邮件或启动申请材料。通讯作者论文按已核实署名与日期纳入，第一作者学历不影响纳入；共同署名本身不证明指导关系。</p></main><script id="report-navigation">${REPORT_NAV_SCRIPT}</script></body></html>`);
+<p class="muted">论文按已核实的第一／共同第一／通讯／共同通讯署名与日期纳入；作者画像为可选补充。</p></main><script id="report-navigation">${REPORT_NAV_SCRIPT}</script></body></html>`);
 }
 
 async function readJson(path, fallback) {

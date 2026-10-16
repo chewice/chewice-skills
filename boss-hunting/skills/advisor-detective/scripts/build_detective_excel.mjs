@@ -5,6 +5,7 @@ import { resolve } from "node:path";
 import { writeWorkbook } from "../../advisor-pipeline/scripts/workbook-runtime.mjs";
 import { isMedicalEvidenceProfile, medicalProject } from "../../advisor-pipeline/scripts/medical-evidence.mjs";
 import { buildMedicalWorkbookSheets } from "../../advisor-pipeline/scripts/medical-workbook.mjs";
+import { readableText } from "../../advisor-pipeline/scripts/publication-evidence.mjs";
 
 function args(argv) {
   const parsed = {};
@@ -81,10 +82,14 @@ tableSheet(
 ),
 ];
 
+const supplementaryRows = medical ? advisors.flatMap(advisor => sections.flatMap(section => {
+  const content = readableText(advisor.sectionResults?.[section.id]);
+  return content ? [[advisor.name || advisor.advisorName || "导师姓名待核实", text([advisor.school,advisor.program].filter(Boolean)), section.label || "补充调查", content]] : [];
+})) : [];
 const result = await writeWorkbook(
   { sheets: medical ? [
     ...buildMedicalWorkbookSheets(input),
-    { ...sheets[0], name: "5_已选维度调查" },
+    ...(supplementaryRows.length ? [tableSheet("调查补充", ["导师","机构与项目","调查内容","结果"], supplementaryRows, [24,32,32,70])] : []),
   ] : sheets },
   resolve(parsed.output),
   { forcePortable: process.env.ADVISOR_ATLAS_FORCE_PORTABLE_XLSX === "1" },

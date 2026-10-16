@@ -148,7 +148,7 @@ export function renderInvestigationMenu(menu) {
   }
   if (medical) {
     lines.push("");
-    lines.push("医学证据画像不计算综合分、引用量排名或录取概率。维度目录为三模块（A 身份定位 / B 近五年主线与论文期刊核验 / C 指导相关论文与作者情况），不含训练匹配、资源、博士资助或培养环境。尚无真实项目/批次映射的导师保留在 advisor_records.json 的探索视图中，不能虚构 advisorProgramId 进入此精确项目确认菜单。");
+    lines.push("医学调查默认选择 A 身份定位与 B 近五年研究主线及第一／共同第一／通讯／共同通讯论文；C 第一作者与指导关系补充为可选。论文检索完成度独立于作者画像。尚无真实项目与批次映射的导师保留在探索视图中，不进入精确项目确认菜单。");
   }
   lines.push("");
   lines.push("## 2. 背调维度");

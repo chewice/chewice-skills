@@ -19,8 +19,8 @@ For medical/biomedical work set `domainProfile: medical` and read
 steps: medical field → disease / mechanism / scientific question → target
 regions. Research objects, scales, paradigm (`researchModes`) and method
 preferences are optional and never block. Discovery then runs scientific
-question → Seeds → PI validation → five-year back-search → three-module deep
-dive (see "Medical discovery orchestration" below).
+question → Seeds → PI validation → full five-year publication back-search →
+human-readable report (see "Medical discovery orchestration" below).
 Ask only missing questions; development of this Skill is not an intake request.
 Choose `searchMode: discovery|application`; medical discovery needs no CV,
 grades, degree, intake, applicant skills or desired training. Application
@@ -188,7 +188,7 @@ official application facts for the shortlist.
 Medical discovery instead completes after a real advisor-level exploration
 view with a five-dimension evidence profile per PI (research-question fit,
 route continuity, PI role confidence, evidence sufficiency, current activity),
-the three public-evidence modules, and an explicit seed / saturation /
+identity and full five-year publication research, and an explicit seed / saturation /
 coverage report. Keep unmapped advisors in `advisor_records.json`; do not
 invent programs, intakes or candidate IDs to satisfy the application route.
 Derive an exploration workbook and the field-named HTML report, then mark
@@ -212,7 +212,7 @@ Scientific question
   -> Identity Resolver: OpenAlex / ORCID / official page, pi_evidence_level A–D
   -> Trajectory Mappers: 5-year back-search per PI -> route continuity
   -> saturation check -> shortlist (display order, not quality ranking)
-  -> three-module research A–C -> merge -> {topic}-导师调研.html
+  -> identity + five-year publications (optional author appendix) -> merge -> {topic}-导师调研.html
 ```
 
 Subagent roles: Seed Scouts, Identity Resolver, Trajectory Mappers, Doctoral Trajectory Investigator,
@@ -271,10 +271,12 @@ success or placement rates, composite quality scores, citation or h-index
 ranking, and any resource or student-funding source entries.
 
 Completion tiers for a medical discovery run: `complete` (every shortlisted PI
-has all three modules with a result or explicit gap, provider metadata and merge
-report saved), `partial` (some modules or PIs unfinished but reported as such),
+has supported core identity, exhausted recorded publication queries, resolved
+paper roles/dates, provider metadata and merge report saved), `partial` (some
+required evidence remains unresolved, even if a gap is explicitly recorded),
 `blocked` (identity unresolved or every route inaccessible for the required
-evidence). Never report a higher tier than the artifacts support.
+evidence). Optional author profiles, talks and unrequested admissions checks do
+not gate the core report. Never report a higher tier than the artifacts support.
 
 Generic/application-stage completion requires:
 
@@ -305,7 +307,7 @@ For direct CLI users, perform the following steps in order:
 
    It prints the candidate table (including the stable `advisorProgramId`
    column), the ordered section catalog for the project's mode (11 generic
-   sections, or the three medical modules A–C, all selected by default) and the
+   sections, or medical A–B selected by default with C as an optional appendix) and the
    current work unit / cost level. Show its output verbatim. You may explain it, but you must
    not reorder, rename, drop, or summarize away any column or row — a
    free-form menu has already shipped without `advisorProgramId`.
@@ -379,10 +381,10 @@ Completion requires:
   exploration workbook for medical discovery, without fabricated total scores.
 - The field/direction-named HTML research report from shared records. Medical
   reports start with the search requirements, then a compact comparison,
-  three readable modules per advisor, and “本次查了什么，还缺什么”.
-  Recent papers, preprints and journal checks belong in the research module;
-  corresponding-author papers do not require first-author degree verification.
-  Source and technical details use native disclosure sections.
+  advisor overview, research mainline, five-year first/corresponding papers,
+  key unresolved issues, and a short coverage statement. Author profiles are
+  optional and never gate papers. Human source notes can use disclosure sections;
+  technical logs and raw JSON remain in the data files.
 - Source, freshness, missing-field, and risk checks.
 
 ## Post-evaluation application materials
@@ -461,21 +463,20 @@ regenerate the workbook from structured state.
 ## Medical report scope
 
 Follow [the shared medical report contract](../advisor-pipeline/references/medical-profile.md).
-Use three modules: identity; research mainline including recent papers, preprints
-and journal-publication checks, plus recent academic conferences/talks;
-corresponding-author papers and their authors.
-Do not investigate or render collaborator profiles or research grants, and do
-not treat missing grant searches as incomplete work. Preserve historical records.
-Include past-five-year papers when the advisor's corresponding/co-corresponding
-role is verified, regardless of the first author's degree or unknown identity.
-Record first/co-first names from the paper; known public roles are optional
-context, never an inclusion requirement. Coauthorship alone does not establish
-supervision. Check the attributable lab website and record sources and dates.
-Generate the shared HTML and supplementary Excel from the same records.
+The core is advisor identity, research mainline and the full five-year
+first/co-first/corresponding/co-corresponding publication back-search across
+all research directions. Representative papers are a display selection, never
+a retrieval cap. Verify each role from actual bylines or author notes; last or
+co-senior authorship does not imply correspondence. Save independent publication
+search receipts and role evidence in the shared records.
+Author profiles are optional supporting material, displayed only when present;
+they never gate publication inclusion or core completion. Lab links belong in
+the advisor overview. Do not investigate collaborators or grants.
+Generate human-readable HTML and supplementary Excel from the same records,
+following the shared contract's retrieval, completion and presentation rules.
 
 医学身份采集和交付前检查：遵循 [身份字段落表与报告前检查](references/medical-profile.md#身份字段落表与报告前检查)。已读正文中的任职等事实须写入 identity 并关联字段级 evidence；链接标题不能代替字段。生成前运行 build_advisor_report.mjs 的 --check-identity，处理缺口或记录无法核实的原因，再交付部分或完整报告。
 
-In medical module 02, also search public conferences, forums and seminars from
-the past two years. Follow the shared medical contract’s “近期学术会议与演讲”
-section: preserve exact talk titles and sources, separate upcoming events, and
-distinguish a scheduled speaker from a confirmed delivered talk.
+Existing verified talks may appear as optional supporting information.
+Search talks separately when requested; preserve exact titles, dates and
+scheduled-versus-delivered status under the shared medical contract.

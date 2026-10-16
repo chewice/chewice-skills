@@ -231,8 +231,8 @@ The projection contains:
   `affiliationAsOf`).
 - `researchMainline` (`longTermQuestion`, `continuingThemes`, `newDirections`,
   `researchObjects`, `methods`, `recentShift`, `participationOnlyWorks`,
-  `representativeWorks[{title, year, venue, doi, url, verifiedRole, relationToMainline, isPreprint, publicationStatus, publishedVersionDoi, sourceIds}]`,
-  `latestPapers[]`, `preprints[]` (same work schema), `backSearchWindow`,
+  `representativeWorks[{title, date, year, venue, doi, url, advisorRoles, roleStatus, roleSourceIds, relationToMainline, isPreprint, publicationStatus, publishedVersionDoi, versionStatus, versionSourceIds, sourceIds}]`,
+  `latestPapers[]`, `preprints[]` (same work schema), `backSearchWindow`, `publicationSearches[]`,
   `academicTalks[]`, `talkSearches[]` (past-two-year conference/talk records and query receipts; see investigation-contract.md)).
 - `doctoralTrajectory` (`firstAuthorProfiles[]`, `labWebsites[]`, `searches[]` as defined in investigation-contract.md, `currentDoctoral[]`, `formerDoctoral[]` with
   supervision evidence / degree or year / topic / outputs / first destination /

@@ -126,9 +126,12 @@ medical-profile.md, executed by the Main Agent with subagents that write only
    evidence is at most `probable` (Level B). Resolve identity through
    OpenAlex / ORCID / the current official page and record `pi_evidence_level`
    A–D, `discovered_via` and `network_round`.
-3. **Back-search**: a five-year author back-search per PI decides
-   `researchRouteContinuity`; one matching paper never proves a sustained
-   mainline.
+3. **Back-search**: retrieve all pages of the actual five-year author searches,
+   across research directions, and verify first/co-first/corresponding/co-corresponding
+   roles. Cross-check official publication lists, retain identity/role/date gaps
+   and query receipts. This is not capped at two or three representative works.
+   The resulting evidence informs `researchRouteContinuity`; one matching paper
+   never proves a sustained mainline.
 4. **Coverage and saturation**: supplement candidates from original papers and
    official rosters; stop when new queries add no relevant PI or sub-direction.
    Record the scope and stopping reason. Do not investigate collaborators or grants.
@@ -139,7 +142,7 @@ medical-profile.md, executed by the Main Agent with subagents that write only
 Use the registry entries for the selected regions; do not enumerate every
 database, and never rank PIs by citations, h-index or network centrality.
 
-Use official faculty pages,
+For general (non-medical) Finder use official faculty pages,
 targeted search, Scholar, dblp, OpenReview, or field directories. Record only:
 
 - Name, institution, department, current role, homepage, and stable `advisor_id`.
@@ -319,21 +322,20 @@ fields plainly. Regeneration reads shared records and does not rerun research.
 ## Medical report scope
 
 Follow [the shared medical report contract](../advisor-pipeline/references/medical-profile.md).
-Use three modules: identity; research mainline including recent papers, preprints
-and journal-publication checks, plus recent academic conferences/talks;
-corresponding-author papers and their authors.
-Do not investigate or render collaborator profiles or research grants, and do
-not treat missing grant searches as incomplete work. Preserve historical records.
-Include past-five-year papers when the advisor's corresponding/co-corresponding
-role is verified, regardless of the first author's degree or unknown identity.
-Record first/co-first names from the paper; known public roles are optional
-context, never an inclusion requirement. Coauthorship alone does not establish
-supervision. Check the attributable lab website and record sources and dates.
-Generate the shared HTML and supplementary Excel from the same records.
+The core is advisor identity, research mainline and the full five-year
+first/co-first/corresponding/co-corresponding publication back-search across
+all research directions. Representative papers are a display selection, never
+a retrieval cap. Verify each role from actual bylines or author notes; last or
+co-senior authorship does not imply correspondence. Save independent publication
+search receipts and role evidence in the shared records.
+Author profiles are optional supporting material, displayed only when present;
+they never gate publication inclusion or core completion. Lab links belong in
+the advisor overview. Do not investigate collaborators or grants.
+Generate human-readable HTML and supplementary Excel from the same records,
+following the shared contract's retrieval, completion and presentation rules.
 
 医学身份采集和交付前检查：遵循 [身份字段落表与报告前检查](../advisor-pipeline/references/medical-profile.md#身份字段落表与报告前检查)。已读正文中的任职等事实须写入 identity 并关联字段级 evidence；链接标题不能代替字段。生成前运行 build_advisor_report.mjs 的 --check-identity，处理缺口或记录无法核实的原因，再交付部分或完整报告。
 
-In medical module 02, also search public conferences, forums and seminars from
-the past two years. Follow the shared medical contract’s “近期学术会议与演讲”
-section: preserve exact talk titles and sources, separate upcoming events, and
-distinguish a scheduled speaker from a confirmed delivered talk.
+Existing verified talks may appear as optional supporting information.
+Search talks separately when requested; preserve exact titles, dates and
+scheduled-versus-delivered status under the shared medical contract.

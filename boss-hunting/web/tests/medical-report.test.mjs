@@ -25,26 +25,25 @@ test("medical report filename follows discipline and scope with safe portable na
   assert.equal(reportFilename({ interests: [{ name: "Statistics" }] }), "Statistics-导师调研.html");
 });
 
-test("T03 T13 T25 medical discovery HTML renders three modules with item-level links and no fabricated project IDs", async () => {
+test("T03 T13 T25 medical discovery HTML renders four readable sections with item-level links and no fabricated project IDs", async () => {
   const input = await fixture("medical-discovery");
   const report = buildAdvisorReport(input);
   assert.match(report, /虚构示例 \/ FICTIONAL FIXTURE/);
   assert.match(report, /生物医学导师方向探索/);
-  assert.match(report, /没有综合导师分/);
+  assert.match(report, /顺序不代表导师质量排名/);
   // First page: compact overview table with the fixed four columns.
-  assert.match(report, /<th>导师与机构<\/th><th>与需求的关系<\/th><th>研究主线与近期活动<\/th><th>需要进一步确认<\/th>/);
+  assert.match(report, /<th>导师与机构<\/th><th>与需求的关系<\/th><th>近五年论文<\/th><th>需要进一步确认<\/th>/);
   // Five modules per advisor in order, then boundary and coverage sections.
-  const order = ["身份与任职", "研究方向与近年论文", "指导相关论文与作者情况", "本次查了什么，还缺什么"];
+  const order = ["导师概况", "研究主线与相关性", "近五年一作／通讯论文", "关键待核实事项", "本次查了什么，还缺什么"];
   const positions = order.map((label) => report.indexOf(label));
   assert.ok(positions.every((position, index) => position >= 0 && (index === 0 || position > positions[index - 1])), positions.join(","));
   assert.doesNotMatch(report, /class="person-entry collaborator"|id="advisor-1-c"|id="advisor-1-d"|FIX-0001/);
-  assert.match(report, /不以第一作者学历或身份是否已核实为条件/);
+  assert.match(report, /作者画像为可选补充/);
   // Item-level external links plus supplementary evidence anchors.
   assert.match(report, /href="https:\/\/example.org\/fictional-study"/);
   assert.doesNotMatch(report, />证据\s*\d+<\/a>/);
-  assert.match(report, /not_checked/);
-  assert.match(report, /未保存查询记录/);
-  assert.match(report, /provider-capabilities\.json/);
+  assert.doesNotMatch(report, /not_checked|provider-capabilities\.json|查询与工具记录|<pre>/);
+  assert.match(report, /论文检索记录尚未补齐/);
   // Removed dimensions do not appear in discovery output.
   assert.doesNotMatch(report, /训练|研究资源及可访问层级|博士生资助|培养制度与环境|申请条件与时效/);
   assert.doesNotMatch(report, /reachCap|matchingContractVersion/);
@@ -77,14 +76,16 @@ test("report and workbooks preserve canonical browser evidence links and provena
     final_url: "https://example.org/final", page_title: "Fixture final page", status: "inaccessible" }];
   const report = buildAdvisorReport(input);
   assert.match(report, /href="https:\/\/example.org\/final"/);
-  assert.match(report, /full_text/);
-  assert.match(report, /fixture-original/);
+  assert.doesNotMatch(report, /full_text|fixture-original/);
+  assert.match(report, /Fixture excerpt/);
   assert.match(report, /Fixture final page/);
   const sourceSheet = buildMedicalWorkbookSheets({ project: input.project, advisorRecords: input.advisors, evidence: input.evidence })
-    .find((sheet) => sheet.name === "3_证据来源与缺口");
-  assert.equal(sourceSheet.rows[0][6].cachedValue, "https://example.org/final");
-  assert.equal(sourceSheet.rows[0][12], "full_text");
-  assert.equal(sourceSheet.rows[0][15], "fixture-original");
+    .find((sheet) => sheet.name === "来源说明");
+  assert.equal(sourceSheet.rows[0][2].cachedValue, "查看来源");
+  assert.match(sourceSheet.rows[0][2].formula, /https:\/\/example.org\/final/);
+  assert.equal(sourceSheet.rows[0][1], "Fixture excerpt");
+  assert.equal(sourceSheet.rows[0][4], "访问受阻");
+  assert.doesNotMatch(JSON.stringify(sourceSheet), /full_text|fixture-original/);
 });
 
 test("medical application report keeps programme entry, exact intake without research grant records without training or personal funding", async () => {
@@ -98,7 +99,7 @@ test("medical application report keeps programme entry, exact intake without res
   assert.doesNotMatch(report, /FIX-APP-01/);
   assert.doesNotMatch(report, /1200000 fictional_unit/);
   assert.match(report, /已核实研究负责人身份/);
-  assert.match(report, /列表顺序不是导师质量排名/);
+  assert.match(report, /顺序不代表导师质量排名/);
   assert.doesNotMatch(report, /训练|博士生资助|研究资源及可访问层级|培养制度与环境/);
   input.candidates[0].intake = "2026";
   assert.throws(() => buildAdvisorReport(input), /intake/);
@@ -122,10 +123,10 @@ test("T13 facts and comparison carry direct source hyperlinks next to the exact 
   );
   const report = buildAdvisorReport(input);
   const brief = report.match(/<article[\s\S]*?<\/article>/)[0];
-  const moduleOf = (id) => brief.split(`id="advisor-1-${id}"`)[1].split(/<div class="module(?: module-[a-e])?"/)[0];
+  const moduleOf = (id) => brief.split(`id="advisor-1-${id}"`)[1].split(/<div class="module(?: module-[a-z])?"/)[0];
   const section = (label) => report.split(`<dt>${label}</dt><dd>`)[1].split("</dd>")[0];
-  assert.match(moduleOf("b"), /href="https:\/\/example.org\/paper-detail"/);
-  assert.match(moduleOf("e"), /href="https:\/\/example.org\/cohort-detail".*部分核实/);
+  assert.match(moduleOf("p"), /href="https:\/\/example.org\/paper-detail"/);
+  assert.match(brief.split('class="author-appendix"')[1], /href="https:\/\/example.org\/cohort-detail".*部分核实/);
   assert.match(section("项目截止日（批次 / 时区）"), /href="https:\/\/example.org\/program-date"/);
   assert.doesNotMatch(section("项目截止日（批次 / 时区）"), /scholarship-date|old-date|other-date/);
   assert.match(section("奖学金截止日（批次 / 时区）"), /href="https:\/\/example.org\/scholarship-date"/);
@@ -225,7 +226,7 @@ test("current evaluator findings reach the comparison and advisor brief without 
   assert.match(brief, /Current evaluator question alignment/);
   assert.match(brief, /Current evaluator continuity note/);
   assert.match(brief, /Current evaluator identity gap/);
-  assert.match(brief, /Current evaluator verify ORCID/);
+  assert.doesNotMatch(brief, /Current evaluator verify ORCID/);
   assert.doesNotMatch(brief, /Old advisor next step|Old advisor-level match|Preserved advisor resource fact/);
   assert.match(report, /Fictional Biomedical PhD；PhD；2027/);
   const valid = structuredClone(input.ranking.rankings[0]);

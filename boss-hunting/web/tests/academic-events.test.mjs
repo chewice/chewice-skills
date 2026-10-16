@@ -52,31 +52,32 @@ test('two-year scope uses the recorded query date; missing, blocked and not-foun
  assert.deepEqual(talkWindow([{...search(),checkedAt:'2024-02-29',windowStart:'2022-02-28',windowEnd:'2024-02-29'}]),{start:'2022-02-28',end:'2024-02-29'});
 });
 
-test('HTML and Excel retain advisor talks in module 02 despite older application snapshots',async()=>{
+test('HTML and Excel retain advisor talks as optional supplements despite older application snapshots',async()=>{
  const input=await fixture('medical-application');
  const advisor=input.advisors[0];
  advisor.evidence_profile={research_mainline:{academic_talks:[talk(),talk({eventName:'Future Forum',date:'2026-12-01'})],talk_searches:[search()]}};
  input.evidence.push(...evidence().map(row=>({...row,entity_id:advisor.advisor_id})));
  const before=structuredClone(input);
  const report=buildAdvisorReport(input);
- const section=report.split('id="advisor-1-b"')[1].split('id="advisor-1-e"')[0];
- assert.match(section,/近期学术会议与演讲/);
+ const section=report.split('class="supplement"')[1].split('</article>')[0];
+ assert.match(section,/学术会议与演讲/);
  assert.match(section,/Mechanisms of adaptation/);
  assert.match(section,/适应机制/);
  assert.match(section,/即将举行[\s\S]*Future Forum/);
  assert.match(section,/href="https:\/\/example.org\/programme"/);
  assert.doesNotMatch(section,/已确认报告/);
- const sheet=buildMedicalWorkbookSheets({project:input.project,advisorRecords:input.advisors,candidates:input.candidates,evidence:input.evidence})[0];
- const cell=sheet.rows[0][sheet.headers.indexOf('B 近期学术会议与演讲')];
+ const sheet=buildMedicalWorkbookSheets({project:input.project,advisorRecords:input.advisors,candidates:input.candidates,evidence:input.evidence}).find(sheet=>sheet.name==='学术活动');
+ const cell=JSON.stringify(sheet.rows);
  assert.match(cell,/Mechanisms of adaptation/);
- assert.match(cell,/即将举行.*Future Forum/);
+ assert.match(cell,/Future Forum/);
+ assert.match(cell,/2026-12-01/);
  assert.doesNotMatch(cell,/已确认报告/);
  assert.deepEqual(input,before);
 });
 
 test('unsafe titles and URLs remain inert; legacy records do not imply no conference activity',async()=>{
  const input=await fixture('medical-discovery');
- assert.match(buildAdvisorReport(input),/未记录会议与演讲检索，不代表没有活动/);
+ assert.doesNotMatch(buildAdvisorReport(input),/未记录会议与演讲检索|class="supplement"/);
  input.advisors[0].evidence_profile.research_mainline={...mainline([talk({talkTitle:'<script>bad()</script>',url:'javascript:alert(1)'})])};
  const report=buildAdvisorReport(input);
  assert.match(report,/&lt;script&gt;bad/);

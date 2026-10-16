@@ -62,16 +62,16 @@ test("authoritative subagent merge preserves existing doctoral students and reco
 
 test("HTML and Excel retain new doctoral information and expose legacy gaps",async()=>{
  const input=await fixture();const advisor=input.advisors[0];
- assert.match(buildAdvisorReport(input),/未记录此项检索/);
+ assert.doesNotMatch(buildAdvisorReport(input),/未记录此项检索/);
  advisor.evidence_profile.doctoral_trajectory={...advisor.evidence_profile.doctoral_trajectory,...raw()};
  input.evidence.push(...["lab","paper"].map(id=>({evidence_id:id,entity_id:advisor.advisor_id,url:`https://example.org/${id}`,status:"verified",citation_label:id==="paper"?"共同研究论文":"实验室成员页"})));
- const report=buildAdvisorReport(input); const section=report.split('id="advisor-1-e"')[1].split("</article>")[0];
- assert.ok(section.indexOf("实验室官网与查阅情况")<section.indexOf("近五年通讯作者论文中的第一作者"));
- assert.match(section,/不以第一作者学历或身份是否已核实为条件/);
- assert.match(section,/页面更新时间：页面未注明/);assert.doesNotMatch(section,/身份待核实/);assert.match(section,/Mechanisms supported by joint work/);
+ const report=buildAdvisorReport(input); const section=report.split('class="author-appendix"')[1].split("</article>")[0];
+ assert.match(report.split('id="advisor-1-a"')[1].split('id="advisor-1-b"')[0],/https:\/\/example.org\/lab/);
+ assert.match(section,/第一作者学历或身份信息不影响导师论文纳入/);
+ assert.doesNotMatch(section,/页面更新时间：页面未注明/);assert.doesNotMatch(section,/身份待核实/);assert.match(section,/Mechanisms supported by joint work/);
  const item=section.match(/<li><a[^>]+>Joint mechanisms paper[\s\S]*?<\/li>/)[0];assert.equal((item.match(/href=/g)||[]).length,1);
  const sheets=buildMedicalWorkbookSheets({project:input.project,advisorRecords:input.advisors,evidence:input.evidence});
- assert.match(JSON.stringify(sheets),/Joint mechanisms paper/);assert.match(JSON.stringify(sheets),/https:\/\/example.org\/members/);
+ assert.match(JSON.stringify(sheets),/Joint mechanisms paper/);assert.match(JSON.stringify(sheets),/https:\/\/example.org\/paper/);
 });
 
 test("lab failures and unsafe author/page text remain explicit and inert",async()=>{
@@ -85,7 +85,7 @@ test("lab failures and unsafe author/page text remain explicit and inert",async(
   doctoral.searches[0].status=status;
   const report=buildAdvisorReport(input);
   assert.doesNotMatch(report,/<img|<script(?! id="report-navigation")|href="javascript:/);
-  assert.match(report,/&lt;img/);assert.match(report,/与导师的归属关系待核实/);
+  assert.match(report,/&lt;img/);assert.match(report,/导师归属待核实/);
  }
 });
 
@@ -93,7 +93,7 @@ test("application snapshots cannot hide later advisor doctoral additions in HTML
  const input=await fixture("medical-application");input.advisors[0].evidence_profile={doctoral_trajectory:{...raw(),current_doctoral:[{name:"Advisor stored student"}]}};
  const report=buildAdvisorReport(input);assert.match(report,/Joint mechanisms paper/);assert.match(report,/Advisor stored student/);
  const sheets=buildMedicalWorkbookSheets({project:input.project,advisorRecords:input.advisors,candidates:input.candidates,evidence:input.evidence});
- assert.match(JSON.stringify(sheets[0]),/Joint mechanisms paper/);assert.match(JSON.stringify(sheets[0]),/Advisor stored student/);
+ assert.match(JSON.stringify(sheets),/Joint mechanisms paper/);assert.match(JSON.stringify(sheets),/Advisor stored student/);
 });
 
 

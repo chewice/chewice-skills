@@ -1,12 +1,13 @@
 // Shared projections only; advisor/program/evidence records remain the fact source.
 //
 // Medical / biomedical discovery describes each PI with an evidence profile
-// built from three modules: identity, research papers and mainline, and
-// corresponding-author papers with author profiles. Legacy records remain readable.
+// built from identity, research mainline and verified five-year publications.
+// Author profiles are optional supporting material. Legacy records remain readable.
 // Training fit, lab resources, doctoral personal funding, training environment,
 // applicant ability and overall quality scores are intentionally absent.
 import { doctoralAdditions } from "./doctoral-evidence.mjs";
 import { academicEvents, mergeAcademicEvents } from "./academic-events.mjs";
+import { normalizePublication, normalizePublicationSearches, collectPublications, mergePublicationMainline, readableText } from "./publication-evidence.mjs";
 import { hasStructuredApplicantBackground } from "./project-contract.mjs";
 import { open, realpath } from "node:fs/promises";
 import { isAbsolute, relative, resolve } from "node:path";
@@ -76,8 +77,8 @@ function statusBlock(value, vocabulary, fallback, extra = {}) {
   const source = value && typeof value === "object" ? value : (typeof value === "string" ? { status: value } : {});
   return {
     status: vocabulary.includes(source.status) ? source.status : fallback,
-    reasons: list(source.reasons).map(String),
-    sourceIds: sourceIds(source),
+    reasons: list(source.reasons).map(readableText).filter(Boolean),
+    sourceIds: [...new Set([...sourceIds(source), ...list(source.reasons).flatMap(sourceIds)])],
     ...extra,
   };
 }
@@ -105,67 +106,46 @@ function researchQuestionFit(profile) {
 }
 
 function representativeWork(item) {
-  if (!item || typeof item !== "object") return { title: String(item ?? ""), sourceIds: [] };
-  return {
-    title: String(pick(item, "title") ?? ""),
-    year: pick(item, "year", "date") ?? null,
-    venue: pick(item, "venue", "journal", "journal_or_preprint") ?? null,
-    doi: pick(item, "doi", "DOI") ?? null,
-    url: pick(item, "url", "final_url") ?? null,
-    verifiedRole: pick(item, "verifiedRole", "verified_role", "role") ?? "unknown",
-    relationToMainline: pick(item, "relationToMainline", "relation_to_mainline", "relation") ?? null,
-    isPreprint: pick(item, "isPreprint", "is_preprint") === true,
-    publishedVersionDoi: pick(item, "publishedVersionDoi", "published_version_doi") ?? null,
-    publicationStatus: pick(item, "publicationStatus", "publication_status") ?? null,
-    sourceIds: sourceIds(item),
-  };
+  return normalizePublication(item);
 }
 
 function researchMainline(profile) {
   const source = pick(profile, "researchMainline", "research_mainline") || {};
   const legacy = pick(profile, "latestSignals", "latest_signals") || {};
+  const themes = ["longTermQuestion", "recentShift", "continuingThemes", "newDirections", "researchObjects", "methods"];
+  const themeRefs = themes.flatMap(field => {
+    const value = pick(source, field, field.replace(/[A-Z]/g, c => `_${c.toLowerCase()}`));
+    return (Array.isArray(value) ? value : [value]).flatMap(sourceIds);
+  });
   return {
     ...academicEvents(source),
-    longTermQuestion: pick(source, "longTermQuestion", "long_term_question") ?? null,
-    continuingThemes: list(pick(source, "continuingThemes", "continuing_themes")),
-    newDirections: list(pick(source, "newDirections", "new_directions")),
-    researchObjects: list(pick(source, "researchObjects", "research_objects")),
-    methods: list(pick(source, "methods")),
-    recentShift: pick(source, "recentShift", "recent_shift") ?? null,
+    longTermQuestion: readableText(pick(source, "longTermQuestion", "long_term_question")),
+    continuingThemes: list(pick(source, "continuingThemes", "continuing_themes")).map(readableText).filter(Boolean),
+    newDirections: list(pick(source, "newDirections", "new_directions")).map(readableText).filter(Boolean),
+    researchObjects: list(pick(source, "researchObjects", "research_objects")).map(readableText).filter(Boolean),
+    methods: list(pick(source, "methods")).map(readableText).filter(Boolean),
+    recentShift: readableText(pick(source, "recentShift", "recent_shift")),
     participationOnlyWorks: list(pick(source, "participationOnlyWorks", "participation_only_works")).map(representativeWork),
     representativeWorks: list(pick(source, "representativeWorks", "representative_works")).map(representativeWork),
     latestPapers: [...list(pick(source, "latestPapers", "latest_papers")), ...list(pick(legacy, "latestPapers", "latest_papers"))].map(representativeWork),
     preprints: [...list(source.preprints), ...list(legacy.preprints)].map(item => ({ ...representativeWork(item), isPreprint: true })),
     backSearchWindow: pick(source, "backSearchWindow", "back_search_window") ?? null,
-    sourceIds: sourceIds(source),
+    publicationSearches: normalizePublicationSearches(pick(source, "publicationSearches", "publication_searches")),
+    sourceIds: [...new Set([...sourceIds(source), ...themeRefs])],
   };
 }
 
 // Prefer a verified journal version when a preprint explicitly points to it.
 // Similar titles alone do not establish a preprint-to-journal relationship.
-export function researchPublications(mainline) {
-  const doiKey = value => String(value || "").replace(/^https?:\/\/(?:dx\.)?doi\.org\//i, "").toLowerCase();
-  const entries = [...mainline.representativeWorks, ...mainline.latestPapers, ...mainline.preprints];
-  const published = new Set(entries.filter(work => !work.isPreprint).map(work => doiKey(work.doi)).filter(Boolean));
-  const seen = new Map();
-  for (const work of entries) {
-    if (work.isPreprint && work.publishedVersionDoi && published.has(doiKey(work.publishedVersionDoi))) continue;
-    const key = doiKey(work.doi) || work.url || JSON.stringify([work.title, work.year, work.isPreprint]);
-    if (seen.has(key)) {
-      const prior = seen.get(key);
-      prior.sourceIds = [...new Set([...prior.sourceIds, ...work.sourceIds])];
-    } else seen.set(key, { ...work, sourceIds: [...work.sourceIds] });
-  }
-  return [...seen.values()];
+export function researchPublications(mainline, evidence = [], advisorId = "") {
+  return collectPublications(mainline, evidence, advisorId);
 }
 
 export function mergeResearchMainline(current, prior) {
   return {
     ...prior,
     ...Object.fromEntries(Object.entries(current).filter(([, value]) => Array.isArray(value) ? value.length : value)),
-    representativeWorks: [...current.representativeWorks, ...prior.representativeWorks],
-    latestPapers: [...current.latestPapers, ...prior.latestPapers],
-    preprints: [...current.preprints, ...prior.preprints],
+    ...mergePublicationMainline(prior, current),
     ...mergeAcademicEvents(current, prior),
   };
 }
@@ -283,8 +263,8 @@ export function normalizeMedicalEvidenceProfile(candidate = {}) {
     doctoralTrajectory: doctoralTrajectory(profile),
     formalRecords: list(pick(profile, "formalRecords", "formal_records")),
     fitBoundary: pick(profile, "fitBoundary", "fit_boundary") ?? null,
-    keyUnknowns: [...new Set(list(pick(profile, "keyUnknowns", "key_unknowns")).map(String))],
-    nextVerification: list(pick(profile, "nextVerification", "next_verification")).map(String),
+    keyUnknowns: [...new Set(list(pick(profile, "keyUnknowns", "key_unknowns")).map(readableText).filter(Boolean))],
+    nextVerification: list(pick(profile, "nextVerification", "next_verification")).map(readableText).filter(Boolean),
   };
 }
 

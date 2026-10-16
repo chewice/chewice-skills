@@ -1,6 +1,6 @@
 # 医学来源能力注册表（Source Capability Registry）
 
-来源目录仅服务身份任职、研究论文与会议演讲、导师通讯论文与作者情况三个模块。
+来源目录服务身份任职、五年研究主线与四种署名论文核验，以及用户选择的作者画像、指导关系或会议演讲补充。论文检索不依赖作者画像是否完成。
 
 这是唯一人工维护的来源目录。先加载 Global Core，再加载用户所选地区的 Regional Adapter；不是封闭白名单，不逐站爬取。具体主张引用记录页/文件，不以数据库首页替代。官方招生证据不能证明研究贡献，论文也不能证明当批次招生。来自官方页面、论文、会议议程的新来源可按任务使用，注明主体和用途。
 
@@ -14,6 +14,7 @@
 - 凭据只以 `configured | unavailable | invalid | capability-limited` 状态词出现；值不进 prompt、evidence、日志、报告。
 - 有 key 不等于付费权限（WoS 分层 `starter | researcher | expanded | limited | unavailable`，未探测不假定 expanded）。
 - Google Scholar 只做 discovery / backcheck；线索必须回到 PubMed、DOI/出版商、ORCID或当前机构记录核实。遇 CAPTCHA/登录即停。
+- 检索元数据用于发现线索，署名回到出版商页面或公开全文核验。若预印本索引排序与实际作者栏冲突，不能把投稿联系人当作第一作者；共同贡献脚注关联首部和末部作者时，不能把共同资深作者当作共同第一。保留冲突及实际依据。
 - 更新此目录时注明更换入口、用途与实际测试范围，不因一次失败删除整个国家支持。
 
 ## Global Core
