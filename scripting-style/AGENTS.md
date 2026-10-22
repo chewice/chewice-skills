@@ -28,7 +28,7 @@
 
 - `.R`、`.py`、`.sh`、`.ipynb` 分别只从同类型指南、邻近代码和范例学习具体写法。
 - 不把 R section、Python CLI、Bash runner 或 Notebook cell 结构跨类型迁移。
-- 修改既有文件时，邻近同类型风格与 minimal diff 优先于模板。
+- 普通修复保留邻近同类型风格并控制 diff；用户明确要求风格重构时，以指定的同类型参考和已确认的阅读目标为准。minimal diff 不保留本轮要求纠正的结构，模板也不替代科学方法或执行契约。
 
 ## Source Boundary
 

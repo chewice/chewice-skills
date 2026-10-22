@@ -7,7 +7,7 @@ description: Write, extend, refactor, or review project-local exploratory scient
 
 > **Write the analysis, not an application around the analysis.**
 
-Produce a project-local analysis record that a researcher can run and inspect in pieces. GZDlab examples inform expression and organization only, never scientific methods, parameters, or conclusions.
+Produce a project-local analysis record that a researcher can read, run, inspect, and modify in analysis order. User-specified same-type references take precedence over indexed GZDlab examples for writing style; neither supplies scientific methods, parameters, or conclusions.
 
 **Write the current fragment → execute a line, selection, or cell → inspect real output → decide and write the next step.**
 
@@ -20,7 +20,7 @@ These instructions use English. Generated headings, comments, and explanations f
    - `.py`: [Python analysis](references/python-analysis.md)
    - `.sh`: [Bash analysis](references/bash-analysis.md)
    - `.ipynb`: [Notebook analysis](references/notebook-analysis.md); identify its actual kernel and source language first.
-2. For edits, read the target and nearby **same-type** scripts. Preserve clear naming, section style, and analysis order. Keep changes local, but fix affected callers when an implementation changes; a small diff is not a reason to retain broken or obsolete paths. Respect an explicitly specified execution contract.
+2. For edits, read the target and nearby **same-type** scripts. For ordinary fixes, preserve clear local conventions and keep changes local. For an explicit style refactor, read the user's same-type reference and follow the requested reading order; minimal diff must not preserve the structure being corrected. Keep scientific choices and current execution contracts intact, and update affected callers when changing an owned interface.
 3. For new code, optionally select at most one same-type primary and one useful complement from the [example index](examples/example-index.yaml), only when the user supplies a source root or it clearly resolves from the workspace. Do not guess `<SOURCE_ROOT>`, search the user's machine, or copy source paths, parameters, environment details, or conclusions. If unavailable, use the type guide and disclose that examples were not read.
 4. Read [API boundaries](references/api-usage-boundary.md) only when calling an API supplied by the user or project.
 5. Discuss unresolved scientific choices briefly in conversation when needed. Do not generate a fixed task brief or spec/plan document. **You may use superpowers, but do not write any spec or plan.** This does not prohibit discussing a scientific question, comparing methods, or explaining the next action; superpowers are optional.
@@ -48,8 +48,8 @@ These restrictions govern generated analysis code, not unrelated infrastructure 
 ## Analysis-step headings and within-step spacing
 
 - Headings identify the actual analysis step and its responsibility, such as “Align expression columns and sample metadata” or “Filter low-expression genes.” Name only steps present and scientifically determined. Do not prefill a whole workflow or impose bioinformatics stages on another discipline.
-- Short comments explain input meaning, scientific rationale, observations to examine, or output use. Do not repeat a clear heading or narrate syntax line by line. Agent instructions such as “run in sections,” “reuse this session,” and “continue after inspection” belong in the skill, not routine script comments. Keep necessary launch instructions at the start and specific unresolved scientific questions near the relevant call.
-- Within a step, separate input preparation, transformation, inspection, and saving into small groups with **one blank line between groups**. Keep closely related statements together. Do not insert blank lines after every statement or split by a fixed line count. Wrap long calls by argument; use type-specific conventions for pipes and plot layers.
+- Make the current operation clear through its heading and short comments about input meaning, purpose, evidence to inspect, or downstream use. Keep necessary limitations and human decisions beside the affected operation; reference detailed history instead of repeating it. Do not repeat a clear heading or narrate syntax line by line. Agent instructions such as “run in sections” belong in the skill, not routine script comments.
+- Within a step, separate input preparation, transformation, inspection, and saving into small groups with **one blank line between groups**. Split a nested expression when it combines distinct analysis steps or hides an intermediate result worth inspecting; keep simple expressions compact. Wrap by arguments, operators, or plot layers rather than character count alone. Do not space every statement or impose fixed block lengths.
 - Small operation groups usually need spacing, not separate headings. Preserve clear project delimiters; do not mandate numbering, fixed chapters, or checkpoint/decision-point labels.
 
 ## Execute from evidence and preserve replay
@@ -71,7 +71,7 @@ Keep only the useful parts of this chain; do not manufacture empty stages:
 - Show objects and transformations in actual execution order. After loading, display a small real slice, table head, or relevant component before transforming it; dimensions or a “loaded” message alone are insufficient. Inspect type after loading, component extraction, or conversion when it matters. Preview large/sparse objects locally without densifying the entire object or creating a general preview helper.
 - After consequential transformations, show the content, summary, or diagnostic needed for the next decision. Do not print every object or apply the same checks everywhere.
 - Paths and analysis units may be selected before reading. Data-dependent columns, group levels, formula terms, covariates, and thresholds must follow observation of the loaded object. Do not infer or overwrite actual fields from a paper, GEO description, or other prior expectation.
-- Keep analysis at the top level. Do not wrap the whole script in `main()` or `run_analysis()`. Functions are allowed for a current, stable technical task. When a method is not yet understood on these data, first run a representative case inline; then extract a narrow repeated calculation only when it is useful now.
+- Keep the analysis sequence at the top level: enter the current inputs and substantive operations without a long front-loaded helper inventory. Define needed local functions before and near their first use, respecting dependencies. Do not wrap the whole script in `main()` or `run_analysis()`. When a method is not yet understood on these data, inspect a representative case inline before extracting stable repetition.
 - Compare candidate methods or parameters when the question requires it. Inspect comparable evidence, then record the choice and rationale near the call. Distinguish exploratory selection from a prespecified choice; retain meaningful negative results. Do not create a selector/config platform or report only the successful branch.
 - Do not silently fill missing scientific parameters from habit, examples, or package defaults. Use confirmed project values, design a comparison from the current data, or leave a concrete unresolved question. A user-specified starting value is a starting proposal, not a verified optimum. Do not pass `NA`/`None` placeholders into dependent calls.
 - Do not enumerate unrequested defaults, algorithm switches, random seeds, or plot sampling settings for apparent completeness. Scientific choices need a reason; plot dimensions, units, and necessary resolution may be set near saving to suit the current figure.
@@ -83,6 +83,10 @@ Keep only the useful parts of this chain; do not manufacture empty stages:
 ## Minimal useful structure
 
 Keep current samples, comparisons, thresholds, paths, and candidates near their use. Possible future changes do not justify a parameter platform. Repetition alone is not a function threshold: parallel sample, method, or lineage blocks may remain separate when their inputs, order, and outputs are clearer that way. Extract the smallest common technical part only when actual maintenance drift impairs understanding or a stable computation has a present reuse need. Scientific choices remain in the main analysis.
+
+Judge a helper by its responsibility and what the caller can see, not its name or length. Narrow parsers, repeated numerical kernels, parallel workers, and stable plotting components can remain functions. A “save” or “prepare” helper that also chooses samples, changes gene identity, sets model or significance rules, draws plots, and writes several products conceals analysis steps. Expose those choices and operations; do not flatten a useful algorithm merely to reduce function count. Existing package and opaque project APIs retain their documented boundaries.
+
+Inlining is an intermediate refactoring step, not the readability goal. After exposing an operation, simplify aliases, nested containers, and fixed switches that only served the removed wrapper. Remove an alternative only when the confirmed inputs and current execution contract make it unreachable; preserve genuine comparisons, resume modes, and required interfaces. Check for variable collisions and preserve meaningful intermediate objects. Do not remove scientific checks or compress scientific scope to imitate a shorter example.
 
 Use understandable names, including ordinary short names and scientific abbreviations. Keep plot preparation, plotting, display, and saving visible. Choose base plotting, ggplot2, package methods, or other appropriate tools by object and purpose; do not impose a plotting/saving wrapper. Show a plot before making a decision based on it.
 
@@ -113,10 +117,14 @@ Phase 1 reviews evidence without changing functional rules and waits for confirm
 
 ## Final check
 
-- Can the researcher identify actual analysis steps from headings and small operation groups from blank lines? Are comments scientific rather than agent instructions?
+- Can the researcher follow the current input through choices, transformations, inspection, and saving without jumping through unrelated helpers? Can they locate and change a scientific choice without editing an export routine?
+- Do headings identify analysis steps and blank lines separate operation groups? Do comments explain the current operation and necessary evidence, rather than substitute restrictions for an explanation?
+- Does each retained helper have a narrow current responsibility? After inlining, are redundant switches, aliases, and containers gone without breaking a real execution mode?
 - Are relative paths anchored to the file directory, real previews local, and choices grounded in inspected data?
 - Have speculative branches, historical compatibility, concealed fixes, and silent scientific substitutions been excluded while necessary validity checks remain?
 - Are current dependencies explicit, affected downstream results refreshed, and meaningful evidence retained without obsolete execution paths?
 - Are changes scoped to the task, with no invented methods, outputs, execution claims, or unnecessary framework?
 
 If not, restore the visible analysis and remove machinery that has no current scientific purpose.
+
+For a style refactor, report behavior preservation and readability separately: parsing or numerical equivalence does not establish readable analysis. Review the actual reading path and retained helper boundaries; function counts, line counts, and heading counts are not acceptance criteria.
