@@ -33,6 +33,8 @@ names(meta)
 
 Use actual project inputs and readers. `data/`, `output/`, and `results/` are examples, not a mandatory directory layout. Create directories only when writing there is needed.
 
+At a read or conversion boundary, make the object's meaning visible where needed: what a row represents, the identifier, units, matrix orientation, or a known downstream format. Show the relevant columns or a small component before using unfamiliar contents; a wide table's full `head()` may obscure the fields that matter. Clear names and familiar structures need no repetitive explanation.
+
 ## Analysis-step headings and spacing
 
 One section serves an actual analysis step. Preserve a nearby convention such as `## Title ====`, `# Title ----`, or another clear delimiter; use `## Title ====` when there is no precedent. Within a step, a short model, tissue, or cohort label can locate a branch without creating another formal section. Titles state analysis content, not instructions such as “Continue after inspection.” Short comments such as “Build the design matrix” or “Add gene annotations” can orient the reader to a local scientific operation; they need not each explain why. Add input meaning, scientific rationale, observations to examine, or downstream use where informative. Do not repeat a clear title or translate each function's syntax. A brief inline comment can clarify an unfamiliar scientific field or unit.
@@ -40,6 +42,18 @@ One section serves an actual analysis step. Preserve a nearby convention such as
 Leave one blank line between sections and between small operation groups within a section. Input preparation, transformation, inspection, and saving are possible group boundaries, not four required subdivisions in every step. Keep consecutive calls serving one operation together, such as fitting the same model or adding annotations to the same plot; leave a blank line when the operation or analysis object changes. Do not space every line, split by line count, or add large banners. Space operators and commas normally; wrap long calls by argument and put pipe steps or plot layers on separate lines. Do not impose numbering or checkpoint labels.
 
 When dependencies permit, keep one model, tissue, or cohort's calculation, inspection, and output close together. Do not reorganize clear local sequences into global “all calculations,” “all checks,” and “all saves” regions merely for uniformity. Bring branches together where an actual comparison needs them. See [compact analysis blocks](r-style-comparisons.md#compact-analysis-blocks) for an example of this reading order, short labels, and spacing.
+
+Place comments where the reader needs the information:
+
+| Location | Useful content when needed |
+|---|---|
+| File entry | Current question or responsibility, necessary upstream input, and main handoff; keep it brief. |
+| Before an operation | Local purpose, a non-obvious rule, or the reason for a choice. A short action cue is sufficient when it aids navigation. |
+| Beside an expression or parameter | Units, direction, row/column meaning, or index correspondence. |
+| After inspecting output | Actual observation, its limits, and a resulting decision. For unexecuted code, leave a specific pending question instead of a conclusion. |
+| At a save | Object state and known consumer, human handoff, or recomputation cost, unless already clear nearby. |
+
+These are placement choices, not required comment slots. Retain explanations of subtle exclusions and information loss; do not expand syntax narration or copy project history into each block. Refresh affected comments when code changes.
 
 The following illustrates layout, assuming fields have been inspected and sample IDs are unique and fully matched. It does not authorize adding alignment to unrelated tasks:
 
@@ -88,6 +102,8 @@ counts[
 
 For sparse objects, preview a small slice directly; convert only that slice if needed. Never densify the whole object for display or create a general preview helper. After filtering, merging, conversion, or fitting, inspect the contents, summary, or plot needed for the next decision. Interactive `View()` is optional, not a required noninteractive step.
 
+Distinguish three purposes: a preview helps a person understand the object or decide what follows; an assertion stops a concrete invalid state; a saved record serves a known consumer or review. A successful assertion does not show the contents, and a plausible preview does not enforce an invariant. Use only what the task needs; do not turn every check into all three or print every iteration of a confirmed batch. For batch replay, use `print()` where a relevant display would otherwise be lost inside a loop or function.
+
 ## Keep choices and execution visible
 
 Write reading, inspection, trials, comparison, and analysis at the top level. During exploration, run the current line or selection, inspect its output, then write and execute dependent code. Section delimiters do not pause a script. Reuse one session instead of repeatedly reloading objects with `Rscript`; after upstream changes, rerun affected downstream blocks and retain explicit dependencies for replay. Once inputs, methods, and parameters are confirmed, a complete script or simple loop may replay the analysis with existing checks and explicit stopping conditions; stop affected work on violations instead of changing methods.
@@ -96,9 +112,13 @@ Keep grouping, thresholds, model choices, and evidence near first use. Example d
 
 If a repeated computation is not yet understood, run one representative case inline first. Only then extract a stable local computation, conversion, or repeated plot into a small function or loop when current reuse warrants it. Parallel sample/method blocks can remain separate when clearer. Repetition twice does not mandate abstraction.
 
-For a style refactor involving wrappers or fixed switches, read the short [R style comparisons](r-style-comparisons.md). A function body pasted into the main script may still retain unnecessary aliases, `list()` layers, or an `if` branch whose flag is fixed for this analysis. Simplify those only after checking their use and the current execution contract; keep actual model comparisons and supported restart modes.
+For a style refactor involving wrappers, fixed switches, or dense long blocks, read [R style comparisons](r-style-comparisons.md). A function body pasted into the main script may still retain unnecessary aliases, `list()` layers, or an `if` branch whose flag is fixed for this analysis. Simplify those only after checking their use and the current execution contract; keep actual model comparisons and supported restart modes.
+
+For a crowded block, first consider local operation groups and short cues, then meaningful intermediate objects that expose a transformation worth inspecting. Consider a narrow function when its computation has a stable responsibility and extraction reduces repetition or the state a reader must track. Consider a separate script only for a real independent question, consumer, expensive recomputation/replot boundary, or human handoff. These are progressively stronger options, not a required sequence or a mandate to split long code. Avoid aliases that merely rename an unchanged object and splitting that forces more navigation than it saves.
 
 For a substantial custom function with a confirmed need across scripts or projects, and when extraction is within the requested scope, use an ordinary `.R` file in that project's root `R/` directory. A style-only request does not itself authorize moving code into `R/`. Keep local helpers before and near their first use. Document purpose, parameters, and return value before `name <- function(...)`. Do not create `DESCRIPTION`, `NAMESPACE`, roxygen scaffolding, or load it with `library()`. From `scripts/downstream`, for example, use `source("../../R/helpers.R")`. Data paths inside the function remain relative to the analysis working directory, not the helper file. Do not invent a shared-library path or extract code for merely possible reuse.
+
+For a nontrivial helper, make important external dependencies and side effects clear too. Prefer explicit arguments for changing data or settings when that clarifies the call; a local closure can legitimately capture a fixed object if the dependency is evident. Do not hide selection or method changes inside IO helpers. When splitting files, establish a sufficient handoff that can be read in a fresh session; preserve the population used by whole-set checks, ordering, missingness, and current scientific choices. Do not serialize every temporary object to recreate a workspace.
 
 Use concise checks for scientific invariants even before a failure occurs. For example, after alignment where matching sample order is required:
 
@@ -138,3 +158,9 @@ saveRDS(seu, fn)
 ```
 
 A later session can reestablish the same relative path, read the object, and inspect `seu` and `head(seu@meta.data)` before use.
+
+Saving fewer files does not necessarily simplify the analysis. A shared table that several stages read, replace, and rewrite introduces state dependencies; use it only for a current project need, not as the default for diagnostics. Keep ordinary previews in the session and retain only meaningful handoffs or review evidence. Separate recomputation from replotting only when there is a real use, with the plot's required inputs available at that boundary.
+
+## Review the reading and modification path
+
+For a substantial style refactor, trace representative reader tasks: locate the input and its meaning; explain a consequential object change; find the choice to edit and its affected downstream work; identify who uses a saved result; and, if supported, resume or replot from the documented handoff. Inspect helper dependencies and whether comments arrive before the ambiguity they resolve. Do not add missing capabilities just to complete this review. Evaluate behavior preservation separately, including ordering, missingness, failure behavior, and supported execution modes; parsing, equal results, line counts, and comment counts do not establish readability.

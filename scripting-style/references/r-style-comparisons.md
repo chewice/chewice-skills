@@ -1,6 +1,6 @@
 # R style comparisons
 
-Read when refactoring wrappers, mechanically inlined analysis, or crowded analysis blocks. The first three fragments assume `measurements` is an already inspected numeric matrix with unique row names. For this teaching task only, the user has explicitly requested excluding rows with missing measurements, computing each remaining row's mean, and saving a table to `row-means.tsv`. This is not a default missing-data policy or a scientific recommendation. The later compact-block example has its own explicit task and inputs.
+Read when refactoring wrappers, mechanically inlined analysis, or crowded analysis blocks. The first three fragments assume `measurements` is an already inspected numeric matrix with unique row names. For this teaching task only, the user has explicitly requested excluding rows with missing measurements, computing each remaining row's mean, and saving a table to `row-means.tsv`. This is not a default missing-data policy or a scientific recommendation. The compact-block and long-block examples have their own explicit tasks and inputs.
 
 ## A save helper hides the analysis
 
@@ -110,6 +110,101 @@ Borrow the reading order and comment placement, not source methods, parameters, 
 
 ## Keep useful function boundaries
 
-A historical-identifier parser returning a mapping, a numerical kernel reused by a parallel worker, or a shared plotting component can remain a function. State its input and return value near its definition, before first use; keep substantive selection, model, and interpretation choices visible at the call site. A package API need not be copied into the main script. A genuine two-model comparison or supported resume flag must not disappear because one test run exercises only one branch.
+A historical-identifier parser returning a mapping, a numerical kernel reused by a parallel worker, or a shared plotting component can remain a function. State its input and return value near its definition, before first use; make important captured data, settings, and side effects evident. Keep substantive selection, model, and interpretation choices visible at the call site. A package API need not be copied into the main script. A genuine two-model comparison or supported resume flag must not disappear because one test run exercises only one branch.
 
 Assess two separate outcomes: preserved behavior (including order, missingness, fields, and supported modes) and an understandable reading/modification path. Matching output does not prove readability, and shorter code does not prove equivalence.
+
+## Long blocks: separate responsibilities locally
+
+This fictional measurement task has an approved contract: `observations.tsv` contains repeated readings with `sample_id`, `instrument_id`, `reading`, and a logical `include` flag; `calibration.tsv` has one positive multiplier per instrument. Multiply a reading by its instrument's multiplier to obtain the agreed common unit. Check **all** observations for finite readings and matching instruments before selecting the supplied `include == TRUE` records. Export the mean and number of included readings per sample, retaining first-appearance order among included records. With no included records, export the same columns with zero rows. A separate plotting script consumes `sample-summary.tsv`. These choices belong to this example only.
+
+The fragments assume the usual initialized session, script-relative paths, and an existing output directory. Input fields are fixed by this contract; in exploration, inspect the real fields before choosing such operations. Neither fragment has been run on scientific data.
+
+### Dense version
+
+```r
+obs <- read.delim("../data/observations.tsv", stringsAsFactors = FALSE)
+calibration <- read.delim("../data/calibration.tsv", stringsAsFactors = FALSE)
+stopifnot(identical(names(obs), c("sample_id", "instrument_id", "reading", "include")),
+          identical(names(calibration), c("instrument_id", "multiplier")))
+stopifnot(!anyNA(obs), !anyNA(calibration), is.logical(obs$include),
+          is.numeric(obs$reading), is.numeric(calibration$multiplier),
+          all(nzchar(obs$sample_id)), all(nzchar(obs$instrument_id)),
+          all(nzchar(calibration$instrument_id)), !anyDuplicated(calibration$instrument_id),
+          all(is.finite(obs$reading)), all(is.finite(calibration$multiplier)),
+          all(calibration$multiplier > 0))
+calibration_index <- match(obs$instrument_id, calibration$instrument_id)
+stopifnot(!anyNA(calibration_index))
+obs$calibrated_reading <- obs$reading * calibration$multiplier[calibration_index]
+stopifnot(all(is.finite(obs$calibrated_reading)))
+included <- obs[obs$include, , drop = FALSE]
+result <- data.frame(sample_id = character(), n_readings = integer(), mean_reading = numeric())
+for (id in unique(included$sample_id)) {
+  values <- included$calibrated_reading[included$sample_id == id]
+  result <- rbind(result, data.frame(sample_id = id, n_readings = length(values), mean_reading = mean(values)))
+}
+stopifnot(sum(result$n_readings) == nrow(included), !anyDuplicated(result$sample_id))
+write.table(result, "../output/sample-summary.tsv", sep = "\t", row.names = FALSE, quote = FALSE)
+```
+
+This preserves important checks but places reading, calibration, selection, summarization, and saving in one uninterrupted run. Its assertions do not display the objects; the unit transition and downstream use are easy to miss.
+
+### Same contract, visible reading path
+
+```r
+## Read repeated measurements and instrument calibration ====
+obs <- read.delim("../data/observations.tsv", stringsAsFactors = FALSE)
+calibration <- read.delim("../data/calibration.tsv", stringsAsFactors = FALSE)
+stopifnot(identical(names(obs), c("sample_id", "instrument_id", "reading", "include")),
+          identical(names(calibration), c("instrument_id", "multiplier")))
+
+head(obs)
+head(calibration)
+
+# Each observation is one reading; calibration has one multiplier per instrument.
+stopifnot(!anyNA(obs), !anyNA(calibration), is.logical(obs$include),
+          is.numeric(obs$reading), is.numeric(calibration$multiplier),
+          all(nzchar(obs$sample_id)), all(nzchar(obs$instrument_id)),
+          all(nzchar(calibration$instrument_id)), !anyDuplicated(calibration$instrument_id),
+          all(is.finite(obs$reading)), all(is.finite(calibration$multiplier)),
+          all(calibration$multiplier > 0))
+
+## Convert readings to the common unit ====
+# Check every reading's instrument before applying the supplied inclusion flag.
+calibration_index <- match(obs$instrument_id, calibration$instrument_id)
+stopifnot(!anyNA(calibration_index))
+
+obs$calibrated_reading <- obs$reading * calibration$multiplier[calibration_index]
+stopifnot(all(is.finite(obs$calibrated_reading)))
+
+head(obs[c("instrument_id", "reading", "calibrated_reading")])
+
+## Summarize included readings by sample ====
+table(obs$include)
+included <- obs[obs$include, , drop = FALSE]
+
+# Preserve the output columns even when no readings are included.
+result <- data.frame(sample_id = character(), n_readings = integer(), mean_reading = numeric())
+for (id in unique(included$sample_id)) {
+  values <- included$calibrated_reading[included$sample_id == id]
+  result <- rbind(result, data.frame(
+    sample_id = id,
+    n_readings = length(values),
+    mean_reading = mean(values)
+  ))
+}
+
+stopifnot(sum(result$n_readings) == nrow(included), !anyDuplicated(result$sample_id))
+head(result)
+
+# The plotting script reads these sample means in the common unit.
+write.table(result, "../output/sample-summary.tsv", sep = "\t", row.names = FALSE, quote = FALSE)
+```
+
+No check was removed, filtering was not moved ahead of whole-input checks, and no extra output was added. The longer layout makes the same operations easier to locate. It needs neither a helper nor another file. The supplied inclusion flag is not a new scientific decision, and the comments make no claim about observed results. Use explicit `print()` for relevant previews inside loops/functions or when required by the chosen replay mechanism.
+
+If the analysis later has a confirmed need for a costly computation followed by frequent replotting, a saved result can become a file boundary. Specify the result's required identifiers, units, and settings and let the plotting script read that product in a fresh session. Do not invent a costly stage, save/reload every intermediate, or split this small example merely to demonstrate that pattern.
+
+### Reading-path acceptance
+
+Can a reader locate the two inputs, explain the conversion, find the supplied selection rule, trace a changed multiplier through the summary to its consumer, and tell which failures prevent writing? Can they distinguish an inspected result from a pending interpretation? Check actual paths and dependencies, not the presence of particular headings. Behavior checks should cover order, repeated observations, an empty selected set, changed upstream values, and failures on invalid inputs. See [reading-path scenarios](../validation/fixtures/reading-path-scenarios.md) for scoped maintenance exercises; they do not define defaults for real analyses.
