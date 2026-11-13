@@ -52,7 +52,7 @@ Use a loop only when the same command is established for the explicit sample lis
 
 Candidate commands or expensive optional stages may remain as clearly explained manual blocks during a real comparison. They are not a reason to create execution modes. Once obsolete, retire their executable paths while retaining meaningful comparison evidence.
 
-Downstream scientific files are valid outputs. `.done` markers, pass tables, registries, automatic completed-directory discovery, retries, and dashboards are not default analysis products. Reuse saved results only when their relevant inputs/settings still match.
+Apply the shared input-reuse and saving criteria. A tool's required output files are valid handoffs; do not add `.done` markers or completion discovery around them.
 
 Validate current inputs when missing or mismatched inputs could mislead the analysis; do not build speculative `if` chains. Do not suppress a tool failure with `|| true`, silently select another tool, or search legacy locations to keep execution going. Fix the actual cause within scope and update known callers. Required explicit format conversions remain valid; wrappers that conceal broken producers or obsolete interfaces do not.
 

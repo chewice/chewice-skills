@@ -57,11 +57,7 @@ Use `type()` after reading, extracting, or converting an object when type matter
 
 After consequential transformations, show the content, category counts, metrics, or plots that inform the next decision. Print or explicitly display plots as needed; do not assume notebook display in a script. No general preview helper or assertion framework.
 
-Compare methods/parameters only when the task calls for it. Keep candidates, comparable metrics, and the later choice near each other. Inspect results before recording a winner and why it was selected; distinguish exploration from prespecified settings and retain meaningful negative results. Leave unresolved scientific questions in comments, without passing `None` to dependent calls. Notebook examples do not establish standalone Python syntax conventions.
-
-Do not infer scientific cutoffs, top-N values, model settings, or other meaningful defaults from habit. Use confirmed values, design a comparison, or leave the decision pending. Do not enumerate unrequested algorithm switches, seeds, or sampling settings for apparent completeness. Figure dimensions and resolution may be set for the actual plot.
-
-An output name does not resolve its estimand, comparison unit, test, or grouping. Keep missing decisions visible; do not invent a standard method for runnable code or connect unrelated upstream choices to a later analysis.
+Apply the shared criteria for confirmed settings, necessary comparisons, and unresolved decisions. Keep candidates, diagnostics, and the resulting selection adjacent; use comments for pending questions and omit dependent calls. Notebook examples do not establish standalone Python syntax conventions.
 
 ## Extract only a useful, stable calculation
 
@@ -69,17 +65,11 @@ When a current batch task still needs understanding, run a representative item i
 
 Two similar blocks alone do not justify abstraction. Preserve separate dataset/method blocks when their differences are clearer that way. Extract the smallest common technical part when actual drift impairs understanding. Numeric kernels, required parsers, and repeated plotting can use narrow functions; scientific choices stay at first use in the main analysis.
 
-## Enforce scientific conditions, not hypothetical recovery
-
-A compact assertion or direct exception is appropriate for current requirements such as aligned identifiers, unique keys, correct matrix orientation, or required categories. These checks need not wait for a previously observed failure.
-
-Do not wrap analysis in broad `try/except`, fallback readers/models, automatic repair, or retry machinery. Never drop samples, impute values, or skip failed comparisons solely to finish. Diagnose the actual cause and repair owned code and known callers; report external boundaries. Direct format conversion or identifier mapping is allowed for a known current contract, with assumptions and information loss visible.
+For concrete scientific conditions, use a compact `assert` or direct exception. Apply the shared exception-handling criteria; broad `try/except` must not hide failed comparisons or substitute scientific inputs.
 
 ## Save scientific artifacts
 
-Save a table, array, model, figure, or converted file only for a current scientific or downstream use. Expensive results can be saved and reused after confirming relevant inputs/settings still match. Do not add orchestration, completion messages, manifests, or pass markers as generic outputs.
-
-Follow project formats and name the object or state. For a metadata table needed by later plotting:
+Apply the shared saving criteria and project formats. For a metadata table needed by later plotting:
 
 ```python
 out_path = Path("../results/sample-overview")
@@ -89,6 +79,6 @@ fn = out_path / "metadata.tsv"
 metadata.to_csv(fn, sep="\t", index=False)
 ```
 
-Later, reestablish the same relative path, use `pd.read_csv(fn, sep="\t")`, and inspect its contents. Do not automatically reload after every save. Protect original inputs and preserve meaningful failed or negative evidence when retiring obsolete code.
+In a later session, reestablish the same relative path, use `pd.read_csv(fn, sep="\t")`, and inspect its contents.
 
 Keep plot preparation, plotting, display, and `fig.savefig(...)` near each other, using the current library and object interfaces. Do not import R plotting/device conventions or introduce a general wrapper. Record conclusions only after observing results; otherwise retain the specific next question.

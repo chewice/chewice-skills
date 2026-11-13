@@ -35,9 +35,7 @@ for value in candidate_values:
 
 Display metrics/plots in the next cell and record the later choice with its rationale. Distinguish exploratory selection from prespecified settings and preserve meaningful negative or failed comparisons. When undecided, use Markdown or a comment to state the specific question and omit/comment out dependent calls. Do not pass `None`/`NA` onward or invent an optimum or diagnostics.
 
-Do not prefill scientific cutoffs, top-N, model settings, or defaults from habit. Use confirmed values, evidence-based comparisons, or a visible pending decision. Do not enumerate unrequested defaults, switches, seeds, sampling sizes, or extra diagnostics for apparent completeness. Set figure dimensions/resolution only to suit the current figure.
-
-If a requested output still lacks an estimand, comparison unit, test, or grouping, keep that decision visible. Do not choose a standard method merely for a runnable notebook. Explain a conceptual gap when a later result does not actually depend on a supposed upstream choice; do not invent dataflow.
+Apply the shared criteria for confirmed settings and pending scientific decisions; Markdown can record the unresolved question without adding executable placeholders.
 
 Newly authored code cells start with `execution_count: null` and empty `outputs`; never fabricate outputs or execution history. Preserve existing user outputs unless clearing or rerunning was requested; do not treat stored outputs as newly verified evidence.
 
@@ -49,7 +47,7 @@ Do not add CLI entrypoints, YAML config loaders, runners, pipeline state, retrie
 
 ## Save and inspect for a purpose
 
-Save expensive fits only when later diagnosis or interpretation needs them. Explain that use near saving/reloading, and verify relevant inputs/settings still match before reuse. Do not create a cache orchestration system. Follow current formats and relative object/state-specific filenames; saving every cell is unnecessary. Protect raw inputs and meaningful negative evidence when retiring obsolete execution paths.
+Apply the shared saving criteria using current formats and relative object/state-specific filenames. A cell boundary alone does not justify a save or a separate report.
 
 Use tools appropriate to the kernel and object: R may use base plots, ggplot2, or package methods; Python uses its current libraries. Keep plot preparation, display, and saving in adjacent cells without a general wrapper.
 
@@ -57,4 +55,4 @@ After reading, show actual local contents, not just shape or a loaded message: t
 
 Inspect `class()` in R or `type()`/`.dtypes` in Python after loading, extraction, or conversion when type matters. Do not apply all checks everywhere. After key transformations, show the contents, summaries, or diagnostics that guide the next decision. Concise assertions for actual scientific requirements, such as matching observation IDs or a required layer, are justified before an error occurs; do not build generic validation or silently repair scientific inputs.
 
-Save only outputs useful for current science, review, handoff, or replay. An operational completion cell is unnecessary; an honest unresolved scientific question may be more useful.
+An operational completion cell is unnecessary; an honest unresolved scientific question may be more useful.

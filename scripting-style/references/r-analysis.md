@@ -126,9 +126,7 @@ These dimensions illustrate saving syntax, not a standard. Use appropriate devic
 
 ## Save for a concrete scientific use
 
-Intermediate saves support expensive-result review, later plotting, human-edited handoff, or another analysis fragment. Follow current project formats: `saveRDS()`/`readRDS()`, `qs::qsave()`/`qs::qread()`, or `save()`/`load()`. Name the object and stage, such as `sample_A.annotated.rds` or `comparison_A.markers.tsv`; avoid generic `result` or `final_final` defaults.
-
-Allow reruns to overwrite the analysis's existing generated files. Write directly with `saveRDS()`, `write.table()`, `ggsave()`, or the appropriate writer; use a documented overwrite argument only when that writer requires it. Do not prepend `stopifnot(!file.exists(fn))`, stop when an output already exists, or wrap saving in `if (!file.exists(fn))` so a rerun silently retains stale results. Do not add timestamped filenames, backup copies, or overwrite confirmation by default. Keep scientific validity assertions, such as sample-order checks; the existence of an old generated output is not a scientific validity failure. Protect raw inputs, human-edited source tables, unrelated files, and explicitly protected records as specified in the core rules.
+Apply the shared saving and overwrite criteria in `SKILL.md`. Match `saveRDS()` with `readRDS()`, `qs::qsave()` with `qs::qread()`, and `save()` with `load()`. Name the object and stage, such as `sample_A.annotated.rds` or `comparison_A.markers.tsv`.
 
 ```r
 ## Save the annotated object for review ====
@@ -139,4 +137,4 @@ fn <- file.path(out_path, "sample_A.annotated.rds")
 saveRDS(seu, fn)
 ```
 
-A later fragment/session can read the same relative `fn` and inspect `seu` and `head(seu@meta.data)`. Do not automatically save and immediately reload. Reestablish the path after a session restart and verify relevant inputs/settings before reusing expensive results. Keep intermediate artifacts distinct from original inputs; never overwrite raw data. Save final tables, figures, or objects near their analysis or a meaningful stage boundary, only when useful. No mandatory output bundle, completion summary, or state system.
+A later session can reestablish the same relative path, read the object, and inspect `seu` and `head(seu@meta.data)` before use.
