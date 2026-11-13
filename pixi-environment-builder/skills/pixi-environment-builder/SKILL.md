@@ -34,7 +34,7 @@ description: "创建、迁移、审查或诊断 Pixi 工作区和环境，并预
   [references/environment-design.md](references/environment-design.md)。
 - 处理镜像、代理、PyPI index、私有源或 conda-pypi 映射：读取
   [references/network-and-sources.md](references/network-and-sources.md)。
-- 处理 CUDA、PyTorch、Jupyter、VS Code 或具体报错：读取
+- 处理 CUDA、PyTorch、R 的 BLAS 性能、Jupyter、VS Code 或具体报错：读取
   [references/troubleshooting.md](references/troubleshooting.md)。
 
 只读取与当前任务相关的 reference。
@@ -81,7 +81,7 @@ python3 scripts/pixi_diagnose.py \
   --json
 ```
 
-脚本不得安装包或修改 manifest。敏感配置只报告存在状态，不输出值。
+脚本不得安装包或修改 manifest。为避免凭据出现在任意 JSON 字段或错误文本中，脚本只报告命令返回码、输出存在状态及 JSON 是否有效，不输出原始命令结果；工作区路径和所选环境名仍会显示，分享前检查。需要详细错误时在本机单独运行对应命令，人工检查并脱敏后再分享。所有执行项均计入总状态。
 
 ## TUNA 镜像转换
 

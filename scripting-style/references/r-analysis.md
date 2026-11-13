@@ -90,7 +90,7 @@ For sparse objects, preview a small slice directly; convert only that slice if n
 
 ## Keep choices and execution visible
 
-Write reading, inspection, trials, comparison, and analysis at the top level. Run the current line or selection, inspect its output, then write and execute dependent code. Section delimiters do not pause a script. Reuse one session instead of repeatedly reloading objects with `Rscript`; after upstream changes, rerun affected downstream blocks and retain explicit dependencies for replay.
+Write reading, inspection, trials, comparison, and analysis at the top level. During exploration, run the current line or selection, inspect its output, then write and execute dependent code. Section delimiters do not pause a script. Reuse one session instead of repeatedly reloading objects with `Rscript`; after upstream changes, rerun affected downstream blocks and retain explicit dependencies for replay. Once inputs, methods, and parameters are confirmed, a complete script or simple loop may replay the analysis with existing checks and explicit stopping conditions; stop affected work on violations instead of changing methods.
 
 Keep grouping, thresholds, model choices, and evidence near first use. Example defaults are not evidence. Leave specific unresolved questions as comments and omit or comment out dependent calls; never select the first level automatically or pass `NA` to a model just to complete the script. Continue when evidence supports the choice; ask only for consequential unresolved scientific tradeoffs.
 

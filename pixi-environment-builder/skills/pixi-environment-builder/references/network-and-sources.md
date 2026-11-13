@@ -68,30 +68,9 @@ https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/bioconda
 
 ## Conda/PyPI 名称映射
 
-混合依赖需要把 Conda 包名映射到 PyPI distribution 名。远程映射不可达或项目需要稳定
-离线行为时，可使用项目内小型映射文件：
+混合依赖可能需要将 Conda 包映射到 PyPI distribution。远程映射不可达或需要离线运行时，先查阅当前 Pixi 版本的官方文档，确认自定义映射的 manifest 字段、文件结构、覆盖语义和位置；不要假设普通 JSON 字符串字典一定是受支持的格式。
 
-```toml
-[workspace]
-conda-pypi-map = { "conda-forge" = "config/conda-pypi-map.json" }
-```
-
-示意：
-
-```json
-{
-  "matplotlib-base": "matplotlib",
-  "pytorch": "torch",
-  "scikit-learn": "scikit-learn"
-}
-```
-
-规则：
-
-- 只加入当前项目实际涉及的名称。
-- 用 JSON 解析器验证文件。
-- 不把映射当成版本兼容性保证。
-- 映射获取失败与依赖求解失败要分开报告。
+只加入有依据的映射；JSON 语法检查只是第一步。经授权后，使用当前版本的 Pixi 对包含目标混合依赖的最小工作区实际求解，并检查是否采用了预期映射；记录版本、命令和结果。求解可能更新 lockfile 或访问网络，应事先说明状态变化。映射不是版本兼容性保证；映射获取失败与依赖求解失败要分开报告。
 
 ## Git、本地与私有包
 

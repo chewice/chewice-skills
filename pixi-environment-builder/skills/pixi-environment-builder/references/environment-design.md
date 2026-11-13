@@ -17,31 +17,11 @@ pixi init --format pixi --channel conda-forge .
 pixi add python
 ```
 
-最小 manifest 通常包含 workspace 名称、channels、platforms 和顶层依赖。默认
-`platforms = ["linux-64"]`；仅当用户明确要求时再加入其他平台。需要支持多个
-操作系统时，先确认包在所有目标平台均可用；平台专用依赖应放入 target 或 feature，
-不要让一个平台的 CUDA 包破坏其他平台求解。
+最小 manifest 通常包含 workspace 名称、channels、platforms 和顶层依赖。按项目已有配置、用户要求和实际运行目标选择平台；目标未指定时，以当前实际运行平台为起点，并说明假设。需要支持多个操作系统时，先确认包在所有目标平台均可用；平台专用依赖应放入 target 或 feature，不要让一个平台的 CUDA 包破坏其他平台求解。
 
-初始化完成后，先校验再设置 `[workspace].name`。默认候选为 `DingHowl_Zhou`；
-Pixi 只允许小写字母、数字、`-` 与 `_`，因此写入 `dinghowl_zhou`。可用：
+保留已有 workspace 名称；新项目优先采用项目目录或用户指定的名称，并按当前 Pixi 的规则校验。`dinghowl_zhou` 只是用户特定工作流中的可选名称，不应写入无关项目。
 
-```bash
-pixi workspace name set dinghowl_zhou
-```
-
-初始化完成后，确保 manifest 默认包含：
-
-```toml
-[tasks.init]
-cmd = "bash setup-vscode.sh"
-```
-
-从 Skill 的 `assets/setup-vscode.sh` 复制脚本到项目根目录。该脚本创建
-`.vscode/settings.json`，并将 VS Code 的 Linux R 可执行文件和终端路径指向
-`${workspaceFolder}/.pixi/envs/default/bin/R`。即使项目暂时不使用 R，也保留这组默认
-初始化文件，除非用户明确要求不同配置。若项目已有 `setup-vscode.sh` 或
-`.vscode/settings.json`，先检查并合并用户配置，不要直接覆盖；只有全新项目才直接
-采用资产模板。
+`assets/setup-vscode.sh` 是可选的 Linux VS Code R 配置模板，仅在项目确实使用 R、VS Code 和匹配的 Pixi 环境且用户需要该配置时考虑使用。先检查脚本与目标平台、环境名及已有 `.vscode/settings.json` 是否匹配；脚本会写入该文件，已有设置须保留并合并，不能直接覆盖。无需默认创建 `init` 任务或执行模板。
 
 ## 包来源
 

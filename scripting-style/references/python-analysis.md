@@ -37,7 +37,7 @@ print(metadata.head())
 print(metadata.columns)
 ```
 
-Use one Python session and its objects. `# %%` does not pause a normal Python process. Execute the current fragment, inspect output, then write and execute dependent code. Do not repeatedly use `python -c`, here-documents, or temporary scripts to reload a large object. Rerun affected downstream work after upstream changes; keep dependencies in the file for replay.
+Use one Python session and its objects. `# %%` does not pause a normal Python process. During exploration, execute the current fragment, inspect output, then write and execute dependent code. Do not repeatedly use `python -c`, here-documents, or temporary scripts to reload a large object. Rerun affected downstream work after upstream changes; keep dependencies in the file for replay. Once inputs, methods, and parameters are confirmed, complete-script or simple-loop replay is allowed with existing checks and explicit stopping conditions; stop affected work on violations instead of changing methods.
 
 Do not add `argparse`, `click`, `main()`, configuration objects, subcommands, logging frameworks, runners, or status files to an analysis. Honor a current positional/environment contract when an existing caller requires it; do not generalize it or preserve obsolete versions. A requested reusable tool is a separate scope.
 

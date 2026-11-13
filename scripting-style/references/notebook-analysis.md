@@ -18,7 +18,7 @@ Use Markdown headings naming actual analysis steps, or clear existing cell comme
 
 Within a cell, leave one blank line between input preparation, transformation, inspection, and saving groups. Keep related statements adjacent; do not split by line count or space every statement. Wrap arguments, pipes, and plot layers according to the actual language. Names such as `df`, `seu`, `ref`, and `p` remain valid when clear.
 
-Execute the current cell in the same kernel and inspect output before dependent cells. Do not use `Run All` to cross unresolved groups, thresholds, or methods. Continue without per-cell approval when evidence is sufficient. After upstream changes, rerun affected cells instead of using stale results; record dependencies so the notebook can be replayed without hidden session objects.
+During exploration, execute the current cell in the same kernel and inspect output before dependent cells. Do not use `Run All` to cross unresolved groups, thresholds, or methods. Continue without per-cell approval when evidence is sufficient. Once inputs, methods, and parameters are confirmed, sequential whole-notebook replay is allowed with existing checks and explicit stopping conditions; stop affected work on violations instead of changing methods. After upstream changes, rerun affected cells instead of using stale results; record dependencies so the notebook can be replayed without hidden session objects.
 
 ## Keep comparison and selection distinct
 

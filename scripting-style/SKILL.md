@@ -9,7 +9,7 @@ description: Write, extend, refactor, or review project-local exploratory scient
 
 Produce a project-local analysis record that a researcher can read, run, inspect, and modify in analysis order. User-specified same-type references take precedence over indexed GZDlab examples for writing style; neither supplies scientific methods, parameters, or conclusions.
 
-**Write the current fragment → execute a line, selection, or cell → inspect real output → decide and write the next step.**
+During exploration: **write the current fragment → execute a line, selection, or cell → inspect real output → decide and write the next step.** Once inputs and methods are confirmed, deterministic batch replay is allowed.
 
 These instructions use English. Generated headings, comments, and explanations follow the user's language and project conventions; English skill instructions do not require English analysis comments.
 
@@ -23,7 +23,7 @@ These instructions use English. Generated headings, comments, and explanations f
 2. For edits, read the target and nearby **same-type** scripts. For ordinary fixes, preserve clear local conventions and keep changes local. For an explicit style refactor, read the user's same-type reference and follow the requested reading order; minimal diff must not preserve the structure being corrected. Keep scientific choices and current execution contracts intact, and update affected callers when changing an owned interface.
 3. For new code, optionally select at most one same-type primary and one useful complement from the [example index](examples/example-index.yaml), only when the user supplies a source root or it clearly resolves from the workspace. Do not guess `<SOURCE_ROOT>`, search the user's machine, or copy source paths, parameters, environment details, or conclusions. If unavailable, use the type guide and disclose that examples were not read.
 4. Read [API boundaries](references/api-usage-boundary.md) only when calling an API supplied by the user or project.
-5. Discuss unresolved scientific choices briefly in conversation when needed. Do not generate a fixed task brief or spec/plan document. **You may use superpowers, but do not write any spec or plan.** This does not prohibit discussing a scientific question, comparing methods, or explaining the next action; superpowers are optional.
+5. Discuss unresolved scientific choices briefly in conversation when needed. Do not create unsolicited spec, plan, checklist, or workflow documents. When the user explicitly requests an analysis plan, task prompt, or handoff document, provide only that deliverable at the requested level of detail. Do not turn it into a prerequisite for unrelated analysis work or treat a plan-only request as authorization to execute it.
 
 Read [public source notes](references/public-repo-patterns.md) only for supplementary source evidence or skill iteration. Do not routinely browse every source. Never derive one file type's concrete style from another: R sections, Python CLI conventions, Bash scheduling, and notebook cells are not interchangeable.
 
@@ -31,6 +31,7 @@ Read [public source notes](references/public-repo-patterns.md) only for suppleme
 
 - Define what the current script receives, computes, and supplies downstream. Implement confirmed needs; do not build configuration systems, runners, registries, retries, or pipelines for imagined reuse. A requested reusable tool is a separate scope.
 - **Reuse suitable upstream products.** Prefer official or previously validated processed inputs when their provenance, version, identifiers, and scientific definition meet the task. Check compatibility at entry; do not recreate upstream analysis merely to start from raw data. Rebuild when inputs are missing, incompatible, scientifically changed, or explicitly requested. Previously verified facts need renewed investigation when relevant inputs/settings change or conflicting evidence appears.
+- Reuse must respect the project's declared provenance boundary. When the project requires a chain starting from first-party releases, rebuild legacy intermediates once from those releases; subsequent steps may reuse the resulting validated products without repeating upstream work. Author-published processed data can satisfy the first-party requirement. Do not impose this project-specific requirement on every analysis.
 - **Keep only necessary transformations.** Read usable formats directly. Convert or rename for a known consumer, a scientific operation, or a clearer representation of the current objects; do not materialize every design term as another table or processing stage. Keep assumptions and information loss visible.
 - **Check concrete scientific conditions.** Protect alignment, unique keys, matrix orientation, required layers, and comparison validity even before a failure occurs. Use concise assertions for violations that could silently invalidate results. Exploratory previews inform decisions; persistent evidence supports a specific review or downstream need. Performing a check does not require saving a report.
 - **Resolve actual exceptions locally.** Apply the direct, established operation first and investigate unresolved or conflicting records separately. Retain whole-set checks where exceptions could collide with accepted records. Do not add speculative recovery, guessed inputs, broad exception suppression, or automatic repairs. Never silently drop samples, impute values, or switch layers or methods merely to finish.
@@ -56,11 +57,12 @@ These restrictions govern generated analysis code, not unrelated infrastructure 
 
 - Sections are selectable analysis units, not function boundaries. Execute the current fragment in one R/Python session or notebook kernel, reusing upstream objects. An ordinary interactive process is enough; do not create a runner or service for it.
 - Inspect actual output before deciding and executing dependent steps. Continue autonomously when evidence is sufficient; ask only when a consequential scientific choice remains unresolved. Discussing a possible direction does not authorize implementing steps that depend on unknown results.
+- Interactive inspection is required at unresolved scientific decision points, not at every line of an already approved analysis. Once inputs, methods, and parameters are confirmed, allow complete scripts, simple loops, or deterministic batch replay with the existing checks and explicit stopping conditions. If an expected condition fails, stop the affected branch and dependent work and report it; do not silently change methods to continue.
 - Headings and comments do not pause execution. Do not use `Run All`, repeated `Rscript` calls, Bash dataset loops, or fresh temporary Python processes to bypass unresolved choices. Confirmed mechanical repetition and external tool calls can still use direct loops or commands.
 - After an upstream filter or parameter changes, rerun affected downstream work. Reuse saved results when their relevant inputs and settings still match.
 - Keep explicit dependencies, current valid code, and the rationale needed for sequential replay. Do not depend on objects that exist only in an unrecorded interactive session. Write valuable experiments back into the analysis or a concise research record.
 - Retire obsolete execution paths within the authorized scope, while preserving original inputs, meaningful failed attempts, negative findings, and selection evidence. Historical evidence need not remain executable code; version history or a short record can preserve it. Never delete unrelated work as “cleanup.”
-- For code-only requests, leave previews and concrete pending questions without claiming execution. If tools cannot execute interactively, report the limitation; batch execution is not evidence of completed exploration.
+- For code-only requests, leave previews and concrete pending questions without claiming execution. If tools cannot support inspection at unresolved decision points, report the limitation; batch replay can verify a confirmed workflow but is not evidence of completed exploration.
 
 ## Keep scientific choices visible
 
@@ -72,6 +74,7 @@ Keep only the useful parts of this chain; do not manufacture empty stages:
 - After consequential transformations, show the content, summary, or diagnostic needed for the next decision. Do not print every object or apply the same checks everywhere.
 - Paths and prespecified methods may precede reading. Verify data-dependent fields, levels, and model terms against the loaded object; do not overwrite actual fields to match a paper or prior expectation. Keep confirmed settings near use without reopening settled choices merely for completeness.
 - Compare methods or parameters only when the question requires it. Inspect comparable evidence and record the selection rationale; distinguish an exploratory starting proposal from a fixed method and retain meaningful negative results.
+- Use observations to assess method applicability, not to repeatedly tune prespecified thresholds until the desired positive result appears. A change to the scientific question, test family, or correction scope is a method change to discuss, not a style simplification.
 - When a scientific parameter is genuinely unresolved, use evidence to decide or state the concrete pending question and omit dependent calls. Do not invent values from habit or pass `NA`/`None` placeholders onward.
 - Do not enumerate unrequested defaults, algorithm switches, random seeds, or plot sampling settings for apparent completeness. Scientific choices need a reason; plot dimensions, units, and necessary resolution may be set near saving to suit the current figure.
 - An output name does not authorize a method. If its estimand, comparison unit, test, grouping, or model remains undecided, keep that decision visible rather than silently choosing a standard method to make the script runnable.
@@ -113,14 +116,16 @@ Remove irrelevant blocks and replace every question, input, tool, and heading pl
 
 Read the full [iteration interface](references/iteration-interface.md) only when asked to review examples or improve this skill. Routine analysis does not load the maintenance workflow.
 
-Phase 1 reviews evidence without changing functional rules and waits for confirmation. Phase 2 implements only decisions, exclusions, holdouts, and rule changes approved in the current conversation; an existing approval does not need repeating. The request validator is read-only and cannot authorize edits. Keep current request-schema behavior separate from the prohibition on legacy branches in generated analysis code.
+For new-example intake, Phase 1 reviews evidence without changing functional rules; Phase 2 implements approved decisions, exclusions, holdouts, and rule changes. A direct user-approved rule change without new examples does not require fabricated Phase 1 intake or holdouts. Validate in proportion to the affected behavior under the iteration interface; an existing approval does not need repeating. The request validator is read-only and cannot authorize edits. Keep current request-schema behavior separate from the prohibition on legacy branches in generated analysis code.
 
 ## Final check
 
-- For each transformation, file, check, or helper, what current scientific decision, concrete failure prevention, downstream use, or review need would be lost without it? Merge or remove additions with no such purpose; preserve explicit deliverables and scientific requirements.
-- Can the researcher follow inputs, choices, transformations, inspection, and saving in order, locate scientific choices directly, and understand headings, comments, and operation groups?
-- Are paths, dependencies, and real execution modes explicit, upstream changes propagated, and scientific checks and meaningful evidence preserved?
-- Are changes within the task, with no invented methods, results, execution claims, or unnecessary framework?
+- What current scientific question, necessary computation, or explicit deliverable does this step support? Remove additions with no current purpose.
+- What correctness guarantee, error detection, or reproduction evidence would be lost by removing it? Merge or remove it when there is no concrete loss; retain necessary scientific checks and meaningful evidence.
+- Has upstream data, software, or an existing verification already resolved the same issue? Reuse it when its relevant inputs and rules still match; rerun only affected work after changes.
+- Does this intermediate file have a known consumer or enough recomputation cost to justify saving? Otherwise keep the object in the session.
+- Does this abstraction make the method and reading order clearer, with inputs, paths, dependencies, scientific choices, inspection, and saving visible? If it hides key choices, use direct code.
+- Does simplification preserve the input provenance, samples, feature identities, statistical question, and correction scope? Discuss scientific changes as method changes; never invent methods, results, or execution claims to complete a refactor.
 
 If not, restore the visible analysis and remove machinery that has no current scientific purpose.
 

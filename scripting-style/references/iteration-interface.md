@@ -1,6 +1,6 @@
 # Skill iteration interface
 
-Read only when the user asks to review new examples or improve `scripting-style`. This is a maintenance entry point, not part of routine analysis generation. Do not create spec or plan documents. Review evidence and approved-decision records serve the maintenance workflow; they are not analysis scaffolding.
+Read only when the user asks to review new examples or improve `scripting-style`. This is a maintenance entry point, not part of routine analysis generation. Do not create unsolicited spec, plan, checklist, or workflow documents. When explicitly requested, provide only the analysis plan, task prompt, or handoff document at the requested scope; do not make it a prerequisite for unrelated work. Review evidence and approved-decision records serve the maintenance workflow; they are not analysis scaffolding.
 
 ## Purpose
 
@@ -35,6 +35,20 @@ python3 scripts/validate-iteration-request.py -
 It writes a JSON manifest to stdout. It does not create iteration directories, copy examples, change rules, or authorize Phase 2. `phase2_request_complete: true` proves only structural validity, not agreement with review evidence or human approval.
 
 For a direct user-approved rule change without new examples, do not fabricate an example intake or pretend to run a source/holdout audit. Record the reviewed current rules, the user's explicit decisions, actual validation, and evidence limits. Existing approval in the conversation is sufficient; do not request it again.
+
+## Validation scope
+
+Choose validation by the affected behavior, not a fixed maintenance checklist:
+
+| Change | Appropriate checks |
+|---|---|
+| Wording, links, or explanation without behavior change | Consistency, links, and affected structure |
+| One language's rules or templates | Relevant same-type cases and affected interfaces |
+| Shared behavior across languages | Representative cross-language behavior checks |
+| Learning from new examples | Phase 1 / Phase 2 and appropriate holdouts, plus applicable regressions |
+| Direct approved rules without new examples | Affected scenarios and actual evidence limits; no fabricated intake or holdout |
+
+Do not rebuild environments or run every language merely to complete maintenance. Use available dependencies and disclose execution gaps. An unchanged request schema does not itself require a new intake or validator run.
 
 ## Source discovery and privacy
 
@@ -73,13 +87,13 @@ Then:
 
 1. Revisit accepted decisions and exclusions.
 2. Update the exact-type guide/template/index as needed; change the shared entry point only for shared principles or explicit user decisions.
-3. Preserve the sentence `You may use superpowers, but do not write any spec or plan.`
+3. Preserve the boundary against unsolicited planning documents while allowing explicitly requested plans, task prompts, and handoffs at the requested scope.
 4. Keep new holdouts unread until the initial changes are complete, then inspect them and rerun applicable existing checks.
 5. Record actual changes, unused candidates, validation, and unresolved limits. Do not claim historical checks as current passes.
 
 A type-specific rule needs repeated same-type evidence or an explicit user decision. Cross-type evidence can support shared principles, not foreign syntax. Narrow a conflicting rule instead of adding an abstraction to conceal the conflict.
 
-Keep concise implementation records under:
+For example-intake iterations, keep concise implementation records under:
 
 ```text
 iterations/<iteration_id>/phase2/
@@ -89,9 +103,11 @@ iterations/<iteration_id>/phase2/
 
 Combine changes, holdout results where applicable, regressions, and limits in one validation record. Store raw output or source hashes separately only when useful. Do not duplicate conclusions across multiple summaries or treat a record as a substitute for functional changes. Remove obsolete drafts/snapshots only when cleanup is authorized, preserving useful evidence.
 
+For direct approved changes, the existing validation record is sufficient; create an iteration directory only if it has a concrete evidence-preservation purpose.
+
 ## Completion
 
-- Source examples were not modified or copied; verify appropriate provenance without unnecessary full-file hash audits for small rule-only edits.
+- Source examples were not modified or copied; verify provenance when file identity or reuse risk requires it, not by model name or file size. Do not perform a full-file hash audit solely because rules were edited.
 - Exact-type routing remains intact; any new holdout was not used for initial changes and actual new/existing checks are identified.
 - No historical parameters, scientific conclusions, machine paths, credentials, cache assumptions, or stale outputs became defaults.
 - No generic CLI, public helper library, configuration platform, runner, or pipeline was added.

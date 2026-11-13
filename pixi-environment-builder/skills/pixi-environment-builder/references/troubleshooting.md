@@ -48,6 +48,22 @@ python -c "import torch; print(torch.__version__); print(torch.version.cuda); pr
 不要仅凭 `nvidia-smi` 中显示的 CUDA 上限决定环境 runtime。一个包族应使用一致的
 channel/source 策略。
 
+## R 矩阵运算与 BLAS 线程
+
+R 的 PCA、SVD 或矩阵乘法缓慢时，先在目标环境检查实际实现与线程变量：
+
+```bash
+pixi run -e <environment> Rscript -e 'print(extSoftVersion()); print(Sys.getenv(c("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS")))'
+```
+
+`extSoftVersion()` 返回的 BLAS 信息并非在所有平台都能完整标识实现；必要时检查实际加载的动态库。确认是 OpenBLAS 后，针对真实工作负载，在新进程启动前分别设置 `OPENBLAS_NUM_THREADS=1`、`2`、`4` 等候选值运行同一个代表性任务，记录耗时、内存与结果一致性。例如在 POSIX shell 中：
+
+```bash
+OPENBLAS_NUM_THREADS=2 pixi run -e <environment> Rscript analysis.R
+```
+
+先确认 Pixi activation 未覆盖该值，并在 R 进程内检查实际值。对于使用 OpenMP 构建的 OpenBLAS，线程控制可能依赖 `OMP_NUM_THREADS`，应检查构建和运行时；不要假设所有 BLAS 都遵守同一变量。控制任务输入、并发和可用 CPU，避免外层并行与 BLAS 线程过度嵌套。结果取决于矩阵大小、算法、硬件和配额，不设通用的最优线程比例或耗时阈值。修改持久配置前确认其作用范围。
+
 ## OpenCV
 
 服务器通常优先使用 PyPI `opencv-python-headless`。只有确实需要 GUI/Qt 时才选择带
@@ -58,7 +74,7 @@ GUI 的 Conda OpenCV。不要同时安装 headless 和 GUI wheel。
 - 环境中安装 `ipykernel`。
 - 为每个需要暴露的 named environment 使用不同 kernel 名。
 - kernel 注册是用户级状态变化，执行前征得授权。
-- 注册后可以直接在 VS Code 中选择 kernel，不要求从 `pixi run` 启动编辑器。
+- 注册后可在 VS Code 中选择 kernel，但不要假设会继承 Pixi activation 变量；检查 kernelspec 的 `argv`、`env` 和实际 kernel 进程内的变量，必要时采用符合当前 Pixi 版本的启动方式。
 
 示意命令：
 

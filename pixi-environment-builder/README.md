@@ -13,7 +13,7 @@
 | 运行附带 Python 工具 | Python 3；两个脚本均只使用标准库，无第三方 Python 包依赖 |
 | 运行 `pixi_diagnose.py` | Python 3 和 `pixi`；目标项目的 `pixi.toml` / `pyproject.toml` 或工作区目录 |
 | 运行 TUNA 转换工具 | Python 3 和目标文件；只做本地文本转换，无需安装 Pixi，也无需联网 |
-| 执行默认 VS Code 初始化任务 | Bash；模板通过 `mkdir`、`cat` 写入 `.vscode/settings.json` |
+| 按需使用 Linux VS Code R 模板 | Bash；模板通过 `mkdir`、`cat` 写入 `.vscode/settings.json` |
 
 Conda CLI 只在需要从旧 Conda 环境导出信息时使用。Python/R 包、`ipykernel`、CUDA 驱动、PyTorch、Jupyter 和 VS Code 按目标项目的实际功能准备，不是运行本 skill 所有路径的统一前置依赖。安装或求解新依赖时，需要可用的包源与网络，或相应本地缓存。
 
@@ -48,7 +48,7 @@ python3 skills/pixi-environment-builder/scripts/pixi_diagnose.py \
   --json
 ```
 
-`gpu` 必须替换为项目已有的环境名。脚本收集 Pixi 版本、工作区信息、配置层级和环境列表；指定环境时使用 `--frozen --no-install` 查询包。它不安装依赖，也不修改 manifest。JSON 中保留各项命令的返回码，应检查失败项，不能仅凭总状态判断所有配置查询都成功。
+`gpu` 必须替换为项目已有的环境名。脚本检查 Pixi 版本、工作区、配置层级和环境列表；指定环境时使用 `--frozen --no-install` 查询包。它不安装依赖，也不修改 manifest。为避免泄露凭据，命令的原始输出不包含在结果中；JSON 保留返回码、输出存在状态及 JSON 有效性，所有检查均计入总状态。路径及环境名仍会显示，分享前应检查。需要详细错误时在本机单独运行相应命令并手动脱敏。
 
 ### TUNA URL 转换
 
@@ -63,11 +63,11 @@ python3 skills/pixi-environment-builder/scripts/convert_pixi_mirror_to_tuna.py \
 
 确认预览并决定执行后，去掉 `--dry-run` 即可原地修改文件。随后再运行同一条预览命令，预期替换数为 0。转换不会自动运行 `pixi lock` 或 `pixi install`，也不证明远端镜像当前可用。
 
-### 新工作区默认行为
+### 新工作区行为
 
-默认平台为 `linux-64`，其他平台需要明确指定。工作区名称先校验，默认采用合法的小写名称 `dinghowl_zhou`。新建 manifest 时添加 `init` 任务，并提供 [setup-vscode.sh](skills/pixi-environment-builder/assets/setup-vscode.sh) 模板，将 VS Code 的 Linux R 路径指向项目 `.pixi/envs/default/bin/R`。
+根据项目和运行目标选择平台及工作区名称；未指定平台时以当前运行平台为起点。`dinghowl_zhou` 是特定个人工作流的可选名称，不用于无关项目。
 
-执行 `pixi run init` 会写入 `.vscode/settings.json`，因此需明确要求执行；已有配置应先检查并合并。只要求诊断时保持只读，锁定、安装、清缓存和用户级内核注册按实际授权范围执行。
+[setup-vscode.sh](skills/pixi-environment-builder/assets/setup-vscode.sh) 是按需使用的 Linux VS Code R 模板，会写入 `.vscode/settings.json`；使用前确认平台、环境名和已有配置，保留并合并用户设置。只要求诊断时保持只读，锁定、安装、清缓存和用户级内核注册按实际授权范围执行。
 
 ## 进一步说明
 

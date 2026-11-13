@@ -40,50 +40,38 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def redact(value: Any, key: str | None = None) -> Any:
-    if key and SENSITIVE_KEY.search(key):
-        return "<redacted>"
-    if isinstance(value, dict):
-        return {item_key: redact(item_value, item_key) for item_key, item_value in value.items()}
-    if isinstance(value, list):
-        return [redact(item) for item in value]
-    return value
-
-
-def run_json(command: list[str]) -> dict[str, Any]:
-    completed = subprocess.run(
-        command,
-        check=False,
-        capture_output=True,
-        text=True,
-    )
+def run_command(command: list[str], *, expect_json: bool = False, version: bool = False) -> dict[str, Any]:
+    # Arbitrary stdout, stderr, JSON keys and values can contain credentials.
+    # Report metadata only; regex-based redaction cannot guarantee safety.
+    try:
+        completed = subprocess.run(command, check=False, capture_output=True, text=True, errors="replace")
+    except OSError:
+        return {"returncode": None, "error": "command could not be started"}
     result: dict[str, Any] = {
-        "command": command,
         "returncode": completed.returncode,
+        "stdout_present": bool(completed.stdout.strip()),
+        "stderr_present": bool(completed.stderr.strip()),
     }
-    if completed.stdout.strip():
+    if expect_json and completed.stdout.strip():
         try:
-            result["data"] = redact(json.loads(completed.stdout))
-        except json.JSONDecodeError:
-            result["stdout"] = completed.stdout.strip()
-    if completed.stderr.strip():
-        result["stderr"] = completed.stderr.strip()
+            data = json.loads(completed.stdout)
+            result["json_valid"] = True
+            result["json_type"] = type(data).__name__
+        except (ValueError, RecursionError):
+            result["json_valid"] = False
+    if version:
+        match = re.fullmatch(r"pixi (\d+\.\d+\.\d+(?:[-+][A-Za-z0-9.-]+)?)", completed.stdout.strip())
+        if match:
+            result["version"] = match.group(1)
     return result
 
 
-def run_text(command: list[str]) -> dict[str, Any]:
-    completed = subprocess.run(
-        command,
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    return {
-        "command": command,
-        "returncode": completed.returncode,
-        "stdout": completed.stdout.strip(),
-        "stderr": completed.stderr.strip(),
-    }
+def run_json(command: list[str]) -> dict[str, Any]:
+    return run_command(command, expect_json=True)
+
+
+def run_text(command: list[str], *, version: bool = False) -> dict[str, Any]:
+    return run_command(command, version=version)
 
 
 def sensitive_environment() -> dict[str, bool]:
@@ -113,7 +101,7 @@ def build_report(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     report: dict[str, Any] = {
         "ok": True,
         "manifest_path": str(manifest_path),
-        "pixi_version": run_text([pixi, "--version"]),
+        "pixi_version": run_text([pixi, "--version"], version=True),
         "workspace_info": run_json(info_command),
         "config": {
             "effective": run_json(
@@ -155,10 +143,18 @@ def build_report(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
             ]
         )
 
-    failures = []
-    for section in ("workspace_info", "environments"):
-        if report[section]["returncode"] != 0:
-            failures.append(section)
+    sections = {
+        "pixi_version": report["pixi_version"],
+        "workspace_info": report["workspace_info"],
+        "environments": report["environments"],
+        **{f"config.{name}": section for name, section in report["config"].items()},
+    }
+    if "packages" in report:
+        sections["packages"] = report["packages"]
+    failures = [name for name, section in sections.items()
+                if section["returncode"] != 0 or section.get("json_valid") is False
+                or (name in {"workspace_info", "config.effective", "config.local", "config.global", "packages"}
+                    and not section.get("json_valid"))]
     report["ok"] = not failures
     report["failed_sections"] = failures
     return report, 0 if report["ok"] else 1
@@ -170,20 +166,13 @@ def print_human(report: dict[str, Any]) -> None:
         print(f"Error: {report['error']}")
         return
     print(f"Manifest path: {report['manifest_path']}")
-    print(f"Version: {report['pixi_version'].get('stdout', 'unknown')}")
+    print(f"Version: {report['pixi_version'].get('version', 'unknown')}")
     print(
         "Sensitive environment variables present: "
         f"{len(report['sensitive_environment_present'])}"
     )
-    for name in ("workspace_info", "environments"):
-        section = report[name]
-        print(f"{name}: return code {section['returncode']}")
-        if section.get("stderr"):
-            print(f"  {section['stderr']}")
-    if "packages" in report:
-        print(f"packages ({report['selected_environment']}): return code {report['packages']['returncode']}")
-        if report["packages"].get("stderr"):
-            print(f"  {report['packages']['stderr']}")
+    print("Failed sections: " + (", ".join(report["failed_sections"]) or "none"))
+    print("Command output is suppressed; inspect errors locally with care.")
 
 
 def main() -> int:

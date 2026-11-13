@@ -20,7 +20,7 @@
 ## Reasoning
 
 - 遵循第一性原理。
-- You may use superpowers, but do not write any spec or plan.
+- 不擅自生成 spec、plan、checklist 或 workflow 文档。用户明确要求分析计划、任务提示词或交接文档时，仅按指定范围交付；不把它作为无关分析的前置条件，也不据此执行仅要求规划的分析。
 - 区分数据事实、方法假设、人工判断和待验证事项。
 - 不用历史参数、模板或来源结论替代当前任务推理。
 
@@ -39,15 +39,15 @@
 
 ## Iteration Gate
 
-- Phase 1 只写 `iterations/<iteration_id>/phase1/` 的隔离审查并停止，不修改功能文件。
-- Phase 2 必须同时具备 Phase 1 证据、当前对话明确确认和非空 accepted decisions。
-- Holdout 在初始改动完成前保持隔离；Phase 2 同时运行新 holdout 与既有回归。
+- 维护细节遵循 `references/iteration-interface.md`；验证范围随修改影响范围确定。
+- 新范例学习沿用 Phase 1／Phase 2：Phase 1 只写隔离审查，不修改功能文件；Phase 2 需审查证据、明确确认与非空 accepted decisions。新 holdout 在初始改动完成前保持隔离，随后复核并运行适用回归。
+- 用户直接批准且没有新范例的规则修改，无需制造 Phase 1 intake 或 holdout；已有授权不重复询问，记录实际验证范围及限制。
 - `schema_version: "1.0"` 保持兼容；`stage_hint` 只作可选语境，不驱动阶段指南。
 - validator 始终只读，不能授予 Skill 写权限。
 
 ## Completion
 
-- 校验 frontmatter、YAML、JSON、内部链接、模板语法和 validator 兼容性。
-- 用隔离前向任务检查四种类型与既有脚本 minimal-diff。
-- 复核来源哈希，确认没有修改来源或环境配置。
+- 措辞、链接或说明修改检查一致性及相关结构；单类型规则修改验证受影响案例与接口，跨语言核心行为修改使用有代表性的跨语言行为检查，不无条件执行四语言全套验证。
+- 按影响范围校验 frontmatter、YAML/JSON、链接、模板语法或 validator 兼容性；接口未变不制造接口变更验证任务。
+- 来源保持只读；只有文件身份与复用风险需要时才核对哈希，不因模型名称或文件大小启动全量审计。不修改无关来源或环境配置。
 - 未经用户确认不 commit、不 push。
