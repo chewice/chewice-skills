@@ -148,6 +148,22 @@ These dimensions illustrate saving syntax, not a standard. Use appropriate devic
 
 Apply the shared saving and overwrite criteria in `SKILL.md`. Match `saveRDS()` with `readRDS()`, `qs::qsave()` with `qs::qread()`, and `save()` with `load()`. Name the object and stage, such as `sample_A.annotated.rds` or `comparison_A.markers.tsv`.
 
+Use an explicit destination directory such as `out_dir` or `out_path`, retaining clear existing names. Define it at the relevant step or shared setup and create it before the first write that needs it; do not repeat directory creation for each result. Keep a concrete filename beside the write. Both `fn <- file.path(out_dir, "result.tsv")` followed by a writer and `file.path()` directly inside that writer are valid. Use `plot_file` or another descriptive path name when several paths coexist. Meaningful `paste0()` filenames inside actual sample or method loops are also valid; do not require literal filenames or a separate path variable for every output.
+
+Separate saving from the preceding calculation with a blank line. A short save call may stay on one line; expand a crowded call by arguments so the object, path, and writer options are easy to scan. A short save comment is optional when the purpose is already clear. Extract substantive result assembly before saving, but do not create aliases solely to rename an unchanged object. For a few fixed outputs, prefer direct object-to-file calls over `get()` or a generic export loop. Preserve necessary chunked writes and external tools' output-prefix contracts. Keep the existing writer and serialization settings, including separators, quoting, missing-value representation, row/column names, compression, and append behavior; readability alone does not justify changing them.
+
+For example, with an already prepared table and an existing destination directory:
+
+```r
+write.table(
+  markers,
+  file.path(out_dir, "all-markers.tsv"),
+  sep = "\t", quote = FALSE, row.names = FALSE
+)
+```
+
+This illustrates direct saving, not a requirement to switch an existing writer to `write.table()` or rename its file.
+
 ```r
 ## Save the annotated object for review ====
 out_path <- "../output"
