@@ -252,6 +252,18 @@
       "prompt": "为项目生成 AGENTS.md。发现 output 中有作者代码包和一次性修补结果的 Python，tmp 中有唯一的上下文迁移前快照；目前只允许改 AGENTS。",
       "should_trigger": true,
       "expected_output": "只生成获准的稳定规则，不迁移文件、改分析或修改忽略策略。作者来源包保留布局；一次性修补若影响正式结果应纳入正式流程，未纳入前说明复现缺口。唯一恢复快照不应作为可随意清理的临时内容，说明需可靠保存的缺口，但不越权搬迁。records 不成为正式结果的手工修补依赖，也不另存一套 context 状态。"
+    },
+    {
+      "id": 43,
+      "should_trigger": true,
+      "prompt": "为项目生成 AGENTS.md：已有 scripts/01_inputs.R 至 05_registry.R 及 output/01_inputs 至 05_registry，后续增加 06_prepare、07_QC、08_OLS、09_networks。请保留目录职责，不运行分析。",
+      "expected_output": "在工作方式写入稳定规则：编号脚本延续各自编号阶段目录，可在阶段内按组织分目录并保存多产物；不把06–09混放到GTEx等新共享目录或输出根。coverage/exceptions若需要则各阶段独立保存，下游显式读取上游，不维护共享根表。只生成已获准指令，不列全部脚本清单、不预建目录、不迁移或重跑结果。"
+    },
+    {
+      "id": 44,
+      "should_trigger": true,
+      "prompt": "初始化 AGENTS.md；本项目是未编号的独立 notebook，结果在 results/exploration。另一个编号子流程已由我明确指定共用 results/joint，不要改动。",
+      "expected_output": "沿用独立notebook清楚的既有布局，保留用户明确指定的编号子流程共享目录例外。生成一般的编号阶段职责规则时注明用户指定布局优先，不强加编号、不迁移或重命名已有文件、不改Git忽略规则。"
     }
   ]
 }

@@ -137,7 +137,7 @@ Use base plots, ggplot2, or object-specific methods such as `DimPlot()`, `Featur
 For ggplot, assign `p`, display it, and adjust directly with layers such as `labs()` or `theme()`. Use existing project composition tools when needed. Set dimensions, resolution, and colors for the current figure, not from example defaults. With a previously created and inspected ggplot object:
 
 ```r
-out_path <- "../output"
+out_path <- "../output/sample_overview"
 dir.create(out_path, showWarnings = FALSE, recursive = TRUE)
 fn <- file.path(out_path, "sample_overview.pdf")
 
@@ -149,6 +149,8 @@ These dimensions illustrate saving syntax, not a standard. Use appropriate devic
 ## Save for a concrete scientific use
 
 Apply the shared saving and overwrite criteria in `SKILL.md`. Match `saveRDS()` with `readRDS()`, `qs::qsave()` with `qs::qread()`, and `save()` with `load()`. Name the object and stage, such as `sample_A.annotated.rds` or `comparison_A.markers.tsv`.
+
+Choose the destination under the shared stage-directory rule before writing the save call. In a numbered workflow, `scripts/07_expression_QC.R` writes its products and any needed diagnostic tables to `../output/07_expression_QC/`; tissue/sample directories go inside that stage, and inputs still come from their actual upstream stages. Multiple outputs do not justify combining several stages into one folder. The examples below illustrate saving syntax; adapt their directories to the current script and existing project layout.
 
 Use an explicit destination directory such as `out_dir` or `out_path`, retaining clear existing names. Define it at the relevant step or shared setup and create it before the first write that needs it; do not repeat directory creation for each result. Keep a concrete filename beside the write. Both `fn <- file.path(out_dir, "result.tsv")` followed by a writer and `file.path()` directly inside that writer are valid. Use `plot_file` or another descriptive path name when several paths coexist. Meaningful `paste0()` filenames inside actual sample or method loops are also valid; do not require literal filenames or a separate path variable for every output.
 
@@ -168,7 +170,7 @@ This illustrates direct saving, not a requirement to switch an existing writer t
 
 ```r
 ## Save the annotated object for review ====
-out_path <- "../output"
+out_path <- "../output/cell_annotation"
 dir.create(out_path, showWarnings = FALSE, recursive = TRUE)
 fn <- file.path(out_path, "sample_A.annotated.rds")
 
