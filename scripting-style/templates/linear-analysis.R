@@ -1,5 +1,5 @@
 # Current question: TODO_QUESTION
-# Launch from the project root; use setwd(".") if already in the script directory.
+# Start a new R session from the project root; run directory initialization once.
 setwd("scripts")
 getwd()
 .libPaths()

@@ -42,7 +42,7 @@ These restrictions govern generated analysis code, not unrelated infrastructure 
 ## Working directory and paths
 
 - Use the current script/notebook directory as the working directory. Inputs, intermediate archives, final outputs, and project API paths are relative to it, not machine-specific absolute paths.
-- R starts explicitly with `setwd()`, `getwd()`, and `.libPaths()`, before loading packages or data. `.libPaths()` displays library paths; do not modify them by default. Set the relative target from the actual launch location; keep `setwd(".")` if already in the script directory.
+- R starts explicitly with `setwd()`, `getwd()`, and `.libPaths()`, before loading packages or data. `.libPaths()` displays library paths; do not modify them by default. Default to a new R session launched from the project root and write an explicit relative target such as `setwd("scripts")` (or the actual nested script directory). Opening a script or sending lines from an editor does not change R's working directory. Use `setwd(".")` only when the user or a verified launch contract explicitly establishes that R already starts in the script directory; never infer this from the file location.
 - Use each language's ordinary directory operations once at session entry. Reuse the session and objects; do not repeatedly change directories or add root-discovery functions.
 - Keep paths near their reads/writes and use the project's existing formats. Names identify the object, processing state, or purpose; ensure saved outputs match downstream reads.
 
@@ -123,7 +123,7 @@ Use only for a new file without a closer same-type project precedent:
 - [Bash](templates/external-analysis.sh)
 - [Notebook](templates/linear-analysis.ipynb)
 
-Remove irrelevant blocks and replace every question, input, tool, and heading placeholder, including the Bash analysis-step title. Script templates enter `scripts/` from the project root; use `.` when already in the file directory. The notebook assumes its kernel starts in that directory and uses Python, not R. Templates provide initialization and reading/preview or a current tool call, not predetermined later stages. Use the type guide for purposeful saving and plotting. Adapt comment language to the user/project.
+Remove irrelevant blocks and replace every question, input, tool, and heading placeholder, including the Bash analysis-step title. R script templates enter `scripts/` from the project root with `setwd("scripts")`; document this launch assumption and run directory initialization only once per session. Use `.` only for an explicitly established script-directory launch contract. Preserve each other language's own launch convention. The notebook assumes its kernel starts in that directory and uses Python, not R. Templates provide initialization and reading/preview or a current tool call, not predetermined later stages. Use the type guide for purposeful saving and plotting. Adapt comment language to the user/project.
 
 ## Skill iteration
 

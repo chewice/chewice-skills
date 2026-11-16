@@ -2,9 +2,9 @@
 
 Read only for `.R` targets. Learn paths, naming, spacing, previews, and plotting expression from same-type examples, not their scientific methods, parameters, or conclusions. Follow the core rules on current inputs only, no speculative recovery, visible scientific decisions, and preserving evidence. Example comments are English; adapt them to the user/project language.
 
-## Enter from the script directory
+## Enter the script directory from the project root
 
-Start with `setwd()`, `getwd()`, and `.libPaths()`, then load packages and data. Display library paths without changing them. Set the target from the actual launch location; for `scripts/analysis.R` launched from the project root:
+Default to a new R session launched from the project root. Start with an explicit relative `setwd()` target, `getwd()`, and `.libPaths()`, then load packages and data. Display library paths without changing them. For `scripts/analysis.R`:
 
 ```r
 setwd("scripts")
@@ -16,7 +16,9 @@ library(Matrix)
 data_path <- "../data"
 ```
 
-If already in the script directory, use `setwd(".")`. Initialize once, then reuse the session; rerunning `setwd("scripts")` could enter a nested directory. Do not guess the script location, discover project roots, probe old paths, or copy machine paths. All input, intermediate, output, and project API paths are relative to the script directory.
+Opening a script in an editor, calling `source("scripts/analysis.R")` with its default `chdir = FALSE`, or sending selected lines to R does not automatically enter the script directory. `setwd(".")` leaves the working directory unchanged; use it only when the user or a verified launch contract explicitly establishes that R starts in the script directory. Do not infer the launch directory from where the script is stored.
+
+Write the actual relative target, for example `setwd("scripts")` or `setwd("scripts/downstream")`, and document the project-root launch assumption in the entry comment. Initialize once per session, then reuse the session; when continuing another script from the established script directory, skip its directory initialization. A full-script run should start from the documented launch directory. Do not add machine-specific absolute paths, editor APIs, script-location detection, directory probing, or root-discovery functions to hide an unspecified launch contract. All input, intermediate, output, and project API paths remain relative to the script directory.
 
 Keep the filename near the read. `fn` is useful for sequential reads; use `counts_file` or `metadata_file` when multiple paths must coexist. A short `readRDS(file.path(...))` is also valid; do not rewrite existing code merely to standardize syntax.
 
